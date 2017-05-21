@@ -13,6 +13,8 @@
 
 namespace quark {
 
+
+
 class OrderErrorException: public std::exception {
 public:
 	OrderErrorException(json::Value orderId, int code, const std::string &message);
@@ -31,6 +33,19 @@ public:
 	const json::Value& getOrderId() const {
 		return orderId;
 	}
+
+	static const int orderHasNoID = 1000;
+	static const int unknownDirection = 1001;
+	static const int orderTypeNotSupported = 1002;
+	static const int invalidOrMissingSize = 1003;
+	static const int invalidOrMissingLimitPrice = 1004;
+	static const int invalidOrMissingStopPrice = 1005;
+	static const int invalidOrMissingTrailingDistance = 1006;
+	static const int orderConflict = 1009;
+	static const int orderNotFound = 1010;
+	static const int orderPostLimitConflict = 1100;
+	static const int orderFOKFailed = 1101;
+	static const int orderIOCCanceled = 1102;
 
 protected:
 

@@ -19,7 +19,7 @@ Order::Order(json::Value data) {
 
 	id = data["id"];
 	if (!id.defined()) {
-		throw OrderErrorException(id,1000, "Order has no ID");
+		throw OrderErrorException(id,OrderErrorException::orderHasNoID, "Order has no ID");
 	}
 
 	Value jd = data["dir"];
@@ -28,7 +28,7 @@ Order::Order(json::Value data) {
 	} else if (jd.getString() == "sell") {
 		dir = sell;
 	} else {
-		throw OrderErrorException(id, 1001, "Uknown dir - The field 'dir' must be either 'buy' or 'sell'");
+		throw OrderErrorException(id, OrderErrorException::unknownDirection, "Uknown dir - The field 'dir' must be either 'buy' or 'sell'");
 	}
 
 
@@ -41,27 +41,44 @@ Order::Order(json::Value data) {
 	else if (tp == "postlimit") type = postlimit;
 	else if (tp == "ioc") type = ioc;
 	else if (tp == "fok") type = fok;
+	else if (tp == "trailing-stop") type = trailingStop;
+	else if (tp == "trailing-stoplimit") type = trailingStopLimit;
+	else if (tp == "trailing-limit") type = trailingLimit;
 	else
-		throw OrderErrorException(id,1002, String({"Order type '", tp, "' is not supported"}).c_str());
+		throw OrderErrorException(id,OrderErrorException::orderTypeNotSupported, String({"Order type '", tp, "' is not supported"}).c_str());
 
 
 	size = data["size"].getUInt();
 	limitPrice = data["limitPrice"].getUInt();
 	triggerPrice = data["stopPrice"].getUInt();
+	trailingDistance = data["trailingDistance"].getUInt();
 	if (size == 0)
-		throw OrderErrorException(id, 1003, "Invalid or missing 'size'");
+		throw OrderErrorException(id, OrderErrorException::invalidOrMissingSize, "Invalid or missing 'size'");
 
 	if (limitPrice == 0 && (type == limit
 			|| type == stoplimit
 			|| type == fok
 			|| type == ioc
-			|| type == postlimit)) {
-		throw OrderErrorException(id, 1004, "Invalid or missing 'limitPrice'");
+			|| type == postlimit
+			|| type == trailingLimit
+			|| type == trailingStopLimit
+		)) {
+		throw OrderErrorException(id, OrderErrorException::invalidOrMissingLimitPrice, "Invalid or missing 'limitPrice'");
 	}
 
 	if (triggerPrice == 0 && (type == stop
-			|| type == stoplimit)) {
-		throw OrderErrorException(id, 1004, "Invalid or missing 'stopPrice'");
+			|| type == stoplimit
+			|| type == trailingStopLimit
+			|| type == trailingStop
+		)) {
+		throw OrderErrorException(id, OrderErrorException::invalidOrMissingStopPrice, "Invalid or missing 'stopPrice'");
+	}
+
+	if (trailingDistance == 0 && (type == trailingLimit
+			|| type == trailingStop
+			|| type == trailingStopLimit))
+	{
+			throw OrderErrorException(id, OrderErrorException::invalidOrMissingTrailingDistance, "Invalid or missing 'trailingDistance'");
 	}
 
 
@@ -70,5 +87,101 @@ Order::Order(json::Value data) {
 
 }
 
+static std::size_t counter = 0;
+
+POrder quark::Order::changeState(State newState) const {
+
+	Order *x = new Order(*this);
+	x->state = newState;
+	x->queuePos = counter++;
+	return x;
+}
+
+POrder Order::decSize(std::size_t sz) const  {
+	if (sz > size) throw std::runtime_error("decSize larger then order's size is");
+	if (sz== size) return nullptr;
+	Order *x = new Order(*this);
+	x->size -= sz;
+	return x;
+}
+
+POrder Order::changeType(Type newType) const {
+	Order *x = new Order(*this);
+	x->type= newType;
+	x->queuePos = counter++;
+	return x;
+}
+
+bool quark::Order::isSimpleUpdate(const Order& other) const {
+	return id == other.id
+			&& limitPrice == other.limitPrice
+			&& type == other.type
+			&& dir == other.dir;
+
+}
+
+POrder Order::doSimpleUpdate(const Order& other) const {
+	Order *x = new Order(*this);
+	x->id = id;
+	x->triggerPrice = other.triggerPrice;
+	x->size = other.size;
+	x->domPriority = other.domPriority;
+	x->queuePriority = other.queuePriority;
+	return x;
+
+}
+
+POrder Order::updateTrailing(std::size_t newPrice) const {
+	switch (type) {
+	case trailingStop:
+	case trailingStopLimit:
+		if (dir == buy)
+			if (newPrice + trailingDistance < triggerPrice) {
+				Order *x = new Order(*this);
+				x->triggerPrice = newPrice + trailingDistance;
+				std::size_t diff = triggerPrice-x->triggerPrice;
+				if (diff > x->limitPrice) x->limitPrice = 0;
+				else x->limitPrice -= diff;
+				return x;
+			} else {
+				return const_cast<Order *>(this);
+			}
+		else {
+			if (triggerPrice + trailingDistance < newPrice) {
+				Order *x = new Order(*this);
+				x->triggerPrice = newPrice - trailingDistance;
+				std::size_t diff = x->triggerPrice-triggerPrice;
+				x->limitPrice += diff;
+				return x;
+			} else {
+				return const_cast<Order *>(this);
+			}
+		}
+		break;
+	case trailingLimit:
+		if (dir == sell)
+			if (newPrice + trailingDistance < limitPrice) {
+				Order *x = new Order(*this);
+				x->limitPrice = newPrice + trailingDistance;
+				return x;
+			} else {
+				return const_cast<Order *>(this);
+			}
+		else {
+			if (limitPrice + trailingDistance < newPrice) {
+				Order *x = new Order(*this);
+				x->limitPrice = newPrice - trailingDistance;
+				return x;
+			} else {
+				return const_cast<Order *>(this);
+			}
+		}
+		break;
+	default:
+		break;
+	}
+	return const_cast<Order *>(this);
+}
 
 } /* namespace quark */
+
