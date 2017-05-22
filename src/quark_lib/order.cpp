@@ -54,6 +54,8 @@ Order::Order(json::Value data) {
 	trailingDistance = data["trailingDistance"].getUInt();
 	if (size == 0)
 		throw OrderErrorException(id, OrderErrorException::invalidOrMissingSize, "Invalid or missing 'size'");
+	budget = data["budget"].getUInt();
+
 
 	if (limitPrice == 0 && (type == limit
 			|| type == stoplimit
@@ -97,12 +99,23 @@ POrder quark::Order::changeState(State newState) const {
 	return x;
 }
 
-POrder Order::decSize(std::size_t sz) const  {
-	if (sz > size) throw std::runtime_error("decSize larger then order's size is");
-	if (sz== size) return nullptr;
+
+POrder Order::updateAfterTrade(std::size_t price, std::size_t size) {
+	if (size > this->size) throw std::runtime_error("Matched larger size then available");
+	if (size == this->size) return nullptr;
+	std::size_t total = 0;
+	if (budget) {
+		total = price *size;
+		if (total > budget) throw std::runtime_error("Order's budget overrun");
+		if (budget - total < price ) return nullptr;
+	}
 	Order *x = new Order(*this);
-	x->size -= sz;
+	x->size -= size;
+	x->budget -= total;
 	return x;
+
+
+
 }
 
 POrder Order::changeType(Type newType) const {
@@ -127,8 +140,14 @@ POrder Order::doSimpleUpdate(const Order& other) const {
 	x->size = other.size;
 	x->domPriority = other.domPriority;
 	x->queuePriority = other.queuePriority;
+	x->budget = other.budget;
 	return x;
+}
 
+std::size_t Order::getSizeAtPrice(std::size_t price) const {
+	if (budget == 0) return size;
+	std::size_t maxsize = budget/price;
+	return std::min(maxsize,size);
 }
 
 POrder Order::updateTrailing(std::size_t newPrice) const {

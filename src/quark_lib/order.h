@@ -79,6 +79,8 @@ public:
 		return size;
 	}
 
+	std::size_t getSizeAtPrice(std::size_t price) const;
+
 	std::size_t getTriggerPrice() const {
 		return triggerPrice;
 	}
@@ -95,7 +97,7 @@ public:
 
 	POrder changeState(State newState) const;
 	POrder changeType(Type newType) const;
-	POrder decSize(std::size_t sz) const;
+	POrder updateAfterTrade(std::size_t price, std::size_t size);
 
 	bool isSimpleUpdate(const Order &other) const;
 	POrder doSimpleUpdate(const Order &other) const;
@@ -104,6 +106,7 @@ protected:
 
 	Value id;
 	std::size_t size;
+	std::size_t budget; //total buy/sell budget - applied only on unlimited market and stop trades
 	std::size_t limitPrice;
 	std::size_t triggerPrice;
 	std::size_t trailingDistance;

@@ -341,28 +341,21 @@ bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output ou
 
 		std::size_t curPrice = maker->getLimitPrice();
 
-		std::size_t commonSize = std::min(maker->getSize(), taker->getSize());
+		std::size_t commonSize = std::min(maker->getSizeAtPrice(curPrice), taker->getSizeAtPrice(curPrice));
 		out(TradeResultTrade(selectOrder(maker,taker,Order::buy),
 						     selectOrder(maker,taker,Order::sell),
 						     commonSize,
 						     maker->getLimitPrice(),
 						     taker->getDir()));
 		queue.erase(b);
-		if (maker->getSize() == commonSize) {
-			updateOrder(maker->getId(), nullptr);
-		} else {
-			POrder newMaker = maker->decSize(commonSize);
-			updateOrder(maker->getId(), newMaker);
-			queue.insert(newMaker);
-		}
 
-		if (taker->getSize() == commonSize) {
-			updateOrder(taker->getId(), nullptr);
-		} else {
-			POrder newTaker = taker->decSize(commonSize);
-			updateOrder(taker->getId(), newTaker);
-			curQueue.push(newTaker);
-		}
+		POrder newMaker = maker->updateAfterTrade(curPrice, commonSize);
+		updateOrder(maker->getId(), newMaker);
+		if (newMaker != nullptr) queue.insert(newMaker);
+
+		POrder newTaker = taker->updateAfterTrade(curPrice, commonSize);
+		updateOrder(taker->getId(), newTaker);
+		if (newTaker != nullptr) curQueue.push(newTaker);
 
 		runTriggers(stop_above,curPrice, std::greater<std::size_t>(),out);
 		runTriggers(stop_below,curPrice, std::less<std::size_t>(),out);
