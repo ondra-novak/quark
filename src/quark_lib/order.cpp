@@ -113,10 +113,14 @@ POrder Order::updateAfterTrade(std::size_t price, std::size_t size) {
 	x->size -= size;
 	x->budget -= total;
 	return x;
-
-
-
 }
+
+bool Order::willBeFilled(std::size_t price, std::size_t size) const {
+	if (budget == 0) return size == this->size;
+	else return (size == this->size)
+			|| (budget - price*size < price);
+}
+
 
 POrder Order::changeType(Type newType) const {
 	Order *x = new Order(*this);

@@ -2,6 +2,7 @@
 
 #include <unordered_map>
 #include <imtjson/json.h>
+#include <queue>
 #include <set>
 
 #include "ITradeResult.h"
@@ -74,7 +75,7 @@ struct TxItem {
 
 typedef std::function<void(const ITradeResult &)> Output;
 
-typedef std::vector<TxItem> Transaction;
+typedef json::StringView<TxItem> Transaction;
 
 
 class OrderCompare {

@@ -35,11 +35,15 @@ public:
 	TradeResultTrade(
 				POrder buyOrder,
 				POrder sellOrder,
+				bool fullBuy,
+				bool fullSell,
 				std::size_t size,
 				std::size_t price,
 				Order::Dir dir):AbstractTradeResult(trTrade)
 		,buyOrder(buyOrder)
 		,sellOrder(sellOrder)
+		,fullBuy(fullBuy)
+		,fullSell(fullSell)
 		,size(size)
 		,price(price)
 		,dir(dir) {}
@@ -64,9 +68,19 @@ public:
 		return size;
 	}
 
+	bool isFullBuy() const {
+		return fullBuy;
+	}
+
+	bool isFullSell() const {
+		return fullSell;
+	}
+
 protected:
 	POrder buyOrder;
 	POrder sellOrder;
+	bool fullBuy;
+	bool fullSell;
 	std::size_t size;
 	std::size_t price;
 	Order::Dir dir;
@@ -87,9 +101,9 @@ protected:
 };
 
 
-class TradeResultOderCancel: public AbstractTradeResult {
+class TradeResultOrderCancel: public AbstractTradeResult {
 public:
-	TradeResultOderCancel(POrder order, std::size_t code)
+	TradeResultOrderCancel(POrder order, std::size_t code)
 		:AbstractTradeResult(trOrderCancel),order(order),code(code) {}
 
 

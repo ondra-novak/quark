@@ -81,6 +81,7 @@ public:
 
 	std::size_t getSizeAtPrice(std::size_t price) const;
 
+
 	std::size_t getTriggerPrice() const {
 		return triggerPrice;
 	}
@@ -98,6 +99,8 @@ public:
 	POrder changeState(State newState) const;
 	POrder changeType(Type newType) const;
 	POrder updateAfterTrade(std::size_t price, std::size_t size);
+	///determines, whether the order will be filled complete when trade operation executes on give price and size
+	bool willBeFilled(std::size_t price, std::size_t size) const;
 
 	bool isSimpleUpdate(const Order &other) const;
 	POrder doSimpleUpdate(const Order &other) const;

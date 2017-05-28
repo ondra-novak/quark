@@ -288,7 +288,7 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 		case Order::postlimit:
 			if (willOrderPair(orderbook, o)) {
 				cancelOrder(o);
-				out(TradeResultOderCancel(o,OrderErrorException::orderPostLimitConflict));
+				out(TradeResultOrderCancel(o,OrderErrorException::orderPostLimitConflict));
 			} else {
 				o = o->changeState(Order::orderbook);
 				getQueueByState(o).insert(o);
@@ -308,7 +308,7 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 		case Order::ioc:
 			if (!pairInQueue(orderbook, o, out)) {
 				cancelOrder(o);
-				out(TradeResultOderCancel(o, OrderErrorException::orderIOCCanceled));
+				out(TradeResultOrderCancel(o, OrderErrorException::orderIOCCanceled));
 			}
 			break;
 
@@ -325,11 +325,6 @@ bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order) {
 	return queue.inOrder(*b, order);
 }
 
-static POrder selectOrder(const POrder &a, const POrder &b, Order::Dir dir) {
-	if (a->getDir() == dir) return a;
-	if (b->getDir() == dir) return b;
-	throw std::runtime_error("Matching error - cannot select requested order");
-}
 
 bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output out) {
 	if (queue.empty()) return false;
@@ -339,21 +334,43 @@ bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output ou
 		POrder maker = *b;
 		POrder taker = order;
 
+		//determine trading parameters
+		//price
 		std::size_t curPrice = maker->getLimitPrice();
-
+		//matching size
 		std::size_t commonSize = std::min(maker->getSizeAtPrice(curPrice), taker->getSizeAtPrice(curPrice));
-		out(TradeResultTrade(selectOrder(maker,taker,Order::buy),
-						     selectOrder(maker,taker,Order::sell),
+
+
+		//update maker command
+		POrder newMaker = maker->updateAfterTrade(curPrice, commonSize);
+		//update taker command
+		POrder newTaker = taker->updateAfterTrade(curPrice, commonSize);
+
+		POrder buy, sell;
+		bool fullBuy, fullSell;
+		if (taker->getDir() == Order::buy) {
+			buy = taker;
+			sell == maker;
+			fullBuy = newTaker == nullptr;
+			fullSell = newMaker == nullptr;
+		} else {
+			buy = maker;
+			sell == taker;
+			fullBuy = newMaker == nullptr;
+			fullSell = newTaker == nullptr;
+
+		}
+
+
+		out(TradeResultTrade(buy, sell, fullBuy, fullSell,
 						     commonSize,
 						     maker->getLimitPrice(),
 						     taker->getDir()));
 		queue.erase(b);
 
-		POrder newMaker = maker->updateAfterTrade(curPrice, commonSize);
 		updateOrder(maker->getId(), newMaker);
 		if (newMaker != nullptr) queue.insert(newMaker);
 
-		POrder newTaker = taker->updateAfterTrade(curPrice, commonSize);
 		updateOrder(taker->getId(), newTaker);
 		if (newTaker != nullptr) curQueue.push(newTaker);
 
