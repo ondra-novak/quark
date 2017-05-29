@@ -4,6 +4,7 @@
 #include "../quark_lib/orderErrorException.h"
 #include "../quark_lib/order.h"
 #include "../quark_lib/engineState.h"
+#include "../quark_lib/core.h"
 
 static quark::CurrentState curState;
 static std::vector<quark::TxItem> txbuffer;
