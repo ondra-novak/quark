@@ -109,15 +109,27 @@ json::Value processTransaction(json::Value id, json::Value time, json::Value e) 
 
 	return json::Object("id", id)
 			("time", time)
+			("price", curState.getLastPrice())
 			("events", outres);
 }
 
 json::Value rollbackTransaction(json::Value id, json::Value tx) {
 
-	return json::Object("id",id)
+
+
+
+	if (!curState.rollbackTo(tx)) {
+		return json::Object("id",id)
 			("success",false)
-			("last",nullptr)
-			("error","Not implemented yet");
+			("last",curState.getCurrentTx())
+			("price",curState.getLastPrice())
+			("error","Transaction not found");
+	} else {
+		return json::Object("id",id)
+			("success",true)
+			("last",curState.getCurrentTx())
+			("price",curState.getLastPrice());
+	}
 
 
 }
@@ -178,13 +190,14 @@ int main(int argc, char **argv) {
 				   ("order",e.getOrderId())
 				   ("code",e.getCode())
 				   ("message",e.getMessage());
+				stream.write(err);
 
 			} catch (std::exception &e) {
 				Object err;
 				err("id", cmd["id"])
 				   ("error","internal_error")
 				   ("message",e.what());
-
+				stream.write(err);
 			}
 		}
 
@@ -193,9 +206,9 @@ int main(int argc, char **argv) {
 	} catch (std::exception &e) {
 
 		Object err;
-		err("error","fatal");
+		err("error","fatal")
 		   ("message",e.what());
-
+		stream.write(err);
 
 
 

@@ -45,6 +45,10 @@ public:
 		this->lastPrice = lastPrice;
 	}
 
+	Value getStateId() const {return stateId;}
+
+	void erasePrevState() {prevState = nullptr;}
+
 protected:
 
 	Value stateId;
@@ -144,7 +148,7 @@ public:
 
 	PEngineState changes;
 
-
+	unsigned int maxHistory = 4;
 
 
 
@@ -175,6 +179,17 @@ public:
 
 	void updateTrailings(std::size_t price, Output out);
 
+	bool rollbackTo(json::Value txid);
+	json::Value getCurrentTx() const;
+	std::size_t getLastPrice() const;
+
+protected:
+	void resetCurrentState();
+	void rollbackOneStep();
+	void clearHistory();
+
+private:
+	void startTransaction(const json::Value& txid);
 };
 
 } /* namespace quark */

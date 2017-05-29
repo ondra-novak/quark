@@ -46,6 +46,7 @@ public:
 	static const int orderPostLimitConflict = 1100;
 	static const int orderFOKFailed = 1101;
 	static const int orderIOCCanceled = 1102;
+	static const int emptyOrderbook = 1103;
 
 protected:
 

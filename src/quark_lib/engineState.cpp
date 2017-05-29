@@ -134,15 +134,25 @@ void CurrentState::rebuildQueues() {
 	}
 }
 
-void CurrentState::reset() {
+void CurrentState::resetCurrentState() {
 	for (auto && o : changes->getChanges()) {
 
-		if (o.second.newOrder == nullptr)
+		if (o.second.oldOrder == nullptr)
 			orders.erase(o.first);
 		else
 			orders[o.first] = o.second.oldOrder;
 	}
+}
+
+void CurrentState::rollbackOneStep() {
+	resetCurrentState();
 	changes = changes->getPrevState();
+}
+
+
+void CurrentState::reset() {
+
+	rollbackOneStep();
 	rebuildQueues();
 }
 
@@ -169,9 +179,14 @@ void CurrentState::updateOrder(const OrderId &orderId, const POrder &newOrder) {
 
 }
 
+void CurrentState::startTransaction(const json::Value& txid) {
+	changes = new EngineState(txid, changes);
+	clearHistory();
+}
+
 void CurrentState::matching(json::Value txid, const Transaction& tx, Output output) {
 
-	changes = new EngineState(txid, changes);
+	startTransaction(txid);
 	try {
 
 		std::size_t begPrice = changes->getLastPrice();
@@ -275,9 +290,6 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 		OrderQueue &stopQueue = order->getDir() == Order::buy?stop_above:stop_below;
 		curQueue.pop();
 		switch (o->getType()) {
-		case Order::market:
-			pairInQueue(orderbook, o, out);
-			break;
 		case Order::limit:
 			if (!pairInQueue(orderbook, o, out)) {
 				o = o->changeState(Order::orderbook);
@@ -305,6 +317,12 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 				throw OrderErrorException(o->getId(), OrderErrorException::orderFOKFailed, "FOK failed");
 			}
 			break;
+		case Order::market:
+			if (!pairInQueue(orderbook, o, out)) {
+				cancelOrder(o);
+				out(TradeResultOrderCancel(o, OrderErrorException::emptyOrderbook));
+			}
+			break;
 		case Order::ioc:
 			if (!pairInQueue(orderbook, o, out)) {
 				cancelOrder(o);
@@ -329,7 +347,7 @@ bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order) {
 bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output out) {
 	if (queue.empty()) return false;
 	auto b = queue.begin();
-	if (queue.inOrder(*b, order) || (*b)->getLimitPrice() == order->getLimitPrice()) {
+	if (order->getType() == Order::market || queue.inOrder(*b, order) || (*b)->getLimitPrice() == order->getLimitPrice()) {
 
 		POrder maker = *b;
 		POrder taker = order;
@@ -350,12 +368,12 @@ bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output ou
 		bool fullBuy, fullSell;
 		if (taker->getDir() == Order::buy) {
 			buy = taker;
-			sell == maker;
+			sell = maker;
 			fullBuy = newTaker == nullptr;
 			fullSell = newMaker == nullptr;
 		} else {
 			buy = maker;
-			sell == taker;
+			sell = taker;
 			fullBuy = newMaker == nullptr;
 			fullSell = newTaker == nullptr;
 
@@ -378,6 +396,7 @@ bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output ou
 		runTriggers(stop_below,curPrice, std::less<std::size_t>(),out);
 
 
+		return true;
 	} else {
 		return false;
 	}
@@ -446,4 +465,41 @@ void CurrentState::updateTrailings(std::size_t price, Output out) {
 	trailings.resize(p - trailings.begin());
 }
 
+void CurrentState::clearHistory() {
+	json::RefCntPtr<EngineState> st = changes;
+	for (unsigned int i = 0; i < maxHistory && st != nullptr; i++) {
+		st = st->getPrevState();
+	}
+	if (st != nullptr) {
+		st->erasePrevState();
+	}
+}
+
 } /* namespace quark */
+
+bool quark::CurrentState::rollbackTo(json::Value txid) {
+	json::RefCntPtr<EngineState> st = changes;
+	while (st != nullptr) {
+		if (st->getStateId() == txid) {
+
+			while (changes->getStateId() != txid) {
+				rollbackOneStep();
+			}
+			rebuildQueues();
+			return true;
+
+		}
+		st = st->getPrevState();
+	}
+	return false;
+}
+
+json::Value quark::CurrentState::getCurrentTx() const {
+	if (changes != nullptr) return changes->getStateId();
+	else return json::null;
+}
+
+std::size_t quark::CurrentState::getLastPrice() const {
+	if (changes != nullptr) return changes->getLastPrice();
+	else return 0;
+}

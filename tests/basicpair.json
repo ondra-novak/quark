@@ -1,0 +1,23 @@
+{
+"id":1,
+"time":1,
+"events":[ {
+		"cmd":"add_order",
+		"id":"buy1",
+		"dir":"buy",
+		"type":"limit",
+		"limitPrice":200000,
+		"size":100
+	}]
+}
+{
+"id":2,
+"time":2,
+"events":[ {
+		"cmd":"add_order",
+		"id":"sell1",
+		"dir":"sell",
+		"type":"market",
+		"size":100
+	}]
+}
