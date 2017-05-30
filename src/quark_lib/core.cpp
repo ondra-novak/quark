@@ -138,7 +138,7 @@ void CurrentState::reset() {
 }
 
 
-void CurrentState::updateOrder(const OrderId &orderId, const POrder &newOrder) {
+POrder CurrentState::updateOrder(const OrderId &orderId, const POrder &newOrder) {
 
 	auto &ch = changes->getChanges();
 	auto p = ch.find(orderId);
@@ -157,6 +157,7 @@ void CurrentState::updateOrder(const OrderId &orderId, const POrder &newOrder) {
 		ord = newOrder;
 
 	}
+	return newOrder;
 
 }
 
@@ -209,6 +210,17 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 			break;
 			}
 
+			while (!market.empty()) {
+				POrder order = *market.begin();
+				OrderQueue &orderbook = order->getDir() == Order::buy?orderbook_ask:orderbook_bid;
+				if (!pairInQueue(orderbook ,order,output)) {
+					break;
+				} else {
+					market.erase(market.begin());
+				}
+
+			}
+
 		}
 
 		std::size_t endPrice = changes->getLastPrice();
@@ -257,8 +269,7 @@ void CurrentState::updateOrderInQueues(POrder oldOrder, POrder newOrder) {
 
 	OrderQueue &q = getQueueByState(oldOrder);
 	q.erase(oldOrder);
-	q.insert(newOrder);
-	updateOrder(newOrder->getId(), newOrder);
+	q.insert(updateOrder(newOrder->getId(), newOrder));
 }
 
 void CurrentState::matchNewOrder(POrder order, Output out) {
@@ -273,9 +284,8 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 		switch (o->getType()) {
 		case Order::limit:
 			if (!pairInQueue(orderbook, o, out)) {
-				o = o->changeState(Order::orderbook);
-				getQueueByState(o).insert(o);
-				updateOrder(o->getId(), o);
+				POrder newOrder = updateOrder(o->changeState(Order::orderbook));
+				getQueueByState(newOrder).insert(newOrder);
 			}
 			break;
 		case Order::postlimit:
@@ -283,15 +293,14 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 				cancelOrder(o);
 				out(TradeResultOrderCancel(o,OrderErrorException::orderPostLimitConflict));
 			} else {
-				o = o->changeState(Order::orderbook);
-				getQueueByState(o).insert(o);
-				updateOrder(o->getId(), o);
+				POrder newOrder = updateOrder(o->changeState(Order::orderbook));
+				getQueueByState(newOrder).insert(newOrder);
 			}
 			break;
 		case Order::stop:
 		case Order::stoplimit:
-			stopQueue.insert(o->changeState(Order::stopQueue));
-			updateOrder(o->getId(), o);
+			stopQueue.insert(
+					updateOrder(o->changeState(Order::stopQueue)));
 			break;
 		case Order::fok:
 			if (!pairInQueue(orderbook, o, out)) {
@@ -300,8 +309,7 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 			break;
 		case Order::market:
 			if (!pairInQueue(orderbook, o, out)) {
-				cancelOrder(o);
-				out(TradeResultOrderCancel(o, OrderErrorException::emptyOrderbook));
+				market.insert(updateOrder(o->changeState(Order::marketQueue)));
 			}
 			break;
 		case Order::ioc:
@@ -319,6 +327,7 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 }
 
 bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order) {
+
 	if (queue.empty()) return false;
 	auto b = queue.begin();
 	return queue.inOrder(*b, order);

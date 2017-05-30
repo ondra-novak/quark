@@ -62,7 +62,8 @@ public:
 
 
 
-	void updateOrder(const OrderId &orderId, const POrder &newOrder);
+	POrder updateOrder(const OrderId &orderId, const POrder &newOrder);
+	POrder updateOrder(const POrder &newOrder) {return updateOrder(newOrder->getId(), newOrder);}
 
 
 
