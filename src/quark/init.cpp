@@ -12,4 +12,11 @@ void initOrdersDB(CouchDB &db) {
 
 
 
+
+void initTradesDB(couchit::CouchDB& db) {
+}
+
+void initPositionsDB(couchit::CouchDB& db) {
+}
+
 }
