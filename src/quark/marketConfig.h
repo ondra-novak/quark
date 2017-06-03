@@ -3,9 +3,9 @@
 
 namespace quark {
 
-class MarkedConfig {
+class MarketConfig {
 public:
-	MarkedConfig(json::Value v);
+	MarketConfig(json::Value v);
 
 	/// size of 1 pip (0.01 means that smallest step is 0.01)
 	double pipSize;

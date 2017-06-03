@@ -5,7 +5,7 @@
  *      Author: ondra
  */
 
-#include "markedConfig.h"
+#include "marketConfig.h"
 
 #include <imtjson/json.h>
 
@@ -21,7 +21,7 @@ static Value mandatory(json::Value v, StrViewA name) {
 	else throw std::runtime_error(String({"Config value: ", name, " is mandatory, but missing"}).c_str());
 }
 
-MarkedConfig::MarkedConfig(json::Value v)
+MarketConfig::MarketConfig(json::Value v)
 :pipSize(mandatory(v,"pipSize").getNumber())
 /// order size granuality
 ,granuality(mandatory(v,"granuality").getNumber())

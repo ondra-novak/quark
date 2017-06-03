@@ -6,6 +6,6 @@ add_custom_command(OUTPUT ${designs} COMMAND make -C designdocs all)
 add_custom_target(buildDesigns COMMAND make -C designdocs all)
 add_custom_target(cleanDesigns COMMAND make -C designdocs clean-designs)
 add_executable (quark ${quark_SRC} ${designs})
-add_dependencies(quark buildDesigns)
+add_dependencies(quark buildDesigns) 
 target_link_libraries (quark LINK_PUBLIC quarklib couchit imtjson)
 

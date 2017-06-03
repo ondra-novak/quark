@@ -11,7 +11,7 @@
 #include <couchit/document.h>
 
 #include "init.h"
-#include "markedConfig.h"
+#include "marketConfig.h"
 
 namespace quark {
 
@@ -21,7 +21,7 @@ using namespace json;
 static std::unique_ptr<CouchDB> ordersDb;
 static std::unique_ptr<CouchDB> tradesDb;
 static std::unique_ptr<CouchDB> positionsDb;
-static std::unique_ptr<MarkedConfig> marketCfg;
+static std::unique_ptr<MarketConfig> marketCfg;
 StrViewA marketConfigDocName("settings");
 
 void processOrder(Value cmd) {
@@ -44,7 +44,7 @@ void mainloop() {
 
 		if (chdoc.id == marketConfigDocName) {
 			try {
-				marketCfg = std::unique_ptr<MarkedConfig>(new MarkedConfig(chdoc.doc));
+				marketCfg = std::unique_ptr<MarketConfig>(new MarketConfig(chdoc.doc));
 			} catch (...) {
 				//TODO add log message here
 			}
@@ -61,7 +61,7 @@ void mainloop() {
 void receiveMarketConfig() {
 	Value doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
 	if (doc != nullptr) {
-		marketCfg = std::unique_ptr<MarkedConfig>(new MarkedConfig(doc));
+		marketCfg = std::unique_ptr<MarketConfig>(new MarketConfig(doc));
 	}
 }
 
