@@ -2,7 +2,7 @@
 
 void mapdoc(Document doc) {
 
-if (doc["status"] != "finished" && doc["status"] != "canceled") {
+if (doc["finished"].getBool() != true && doc["user"].defined()) {
 	emit(doc["user"], doc["_rev"]);
 }
 

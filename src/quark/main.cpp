@@ -8,8 +8,10 @@
 #include <fstream>
 #include <couchit/couchDB.h>
 #include <couchit/changes.h>
+#include <couchit/document.h>
 
 #include "init.h"
+#include "markedConfig.h"
 
 namespace quark {
 
@@ -19,7 +21,20 @@ using namespace json;
 static std::unique_ptr<CouchDB> ordersDb;
 static std::unique_ptr<CouchDB> tradesDb;
 static std::unique_ptr<CouchDB> positionsDb;
+static std::unique_ptr<MarkedConfig> marketCfg;
+StrViewA marketConfigDocName("settings");
 
+void processOrder(Value cmd) {
+
+	if (marketCfg == nullptr) {
+		Document doc(cmd);
+		doc("status","rejected")
+		   ("reason","market is not opened yet")
+		   ("finished",true);
+		ordersDb->put(doc);
+	}
+
+}
 
 void mainloop() {
 
@@ -27,13 +42,29 @@ void mainloop() {
 	ChangesFeed chfeed = ordersDb->createChangesFeed();
 	chfeed.setTimeout(-1).includeDocs() >> [](ChangedDoc chdoc) {
 
-
-
+		if (chdoc.id == marketConfigDocName) {
+			try {
+				marketCfg = std::unique_ptr<MarkedConfig>(new MarkedConfig(chdoc.doc));
+			} catch (...) {
+				//TODO add log message here
+			}
+		} else if (chdoc.id.substr(0,8) != "_design/"){
+			processOrder(chdoc.doc);
+		}
 		return true;
 	};
 
 
 }
+
+
+void receiveMarketConfig() {
+	Value doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
+	if (doc != nullptr) {
+		marketCfg = std::unique_ptr<MarkedConfig>(new MarkedConfig(doc));
+	}
+}
+
 
 
 void start(couchit::Config cfg) {
@@ -55,6 +86,8 @@ void start(couchit::Config cfg) {
 	positionsDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
 	initPositionsDB(*positionsDb);
 
+
+	receiveMarketConfig();
 
 	mainloop();
 
