@@ -28,7 +28,8 @@ StrViewA STOP = "stop";
 StrViewA MARKET = "market";
 StrViewA LIMIT = "limit";
 StrViewA FIELD_CANCELED = "canceled";
-
+StrViewA  FIELD_UPDATE_REQ = "updateReq";
+StrViewA FIELD_TMCREATED = "createTime";
 
 void validationError(StrViewA field, StrViewA message) {
 
@@ -57,7 +58,8 @@ void update(Document &doc, Value req) {
 			start(Object(),404);
 			send("Order not found");
 		} else {
-			doc = doc.replace(FIELD_CANCELED, true);
+			doc = doc.replace(FIELD_UPDATE_REQ,
+					Object(FIELD_STATUS, FIELD_CANCELED));
 			okResponse(doc);
 		}
 	} else {
@@ -78,7 +80,7 @@ void update(Document &doc, Value req) {
 			for (Value v : reqOrder) {
 				StrViewA x = v.getKey();
 					if (x == FIELD_DIR || x == FIELD_TYPE || x == FIELD_STATUS
-							|| x == FIELD__ID || x == "updateReq"
+							|| x == FIELD__ID || x == FIELD_UPDATE_REQ
 							|| x == FIELD_USER) {
 					return validationError(x,"The field is read-only");
 				}
@@ -95,7 +97,7 @@ void update(Document &doc, Value req) {
 				}
 			}
 
-			doc = doc.replace("updateReq", reqOrder);
+				doc = doc.replace(FIELD_UPDATE_REQ, reqOrder);
 
 			okResponse(doc);
 
@@ -193,9 +195,13 @@ void update(Document &doc, Value req) {
 				return validationError(FIELD_USER, "must be defined");
 		}
 
+		time_t t;
+		time(&t);
+
 		Object obj(reqOrder);
 			obj(FIELD_STATUS, "created")
 		   (FIELD__ID, req["uuid"])
+		   (FIELD_TMCREATED, t)
 		   (FIELD_CANCELED,
 					false);
 

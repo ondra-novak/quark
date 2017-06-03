@@ -7,6 +7,7 @@
 
 #include <fstream>
 #include <couchit/couchDB.h>
+#include <couchit/changes.h>
 
 #include "init.h"
 
@@ -18,6 +19,21 @@ using namespace json;
 static std::unique_ptr<CouchDB> ordersDb;
 static std::unique_ptr<CouchDB> tradesDb;
 static std::unique_ptr<CouchDB> positionsDb;
+
+
+void mainloop() {
+
+
+	ChangesFeed chfeed = ordersDb->createChangesFeed();
+	chfeed.setTimeout(-1).includeDocs() >> [](ChangedDoc chdoc) {
+
+
+
+		return true;
+	};
+
+
+}
 
 
 void start(couchit::Config cfg) {
@@ -38,6 +54,9 @@ void start(couchit::Config cfg) {
 	cfg.databaseName = dbprefix + "positions";
 	positionsDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
 	initPositionsDB(*positionsDb);
+
+
+	mainloop();
 
 
 }
