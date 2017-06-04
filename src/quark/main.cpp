@@ -6,96 +6,18 @@
  */
 
 #include <fstream>
+#include <thread>
 #include <couchit/couchDB.h>
 #include <couchit/changes.h>
 #include <couchit/document.h>
 
+#include "couchDBLogProvider.h"
+
 #include "init.h"
 #include "marketConfig.h"
+#include "quarkApp.h"
 
-namespace quark {
-
-using namespace couchit;
-using namespace json;
-
-static std::unique_ptr<CouchDB> ordersDb;
-static std::unique_ptr<CouchDB> tradesDb;
-static std::unique_ptr<CouchDB> positionsDb;
-static std::unique_ptr<MarketConfig> marketCfg;
-StrViewA marketConfigDocName("settings");
-
-void processOrder(Value cmd) {
-
-	if (marketCfg == nullptr) {
-		Document doc(cmd);
-		doc("status","rejected")
-		   ("reason","market is not opened yet")
-		   ("finished",true);
-		ordersDb->put(doc);
-	}
-
-}
-
-void mainloop() {
-
-
-	ChangesFeed chfeed = ordersDb->createChangesFeed();
-	chfeed.setTimeout(-1).includeDocs() >> [](ChangedDoc chdoc) {
-
-		if (chdoc.id == marketConfigDocName) {
-			try {
-				marketCfg = std::unique_ptr<MarketConfig>(new MarketConfig(chdoc.doc));
-			} catch (...) {
-				//TODO add log message here
-			}
-		} else if (chdoc.id.substr(0,8) != "_design/"){
-			processOrder(chdoc.doc);
-		}
-		return true;
-	};
-
-
-}
-
-
-void receiveMarketConfig() {
-	Value doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
-	if (doc != nullptr) {
-		marketCfg = std::unique_ptr<MarketConfig>(new MarketConfig(doc));
-	}
-}
-
-
-
-void start(couchit::Config cfg) {
-
-
-
-
-
-	String dbprefix = cfg.databaseName;
-	cfg.databaseName = dbprefix + "orders";
-	ordersDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
-	initOrdersDB(*ordersDb);
-
-	cfg.databaseName = dbprefix + "trades";
-	tradesDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
-	initTradesDB(*tradesDb);
-
-	cfg.databaseName = dbprefix + "positions";
-	positionsDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
-	initPositionsDB(*positionsDb);
-
-
-	receiveMarketConfig();
-
-	mainloop();
-
-
-}
-
-
-}
+quark::QuarkApp quarkApp;
 
 bool mandatoryField(const json::Value &v, json::StrViewA name) {
 
@@ -105,13 +27,21 @@ bool mandatoryField(const json::Value &v, json::StrViewA name) {
 
 }
 
+
 int main(int c, char **args) {
 
+
+	using namespace quark;
 	using namespace couchit;
 	using namespace json;
 
+	CouchDBLogProvider logProvider;
+
+	setLogProvider(&logProvider);
+
 	if (c != 2) {
-		std::cerr << "failed to start. Required argument - path to configuration" << std::endl;
+
+		logError("failed to start. Required argument - path to configuration");
 		return 1;
 	}
 
@@ -123,13 +53,13 @@ int main(int c, char **args) {
 		Value cfgjson;
 		std::ifstream inp(cfgpath, std::ios::in);
 		if (!inp) {
-			std::cerr << "Failed to open config:" << cfgpath << std::endl;
+			logError({"Failed to open config",cfgpath});
 			return 2;
 		}
 		try {
 			cfgjson = Value::fromStream(inp);
 		} catch (std::exception &e) {
-			std::cerr << "Config exception: " << e.what() << std::endl;
+			logError({"Config exception",e.what()});
 			return 3;
 		}
 
@@ -144,12 +74,19 @@ int main(int c, char **args) {
 
 	}
 
-	try {
-		quark::start(cfg);
-	} catch (std::exception &e) {
-		std::cerr << "Quark exited with unhandled exception: " << e.what() << std::endl;
+	std::thread thr([=]{
+		try {
+			quarkApp.start(cfg);
+		} catch (std::exception &e) {
+			logError({"Quark exited with unhandled exception",e.what()});
+		}
+		exit(1);
+	});
+	while (!std::cin.eof()) {
+		char c = std::cin.get();;
+		if (c == 'x') break;
 	}
-
+	quarkApp.exitApp();
 
 }
 

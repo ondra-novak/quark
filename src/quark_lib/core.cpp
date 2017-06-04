@@ -161,6 +161,65 @@ POrder CurrentState::updateOrder(const OrderId &orderId, const POrder &newOrder)
 
 }
 
+std::size_t CurrentState::calcBudgetForMarketOrder(Order::Dir direction,
+		std::size_t size) const {
+}
+
+
+CurrentState::OrderQueue& CurrentState::selectOpositeOrderbook(Order::Dir direction) {
+	switch (direction) {
+	case Order::buy: return orderbook_ask;
+	case Order::sell: return orderbook_bid;
+	default: throw std::runtime_error("Corrupted order");
+	}
+}
+
+CurrentState::OrderQueue& CurrentState::selectFriendlyOrderbook(Order::Dir direction) {
+	switch (direction) {
+	case Order::buy: return orderbook_bid;
+	case Order::sell: return orderbook_ask;
+	default: throw std::runtime_error("Corrupted order");
+	}
+}
+
+CurrentState::OrderQueue& CurrentState::selectStopQueue(Order::Dir direction) {
+	switch (direction) {
+	case Order::buy: return stop_above;
+	case Order::sell: return stop_below;
+	default: throw std::runtime_error("Corrupted order");
+	}
+}
+
+const CurrentState::OrderQueue& CurrentState::selectOpositeOrderbook(
+		Order::Dir direction) const {
+	switch (direction) {
+	case Order::buy: return orderbook_ask;
+	case Order::sell: return orderbook_bid;
+	default: throw std::runtime_error("Corrupted order");
+	}
+}
+
+const CurrentState::OrderQueue& CurrentState::selectFriendlyOrderbook(
+		Order::Dir direction) const {
+	switch (direction) {
+	case Order::buy: return orderbook_bid;
+	case Order::sell: return orderbook_ask;
+	default: throw std::runtime_error("Corrupted order");
+	}
+}
+
+const CurrentState::OrderQueue& CurrentState::selectStopQueue(Order::Dir direction) const {
+	switch (direction) {
+	case Order::buy: return stop_above;
+	case Order::sell: return stop_below;
+	default: throw std::runtime_error("Corrupted order");
+	}
+}
+
+bool CurrentState::isKnownOrder(const OrderId& orderId) const {
+	return orders.find(orderId) != orders.end();
+}
+
 void CurrentState::startTransaction(const json::Value& txid) {
 	changes = new EngineState(txid, changes);
 	clearHistory();

@@ -48,6 +48,7 @@ public:
 	static const int orderIOCCanceled = 1102;
 	static const int emptyOrderbook = 1103;
 
+
 protected:
 
 	json::Value orderId;

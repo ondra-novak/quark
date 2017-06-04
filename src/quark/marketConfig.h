@@ -1,9 +1,12 @@
 #pragma once
 #include <imtjson/value.h>
+#include <imtjson/string.h>
+
+
 
 namespace quark {
 
-class MarketConfig {
+class MarketConfig: public json::RefCntObj {
 public:
 	MarketConfig(json::Value v);
 
@@ -25,7 +28,23 @@ public:
 
 	///maximum allowed spread in per cents, if spread is larger, market orders are paused
 	double maxSpreadPtc;
+	///maximum slippage for stop commands in ptc
+	double maxSlippagePtc;
+
+
+	std::size_t priceToPip(double price);
+	double pipToPrice(std::size_t pip);
+
+	std::size_t amountToSize(double amount);
+	double sizeToAmount(std::size_t size);
+
+	std::size_t budgetToPip(double budget);
+	double pipToBudget(std::size_t pip);
+
+	json::String signature;
 
 };
+
+typedef json::RefCntPtr<MarketConfig> PMarketConfig;
 
 } /* namespace quark */

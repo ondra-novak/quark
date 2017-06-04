@@ -15,10 +15,28 @@ public:
 
 };
 
+struct OrderJsonData {
+
+	json::Value id;
+	json::String dir;
+	json::String type;
+	std::size_t size;
+	std::size_t limitPrice;
+	std::size_t stopPrice;
+	std::size_t trailingDistance;
+	std::size_t budget;
+	int queuePriority;
+	int domPriority;
+
+	OrderJsonData(json::Value v);
+	OrderJsonData() {}
+
+};
+
 class Order: public RefCntObj {
 public:
 	Order();
-	Order(json::Value data);
+	Order(const OrderJsonData &data);
 
 
 	enum Dir {

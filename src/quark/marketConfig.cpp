@@ -39,10 +39,41 @@ MarketConfig::MarketConfig(json::Value v)
 
 ///maximum allowed spread in per cents, if spread is larger, market orders are paused
 ,maxSpreadPtc(mandatory(v,"maxSpreadPtc").getNumber())
+///maximum allowed spread in per cents, if spread is larger, market orders are paused
+,maxSlippagePtc(mandatory(v,"maxSlippagePtc").getNumber())
+
+,signature(mandatory(v,"signature"))
 {
 
+	double maxSize = pow(2,sizeof(std::size_t)*8);
+	double reqSize = std::min(maxPrice * maxSize, maxBudget) / pipSize / granuality;
+	if (reqSize >= maxSize) throw std::runtime_error("maxPrice * maxSize or maxBudget is out of range to map to the numbers");
+
+}
 
 
+std::size_t quark::MarketConfig::priceToPip(double price) {
+	return (std::size_t)floor(price / pipSize);
+}
+
+double quark::MarketConfig::pipToPrice(std::size_t pip) {
+	return pip * pipSize;
+}
+
+std::size_t quark::MarketConfig::amountToSize(double amount) {
+	return (std::size_t)floor(amount / granuality+0.5);
+}
+
+double quark::MarketConfig::sizeToAmount(std::size_t size) {
+	return size * granuality;
+}
+
+std::size_t MarketConfig::budgetToPip(double budget) {
+	return (std::size_t)floor(budget / pipSize / granuality+0.5);
+}
+
+double MarketConfig::pipToBudget(std::size_t pip) {
+	return pip * pipSize * granuality;
 }
 
 } /* namespace quark */

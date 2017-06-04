@@ -13,16 +13,33 @@ namespace quark {
 
 Order::Order() {}
 
-Order::Order(json::Value data) {
+OrderJsonData::OrderJsonData(json::Value data) {
 
 	using namespace json;
 
 	id = data["id"];
+	dir = String(data["dir"]);
+	type = String(data["type"]);
+	size = data["size"].getUInt();
+	limitPrice = data["limitPrice"].getUInt();
+	stopPrice = data["stopPrice"].getUInt();
+	trailingDistance = data["trailingDistance"].getUInt();
+	domPriority = data["domPriority"].getInt();
+	queuePriority = data["queuePriority"].getInt();
+	budget = data["budget"].getInt();
+
+}
+
+Order::Order(const OrderJsonData &data) {
+
+	using namespace json;
+
+	id = data.id;
 	if (!id.defined()) {
 		throw OrderErrorException(id,OrderErrorException::orderHasNoID, "Order has no ID");
 	}
 
-	Value jd = data["dir"];
+	Value jd = data.dir;
 	if (jd.getString() == "buy") {
 		dir = buy;
 	} else if (jd.getString() == "sell") {
@@ -33,7 +50,7 @@ Order::Order(json::Value data) {
 
 
 
-	StrViewA tp = data["type"].getString();
+	StrViewA tp = data.type;
 	if (tp == "market") type = market;
 	else if (tp == "limit") type = limit;
 	else if (tp == "stop") type = stop;
@@ -48,13 +65,13 @@ Order::Order(json::Value data) {
 		throw OrderErrorException(id,OrderErrorException::orderTypeNotSupported, String({"Order type '", tp, "' is not supported"}).c_str());
 
 
-	size = data["size"].getUInt();
-	limitPrice = data["limitPrice"].getUInt();
-	triggerPrice = data["stopPrice"].getUInt();
-	trailingDistance = data["trailingDistance"].getUInt();
+	size = data.size;
+	limitPrice = data.limitPrice;
+	triggerPrice = data.stopPrice;
+	trailingDistance = data.trailingDistance;
 	if (size == 0)
 		throw OrderErrorException(id, OrderErrorException::invalidOrMissingSize, "Invalid or missing 'size'");
-	budget = data["budget"].getUInt();
+	budget = data.budget;
 
 
 	if (limitPrice == 0 && (type == limit
@@ -84,8 +101,8 @@ Order::Order(json::Value data) {
 	}
 
 
-	domPriority = data["domPriority"].getInt();
-	queuePriority = data["queuePriority"].getInt();
+	domPriority = data.domPriority;
+	queuePriority = data.queuePriority;
 
 }
 

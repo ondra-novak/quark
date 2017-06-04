@@ -200,10 +200,8 @@ void update(Document &doc, Value req) {
 
 		Object obj(reqOrder);
 			obj(FIELD_STATUS, "created")
-		   (FIELD__ID, req["uuid"])
-		   (FIELD_TMCREATED, t)
-		   (FIELD_CANCELED,
-					false);
+		   (FIELD__ID, String({"o.",req["uuid"].getString()}))
+		   (FIELD_TMCREATED, t);
 
 
 		doc = Value(obj);
