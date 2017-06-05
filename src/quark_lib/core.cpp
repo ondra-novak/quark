@@ -461,7 +461,7 @@ void CurrentState::runTriggers(OrderQueue& queue, std::size_t price, Cmp cmp, Ou
 
 	if (!queue.empty()) {
 		auto b = queue.begin();
-		while (!cmp((*b)->getTriggerPrice(), price)) {
+		while (b != queue.end() && !cmp((*b)->getTriggerPrice(), price)) {
 
 			POrder newOrder;
 
