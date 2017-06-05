@@ -12,7 +12,7 @@ void mapdoc(Document doc) {
 	if (!doc["_deleted"].getBool()) {
 
 		StrViewA name = doc.getID();
-		if (name == "settings") {
+		if (name == "settings" || name == "error") {
 			emit(nullptr,nullptr);
 		}
 		if (name.substr(0,2) == "o." && doc["finished"].getBool() == false) {

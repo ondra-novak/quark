@@ -342,14 +342,14 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 				}break;
 			case quark::trOrderCancel: {
 					const quark::TradeResultOrderCancel &t = dynamic_cast<const quark::TradeResultOrderCancel &>(r);
-					Document &o = o2u[t.getOrder()->getDir()];
+					Document &o = o2u[t.getOrder()->getId()];
 					o("status","canceled")
 					 ("finished",true)
 					 ("cancel_code",t.getCode());
 				}break;
 			case quark::trOrderTrigger: {
 					const quark::TradeResultOrderTrigger &t = dynamic_cast<const quark::TradeResultOrderTrigger &>(r);
-					Document &o = o2u[t.getOrder()->getDir()];
+					Document &o = o2u[t.getOrder()->getId()];
 					Order::Type ty = t.getOrder()->getType();
 					StrViewA st;
 					switch (ty) {
@@ -499,47 +499,83 @@ void QuarkApp::createOrder(Document order) {
 
 void QuarkApp::mainloop() {
 
-	View queueView("_design/orders/_view/queue", View::includeDocs|View::update);
+	View queueView("_design/orders/_view/queue", View::includeDocs | View::update);
+	Filter errorWait("orders/removeError");
 
-	auto loopBody = [&](ChangedDoc chdoc) {
+
+	for (;;) {
+
+
 
 		try {
 
-			if (!chdoc.deleted)  {
-				if (chdoc.id == marketConfigDocName) {
-					try {
-						marketCfg = new MarketConfig(chdoc.doc);
-						logInfo("Market configuration updated");
-					} catch (std::exception &e) {
-						logError({"MarketConfig update failed", e.what()});
-					}
-				} else if (chdoc.id.substr(0,8) != "_design/"){
-					processOrder(chdoc.doc);
+			ChangesFeed chfeed = ordersDb->createChangesFeed();
+			exitFn = [&] {
+				chfeed.cancelWait();
+			};
+
+			Value errorDoc = ordersDb->get("error", CouchDB::flgNullIfMissing);
+			if (!errorDoc.isNull()) {
+				logError("Error is signaled, engine stopped - please remove error file to continue");
+
+				try {
+					chfeed.setFilter(errorWait).since(ordersDb->getLastKnownSeqNumber()).setTimeout(-1)
+							>> [](ChangedDoc chdoc) {
+						if (chdoc.deleted) return false;
+						return true;
+					};
+				} catch (CanceledException &e) {
+					return;
 				}
+				continue;
+
 			}
+
+
+
+
+			auto loopBody = [&](ChangedDoc chdoc) {
+
+				if (!chdoc.deleted) {
+					if (chdoc.id == marketConfigDocName) {
+						try {
+							marketCfg = new MarketConfig(chdoc.doc);
+							logInfo("Market configuration updated");
+						} catch (std::exception &e) {
+							logError( {	"MarketConfig update failed", e.what()});
+						}
+					} else if (chdoc.id.substr(0,8) != "_design/") {
+						processOrder(chdoc.doc);
+					}
+				}
+				return true;
+			};
+
+			Query q = ordersDb->createQuery(queueView);
+			Result res = q.exec();
+			for (Value v : res) {
+				loopBody(v);
+			}
+
+			try {
+				chfeed.setFilter(queueView).since(res.getUpdateSeq()).setTimeout(-1)
+						>> loopBody;
+			} catch (CanceledException &e) {
+
+			}
+			return;
+
 		} catch (std::exception &e) {
-			logError({"Unhandled exception in mainloop",e.what()});
+			logError( { "Unhandled exception in mainloop", e.what() });
+			Document errdoc;
+			errdoc.setID("error");
+			errdoc.set("what", e.what());
+			errdoc.enableTimestamp();
+			ordersDb->put(errdoc);
 		}
-		return true;
-	};
-
-	Query q = ordersDb->createQuery(queueView);
-	Result res = q.exec();
-	for (Value v : res) {
-		loopBody(v);
-	}
-
-
-	ChangesFeed chfeed = ordersDb->createChangesFeed();
-	exitFn = [&] {
-		chfeed.cancelWait();
-	};
-
-	try {
-		chfeed.setFilter(queueView).since(res.getUpdateSeq()).setTimeout(-1) >> loopBody;
-	} catch (CanceledException &e) {
 
 	}
+
 
 }
 
