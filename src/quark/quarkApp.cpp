@@ -11,6 +11,7 @@
 
 #include <couchit/document.h>
 #include <couchit/query.h>
+#include <couchit/changeset.h>
 
 #include "init.h"
 #include "logfile.h"
@@ -194,26 +195,178 @@ void QuarkApp::exitApp() {
 		exitFn();
 }
 
+View budget("_design/users/_view/budget",View::groupLevel|View::update|View::reduce);
+
 
 void QuarkApp::runTransaction(const TxItem& txitm) {
 	transactionCounter++;
+	OrdersToUpdate &o2u = o2u_1;
 	coreState.matching(transactionCounter,Transaction(&txitm,1), [&](const ITradeResult &res){
-		//TODO
-
+		receiveResults(res,o2u);
 	});
+
+	if (o2u.empty()) return;
+
+	Array keys;
+	{
+		bool rep;
+
+		Query q = ordersDb->createQuery(View::includeDocs);
+		Changeset chset = ordersDb->createChangeset();
+		u2u.clear();
+
+		do {
+			keys.clear();
+			keys.reserve(o2u.size());
+			for (auto && x: o2u) {
+				keys.push_back(x.first);
+			}
+			q.keys(keys);
+			Result res = q.exec();
+			for (Row r : res) {
+
+
+				Document &d = o2u[r.key];
+				logDebug({"Updating order", r.key, d});
+				d.setBaseObject(r.doc);
+				d.set("blocked", calculateBudget(d).toJson());
+				u2u.insert(std::make_pair(d["user"], json::null));
+				chset.update(d);
+
+			}
+			try {
+				chset.commit();
+				rep = false;
+			} catch (UpdateException &e) {
+				keys.clear();
+				for (auto err : e.getErrors()) {
+					if (err.isConflict()) {
+						Value id = err.document["_id"];
+						o2u_2[id] = o2u_1[id];
+						keys.push_back(id);
+					} else {
+						logError({"Unexpected error while update!", err.document, err.errorType, err.errorDetails, err.reason});
+					}
+				}
+				std::swap(o2u_1,o2u_2);
+				o2u_2.clear();
+				rep = true;
+			}
+		}
+		while (rep);
+	}
+
+	{
+		keys.clear();
+		for (auto &&x : u2u) {
+			keys.push_back(x.first);
+		}
+		Query q = ordersDb->createQuery(budget);
+		Result res = q.keys(keys).exec();
+		for (Row r : res) {
+			u2u[r.key] = r.value;
+		}
+		for (auto && x : u2u) {
+			if (x.second.isNull()) {
+				releaseUserBudget(x.first);
+			} else {
+				allocateUserBudget(x.first,x.second);
+			}
+		}
+	}
+}
+
+void QuarkApp::releaseUserBudget(Value user) {
+	logInfo( { "Clearing budget for user", user });
+}
+
+void QuarkApp::allocateUserBudget(Value user, Value v) {
+	logInfo( { "Allocating budget for user", user, v});
 }
 
 void QuarkApp::updateUserBudget(Value user) {
 
-	View budget("_design/users/_view/budget",View::groupLevel|View::update|View::reduce);
 
 	Query q = ordersDb->createQuery(budget);
 	Result r = q.key(user).exec();
 	if (r.empty()) {
-		logInfo({"Clearing budget for user", user});
+		releaseUserBudget(user);
 	} else {
-		logInfo({"Allocating budget for user", user, Row(r[0]).value});
+		allocateUserBudget(user, r[0]);
 	}
+
+}
+
+void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
+	time_t now;
+	time(&now);
+	switch (r.getType()) {
+			case quark::trTrade: {
+					const quark::TradeResultTrade &t = dynamic_cast<const quark::TradeResultTrade &>(r);
+					double price = marketCfg->pipToPrice(t.getPrice());
+					double amount = marketCfg->sizeToAmount(t.getSize());
+					Value dir = t.getDir()== Order::buy?"buy":"sell";
+					logInfo({"Trade",dir,price,amount});
+					Document &buyOrder = o2u[t.getBuyOrder()->getId()];
+					Document &sellOrder = o2u[t.getSellOrder()->getId()];
+					if (t.isFullBuy())
+						buyOrder("finished",true)
+								("status","executed");
+					 else
+						buyOrder("size",marketCfg->sizeToAmount(t.getBuyOrder()->getSize()-t.getSize()));
+
+					if (t.isFullSell())
+						sellOrder("finished",true)
+								("status","executed");
+					else
+						sellOrder("size",marketCfg->sizeToAmount(t.getSellOrder()->getSize()-t.getSize()));
+					Document trade;
+
+					trade("_id",String({"t.", t.getBuyOrder()->getId().getString().substr(2),t.getSellOrder()->getId().getString().substr(2)}))
+						 ("price",price)
+						 ("buyOrder",t.getBuyOrder()->getId())
+						 ("sellOrder",t.getSellOrder()->getId())
+						 ("size",amount)
+						 ("dir",dir)
+						 ("time",(std::size_t)now);
+					tradesDb->put(trade);
+				}break;
+			case quark::trOrderMove: {
+					const quark::TradeResultOderMove &t = dynamic_cast<const quark::TradeResultOderMove &>(r);
+					POrder o = t.getOrder();
+					Document &changes = o2u[o->getId()];
+					if (o->getLimitPrice()) changes("limitPrice",marketCfg->pipToPrice(o->getLimitPrice()));
+					if (o->getTriggerPrice()) changes("stopPrice",marketCfg->pipToPrice(o->getTriggerPrice()));
+				}break;
+			case quark::trOrderOk: {
+				}break;
+			case quark::trOrderCancel: {
+					const quark::TradeResultOrderCancel &t = dynamic_cast<const quark::TradeResultOrderCancel &>(r);
+					Document &o = o2u[t.getOrder()->getDir()];
+					o("status","canceled")
+					 ("finished",true)
+					 ("cancel_code",t.getCode());
+				}break;
+			case quark::trOrderTrigger: {
+					const quark::TradeResultOrderTrigger &t = dynamic_cast<const quark::TradeResultOrderTrigger &>(r);
+					Document &o = o2u[t.getOrder()->getDir()];
+					Order::Type ty = t.getOrder()->getType();
+					StrViewA st;
+					switch (ty) {
+					case Order::market: st = "market";break;
+					case Order::limit: st = "limit";break;
+					case Order::postlimit: st = "postlimit";break;
+					case Order::stop: st = "stop";break;
+					case Order::stoplimit: st = "stoplimit";break;
+					case Order::fok: st = "fok";break;
+					case Order::ioc: st = "loc";break;
+					case Order::trailingStop: st = "trailing-stop";break;
+					case Order::trailingStopLimit: st = "traling-stoplimit";break;
+					case Order::trailingLimit: st = "traling-limit";break;
+					}
+					o("type", st);
+				}break;
+			}
 
 }
 

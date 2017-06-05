@@ -293,6 +293,7 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 
 	} catch (...) {
 		reset();
+		throw;
 	}
 
 
