@@ -17,6 +17,7 @@
 #include "blockedBudget.h"
 
 #include "marketConfig.h"
+#include "moneyService.h"
 
 namespace quark {
 
@@ -41,6 +42,8 @@ protected:
 	std::unique_ptr<CouchDB> ordersDb;
 	std::unique_ptr<CouchDB> tradesDb;
 	std::unique_ptr<CouchDB> positionsDb;
+	MoneyServiceAdapter moneyServer;
+
 	PMarketConfig marketCfg;
 	static const StrViewA marketConfigDocName;
 	CurrentState coreState;
@@ -55,21 +58,22 @@ protected:
 	Document saveOrder(Document order, Object newItems);
 	void matchOrder(Document &order);
 	BlockedBudget calculateBudget(const Document &order);
-	void updateUserBudget(Value user);
 	void runTransaction(const TxItem &txitm);
 
 	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u);
+	void rejectOrderBudget(Document order);
+
 private:
 	POrder docOrder2POrder(const Document& order);
-	void releaseUserBudget(Value user);
-	void allocateUserBudget(Value user, Value v);
+
+
 
 	static const StrViewA FIELD_STATUS;
 	std::function<void()> exitFn;
 	std::size_t transactionCounter = 0;
 
+
 	OrdersToUpdate o2u_1, o2u_2;
-	UsersToUpdate u2u;
 
 };
 

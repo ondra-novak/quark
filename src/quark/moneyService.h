@@ -38,7 +38,7 @@ public:
 	 * The argument of the response is true=budget allocated, false=allocation rejected
 	 */
 
-	void allocBudget(json::Value user, json::Value order, const BlockedBudget &budget, Callback callback);
+	bool allocBudget(json::Value user, json::Value order, const BlockedBudget &budget, Callback callback);
 
 
 	virtual void requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback) = 0;
@@ -77,7 +77,7 @@ protected:
 		///Budget decreased - asynchronous call is enough
 		allocAsync,
 	};
-	void sendServerRequest(AllocationResult r, json::Value user,
+	bool sendServerRequest(AllocationResult r, json::Value user,
 			BlockedBudget total, Callback callback);
 
 
@@ -85,48 +85,24 @@ protected:
 			const BlockedBudget &toBlock, BlockedBudget &total);
 };
 
-
-class MockupMoneyService: public AbstractMoneyService {
+class MoneyServiceAdapter {
 public:
 
-	MockupMoneyService(BlockedBudget maxBudgetPerUser, std::size_t serverLatency):maxBudgetPerUser(maxBudgetPerUser),serverLatency(serverLatency) {}
-	~MockupMoneyService() {stop();}
+	typedef std::function<void()> ReleaseCallback;
 
 
-	void start();
-	void stop();
-
-	virtual void requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback);
+	bool allocBudget(json::Value user, json::Value orderId, const BlockedBudget &budget, AbstractMoneyService::Callback callback);
+	bool isPending(json::Value orderId) const;
+	bool asyncWait(json::Value orderId, ReleaseCallback callback);
+	void setMoneyService(std::unique_ptr<AbstractMoneyService> &&moneyService);
 
 protected:
-	typedef std::unordered_map<json::Value, BlockedBudget> UserMap;
-
-	std::unique_ptr<std::thread> workerThread;
-	UserMap userMap;
-	std::size_t serverLatency;
-	BlockedBudget maxBudgetPerUser;
-
-	struct QueueItem {
-		json::Value user;
-		BlockedBudget budget;
-		Callback callBack;
-
-		QueueItem(){}
-		QueueItem(json::Value user,BlockedBudget budget,Callback callBack)
-			:user(user),budget(budget),callBack(callBack) {}
-	};
-
-	std::mutex queueLock;
-	std::queue<QueueItem> queue;
-	std::condition_variable runBackend;
-	bool finish = false;
-
-	void worker();
-
-private:
-	bool allocBudget(json::Value user, const BlockedBudget &b);
+	std::unique_ptr<AbstractMoneyService> moneyService;
+	typedef std::unordered_map<Value, std::function<void()> > PendingOrders;
+	PendingOrders pendingOrders;
+	mutable std::mutex lock;
+	void releasePending(json::Value orderId);
 };
-
 
 }
 
