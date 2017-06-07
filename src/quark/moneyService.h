@@ -1,5 +1,20 @@
 #pragma once
 
+#include <imtjson/value.h>
+#include <condition_variable>
+#include <functional>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <unordered_map>
+
+
+
+
+#include "blockedBudget.h"
+
 namespace quark {
 
 ///Connects to money server and allocates budget for users
@@ -7,17 +22,14 @@ namespace quark {
 class AbstractMoneyService {
 public:
 
-	class IAllocResponse {
-	public:
-		virtual void responseFn(bool response) = 0;
-	};
+	typedef std::function<void(bool)> Callback;
 
 	///Allocate user's budget
 	/**
 	 * @param user user identification
 	 * @param order order identification
 	 * @param budget budget information
-	 * @param response function called when allocation is complete.
+	 * @param callback function called when allocation is complete.
 	 *
 	 * @note if function decides to access the money server, the response can be called
 	 * asynchronously anytime later. If the request can be processed immediatelly, or
@@ -25,23 +37,20 @@ public:
 	 *
 	 * The argument of the response is true=budget allocated, false=allocation rejected
 	 */
-	template<typename Fn>
-	void allocBudget(json::Value user, json::Value order, const BlockedBudget &budget, Fn response);
+
+	void allocBudget(json::Value user, json::Value order, const BlockedBudget &budget, Callback callback);
 
 
-	///Clears user's budget for the given command
-	void clearBudget(json::Value user, json::Value order);
-
+	virtual void requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback) = 0;
 
 protected:
-
-	void allocBudget(json::Value user, json::Value order, const BlockedBudget &budget,
-			IAllocResponse *response);
-
 
 	struct Key {
 		json::Value user;
 		json::Value command;
+
+		Key () {}
+		Key (json::Value user,json::Value command):user(user),command(command) {}
 	};
 
 	struct CmpKey {
@@ -49,14 +58,13 @@ protected:
 			int r = json::Value::compare(a.user,b.user) ;
 			if (r < 0) return true;
 			if (r == 0) {
-				return json::Value::compare(a.command,b.command)<0;
-			} else {
-				return false;
+				return  json::Value::compare(a.command,b.command)<0;
 			}
+			return false;
 		}
 	};
 
-	typedef std::map<Key, BlockedBudget> BudgetUserMap;
+	typedef std::map<Key, BlockedBudget, CmpKey> BudgetUserMap;
 
 	BudgetUserMap budgetMap;
 	std::mutex requestLock;
@@ -70,11 +78,55 @@ protected:
 		allocAsync,
 	};
 	void sendServerRequest(AllocationResult r, json::Value user,
-			BlockedBudget total, IAllocResponse *response);
+			BlockedBudget total, Callback callback);
 
 
+	AllocationResult updateBudget(json::Value user,json::Value order,
+			const BlockedBudget &toBlock, BlockedBudget &total);
 };
 
-}
 
+class MockupMoneyService: public AbstractMoneyService {
+public:
+
+	MockupMoneyService(BlockedBudget maxBudgetPerUser, std::size_t serverLatency):maxBudgetPerUser(maxBudgetPerUser),serverLatency(serverLatency) {}
+	~MockupMoneyService() {stop();}
+
+
+	void start();
+	void stop();
+
+	virtual void requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback);
+
+protected:
+	typedef std::unordered_map<json::Value, BlockedBudget> UserMap;
+
+	std::unique_ptr<std::thread> workerThread;
+	UserMap userMap;
+	std::size_t serverLatency;
+	BlockedBudget maxBudgetPerUser;
+
+	struct QueueItem {
+		json::Value user;
+		BlockedBudget budget;
+		Callback callBack;
+
+		QueueItem(){}
+		QueueItem(json::Value user,BlockedBudget budget,Callback callBack)
+			:user(user),budget(budget),callBack(callBack) {}
+	};
+
+	std::mutex queueLock;
+	std::queue<QueueItem> queue;
+	std::condition_variable runBackend;
+	bool finish = false;
+
+	void worker();
+
+private:
+	bool allocBudget(json::Value user, const BlockedBudget &b);
+};
+
+
+}
 
