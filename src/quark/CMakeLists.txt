@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 2.8)
 add_compile_options(-std=c++11)
 file(GLOB quark_SRC "*.cpp")
-set(designs designdocs/orders.design.cpp designdocs/users.design.cpp)
+set(designs designdocs/orders.design.cpp designdocs/users.design.cpp designdocs/orderbook.design.cpp)
 add_custom_command(OUTPUT ${designs} COMMAND make -C designdocs all) 
 add_custom_target(buildDesigns COMMAND make -C designdocs all)
 add_custom_target(cleanDesigns COMMAND make -C designdocs clean-designs)
 add_executable (quark ${quark_SRC} ${designs})
 add_dependencies(quark buildDesigns)  
 target_link_libraries (quark LINK_PUBLIC quarklib couchit imtjson pthread)
+ 

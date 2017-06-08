@@ -97,7 +97,8 @@ void update(Document &doc, Value req) {
 				}
 			}
 
-				doc = doc.replace(FIELD_UPDATE_REQ, reqOrder);
+				doc = doc.replace(FIELD_UPDATE_REQ, reqOrder).
+						replace("updateStatus","validation");
 
 			okResponse(doc);
 
@@ -199,7 +200,7 @@ void update(Document &doc, Value req) {
 		time(&t);
 
 		Object obj(reqOrder);
-			obj(FIELD_STATUS, "created")
+			obj(FIELD_STATUS, "validation")
 		   (FIELD__ID, String({"o.",req["uuid"].getString()}))
 		   (FIELD_TMCREATED, t);
 

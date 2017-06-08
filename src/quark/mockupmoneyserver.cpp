@@ -5,7 +5,7 @@
 namespace quark {
 
 void MockupMoneyService::start() {
-	if (workerThread != nullptr)
+	if (workerThread == nullptr)
 		workerThread = std::unique_ptr<std::thread>(new std::thread([=]{worker();}));
 }
 

@@ -88,5 +88,10 @@ protected:
 
 typedef json::RefCntPtr<AbstractMoneyService> PMoneyService;
 
+
+class ErrorMoneyService: public AbstractMoneyService {
+public:
+	virtual void requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback);
+};
 }
 
