@@ -19,7 +19,7 @@ namespace quark {
 
 ///Connects to money server and allocates budget for users
 /** It executes requests in batches. It also tracks blocked budget for opened commands*/
-class AbstractMoneyService {
+class AbstractMoneyService: public json::RefCntObj {
 public:
 
 	typedef std::function<void(bool)> Callback;
@@ -85,24 +85,8 @@ protected:
 			const BlockedBudget &toBlock, BlockedBudget &total);
 };
 
-class MoneyServiceAdapter {
-public:
 
-	typedef std::function<void()> ReleaseCallback;
-
-
-	bool allocBudget(json::Value user, json::Value orderId, const BlockedBudget &budget, AbstractMoneyService::Callback callback);
-	bool isPending(json::Value orderId) const;
-	bool asyncWait(json::Value orderId, ReleaseCallback callback);
-	void setMoneyService(std::unique_ptr<AbstractMoneyService> &&moneyService);
-
-protected:
-	std::unique_ptr<AbstractMoneyService> moneyService;
-	typedef std::unordered_map<Value, std::function<void()> > PendingOrders;
-	PendingOrders pendingOrders;
-	mutable std::mutex lock;
-	void releasePending(json::Value orderId);
-};
+typedef json::RefCntPtr<AbstractMoneyService> PMoneyService;
 
 }
 

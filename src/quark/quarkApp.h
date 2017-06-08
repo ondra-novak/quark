@@ -18,6 +18,7 @@
 
 #include "marketConfig.h"
 #include "moneyService.h"
+#include "pendingOrders.h"
 
 namespace quark {
 
@@ -42,7 +43,8 @@ protected:
 	std::unique_ptr<CouchDB> ordersDb;
 	std::unique_ptr<CouchDB> tradesDb;
 	std::unique_ptr<CouchDB> positionsDb;
-	MoneyServiceAdapter moneyServer;
+	PMoneyService moneyService;
+	PendingOrders<json::Value> pendingOrders;
 
 	PMarketConfig marketCfg;
 	static const StrViewA marketConfigDocName;

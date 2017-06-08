@@ -26,13 +26,14 @@ const StrViewA QuarkApp::FIELD_STATUS("status");
 QuarkApp::QuarkApp() {
 	// TODO Auto-generated constructor stub
 
-	moneyServer.setMoneyService(std::unique_ptr<AbstractMoneyService>(
-			new MockupMoneyService(BlockedBudget(100,10000),500)));
+	moneyService = new MockupMoneyService(BlockedBudget(100,10000),500);
 }
 
 void QuarkApp::processOrder(Value cmd) {
 
 	Document orderDoc(cmd);
+
+
 
 	if (moneyServer.isPending(orderDoc.getIDValue())) {
 		if (moneyServer.asyncWait(orderDoc.getIDValue(),[=] {
