@@ -34,9 +34,6 @@ bool mandatoryField(const json::Value &v, json::StrViewA name) {
 
 int main(int c, char **args) {
 
-	//sleep for two seconds at start-up
-	//this is required as the CouchDB can be still in initialization phase
-	std::this_thread::sleep_for(std::chrono::seconds(2));
 
 
 	using namespace quark;
@@ -103,6 +100,11 @@ int main(int c, char **args) {
 
 
 	}
+
+	//sleep for two seconds at start-up
+	//this is required as the CouchDB can be still in initialization phase
+	std::this_thread::sleep_for(std::chrono::seconds(2));
+
 
 	std::thread thr([=]{
 		try {
