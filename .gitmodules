@@ -1,6 +1,3 @@
-[submodule "imtjson"]
-	path = imtjson
-	url = git@github.com:/ondra-novak/imtjson.git
 [submodule "src/imtjson"]
 	path = src/imtjson
 	url = git@github.com:/ondra-novak/imtjson.git
