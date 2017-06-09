@@ -1,9 +1,9 @@
 [submodule "src/imtjson"]
 	path = src/imtjson
-	url = git@github.com:/ondra-novak/imtjson.git
+	url = https://github.com/ondra-novak/imtjson.git
 [submodule "src/couchit"]
 	path = src/couchit
-	url = git@github.com:/ondra-novak/couchit.git
+	url = https://github.com/ondra-novak/couchit.git
 [submodule "src/couchcpp"]
 	path = src/couchcpp
-	url = git@github.com:/ondra-novak/couchcpp.git
+	url = https://github.com/ondra-novak/couchcpp.git
