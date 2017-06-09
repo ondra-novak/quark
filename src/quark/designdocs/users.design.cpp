@@ -1,6 +1,6 @@
 const char *designdoc_users="{\"_id\": \"_design/users\", \"couchapp\": {\"signatures\": {}, \"objects\": {},"
-" \"manifest\": [\"language\", \"views/\", \"views/active/\", \"views/active/map."
-"cpp\", \"views/budget/\", \"views/budget/reduce.cpp\", \"views/budget/map.cpp\"]"
+" \"manifest\": [\"views/\", \"views/budget/\", \"views/budget/map.cpp\", \"views"
+"/budget/reduce.cpp\", \"views/active/\", \"views/active/map.cpp\", \"language\"]"
 "}, \"_attachments\": {}, \"language\": \"C++\", \"views\": {\"active\": {\"map\""
 ": \"#include <couchcpp/api.h>\\n\\nvoid mapdoc(Document doc) {\\n\\nif (doc[\\\""
 "finished\\\"].getBool() != true && doc[\\\"user\\\"].defined()) {\\n\\temit(doc["
