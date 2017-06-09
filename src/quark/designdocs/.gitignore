@@ -1,5 +1,5 @@
-/orders.design.cpp
-/orders.design.h
-/orders.design.deps
-/orders.design.json
 /tmp
+/*.design.json
+/*.design.deps
+/*.design.h
+/*.design.cpp
