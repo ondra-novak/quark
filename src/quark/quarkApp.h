@@ -33,7 +33,7 @@ public:
 	void processOrder(Value cmd);
 	void receiveMarketConfig();
 
-	void start(couchit::Config cfg);
+	void start(couchit::Config cfg, PMoneyService moneyService);
 
 	void exitApp();
 
@@ -55,15 +55,15 @@ protected:
 
 
 
-	void createOrder(Document order);
-	void updateOrder(Document order);
+//	void createOrder(Document order);
+	void checkUpdate(Document order);
 	Document saveOrder(Document order, Object newItems);
-	void matchOrder(Document &order);
+	void matchOrder(Document order);
 	BlockedBudget calculateBudget(const Document &order);
 	void runTransaction(const TxItem &txitm);
 
 	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u);
-	void rejectOrderBudget(Document order);
+	void rejectOrderBudget(Document order, bool update);
 
 private:
 	POrder docOrder2POrder(const Document& order);
@@ -76,6 +76,12 @@ private:
 
 
 	OrdersToUpdate o2u_1, o2u_2;
+
+	std::mutex ordLock;
+	typedef std::unique_lock<std::mutex> Sync;
+
+	void runOrder(const Document &doc, bool update);
+	void runOrder2(const Document &doc, bool update);
 
 };
 

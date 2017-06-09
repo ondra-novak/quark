@@ -78,72 +78,11 @@ AbstractMoneyService::AllocationResult AbstractMoneyService::updateBudget(json::
 	return r;
 }
 
-
-bool MoneyServiceAdapter::allocBudget(json::Value user,
-		json::Value orderId, const BlockedBudget& budget,
-		AbstractMoneyService::Callback callback) {
-
-	if (isPending(orderId)) {
-		BlockedBudget b = budget;
-		if (asyncWait(orderId, [=] {
-				if (allocBudget(user,orderId,b, callback)) {
-					callback(true);
-				}
-			})) {
-				return true;
-		}
-	}
-	std::lock_guard<std::mutex> _(lock);
-	bool r = moneyService->allocBudget(user,orderId,budget,[=](bool r) {
-		releasePending(orderId);
-		callback(r);
-	});
-	if (!r) {
-		pendingOrders.insert(std::make_pair(orderId,nullptr));
-	}
-
-
+void ErrorMoneyService::requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback) {
+	std::thread thr([=] {callback(false);});
+	thr.detach();
 }
 
-bool quark::MoneyServiceAdapter::isPending(json::Value orderId) const {
-	std::lock_guard<std::mutex> _(lock);
-	return pendingOrders.find(orderId) != pendingOrders.end();
-}
-
-bool quark::MoneyServiceAdapter::asyncWait(json::Value orderId,
-		ReleaseCallback callback) {
-
-	std::lock_guard<std::mutex> _(lock);
-	auto p = pendingOrders.find(orderId);
-	if (p == pendingOrders.end()) return false;
-	auto curFn = p->second;
-	p->second = [curFn,callback]{
-		if (curFn != nullptr) curFn();
-		callback();
-	};
-}
-
-void MoneyServiceAdapter::setMoneyService(
-		std::unique_ptr<AbstractMoneyService>&& moneyService) {
-	this->moneyService = std::move(moneyService);
-}
-
-void MoneyServiceAdapter::releasePending(json::Value orderId) {
-	ReleaseCallback rb;
-
-	while (true) {
-		{
-			std::lock_guard<std::mutex> _(lock);
-			auto p = pendingOrders.find(orderId);
-			if (p == pendingOrders.end()) return;
-			std::swap(rb,p->second);
-			if (rb == nullptr) {
-				pendingOrders.erase(p);
-				return;
-			}
-		}
-		rb();
-	}
-}
 
 } /* namespace quark */
+

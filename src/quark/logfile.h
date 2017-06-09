@@ -40,5 +40,17 @@ void logWarn(json::Value v);
 void logInfo(json::Value v);
 void logDebug(json::Value v);
 
+#ifdef DISABLE_DEBUGLOG
+#define LOGDEBUG1(x)
+#define LOGDEBUG2(x,y)
+#define LOGDEBUG3(x,y,z)
+#define LOGDEBUG4(x,y,z,w)
+#else
+#define LOGDEBUG1(x) logDebug({(x)})
+#define LOGDEBUG2(x,y) logDebug({(x),(y)})
+#define LOGDEBUG3(x,y,z) logDebug({(x),(y),(z)})
+#define LOGDEBUG4(x,y,z,w) logDebug({(x),(y),(z),(w)})
+#endif
+
 
 }

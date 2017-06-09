@@ -59,6 +59,10 @@ protected:
 };
 
 
+class AlreadyPendingException: public std::exception {
+public:
+	const char *what() const throw() {return "Already pending";}
+};
 
 template<typename OrderId, typename MapCont>
 template<typename AFn>
@@ -69,6 +73,8 @@ inline bool quark::PendingOrders<OrderId, MapCont>::async(OrderId orderId, AFn f
 		auto ins = orderMap.insert(std::make_pair(orderId, nullptr));
 		//if was not registered
 		if (!ins.second) {
+			throw AlreadyPendingException();
+			/*
 			//pick current registration
 			auto fn2 = ins.first->second;
 			//if it hasn't await callback
@@ -90,6 +96,7 @@ inline bool quark::PendingOrders<OrderId, MapCont>::async(OrderId orderId, AFn f
 			}
 			//in all cases, return true because operation is pending
 			return true;
+			*/
 		}
 	}
 	//prepare finish handler
