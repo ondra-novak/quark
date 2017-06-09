@@ -5,6 +5,10 @@ DESIGN_DEPS =  $(addsuffix .deps,$(DESIGNDOCS))
 DESIGN_JSON =  $(addsuffix .json,$(DESIGNDOCS))
 DESIGN_CPP =  $(addsuffix .cpp,$(DESIGNDOCS))
 DESIGN_H =  $(addsuffix .h,$(DESIGNDOCS))
+
+COUCHCPP = ../../../bin/couchcpp -f couchcpp.cfg
+COUCHCPP_INCLUDES = ../../../
+COUCHCPP_BASEDIR = tmp
  
 all : designs
 
@@ -23,7 +27,7 @@ tmp :
 	echo extern unsigned int designdoc_$(@F:.design.h=)_length\; >> $@
 
 %.design.json: | tmp 
-	FILES=`find $(@:.json=) -name "*.cpp"`; couchcpp -p $$FILES -o tmp 
+	FILES=`find $(@:.json=) -name "*.cpp"`; $(COUCHCPP) -p $$FILES -o $(COUCHCPP_BASEDIR) 
 	cd $(@:.json=) && couchapp push --export > ../$(@F)
 	echo $@ : `find  $(@:.json=)/*`  > $(@:.json=.deps)  	
 
