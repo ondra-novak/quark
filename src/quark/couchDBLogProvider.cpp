@@ -6,6 +6,7 @@
  */
 
 #include "couchDBLogProvider.h"
+#include <imtjson/string.h>
 
 namespace quark {
 
@@ -33,7 +34,8 @@ void CouchDBLogProvider::sendLog(ILogProvider::LogType type, json::Value message
 	}
 
 	std::cout<<"[\"log\",";
-	message.toStream(std::cout);
+	json::Value v = message.stringify();
+	v.toStream(std::cout);
 	std::cout<<",{\"level\":\"" << level << "\"}]" << std::endl;
 
 }

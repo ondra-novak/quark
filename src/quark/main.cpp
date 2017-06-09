@@ -37,6 +37,10 @@ int main(int c, char **args) {
 
 	CouchDBLogProvider logProvider;
 
+json::maxPrecisionDigits=9;
+
+
+
 	setLogProvider(&logProvider);
 
 	if (c != 2) {
@@ -84,9 +88,9 @@ int main(int c, char **args) {
 	});
 	while (!std::cin.eof()) {
 		char c = std::cin.get();;
-		if (c == 'x') break;
 	}
 	quarkApp.exitApp();
+	logInfo("Exitting after stdin is closed");
 
 }
 
