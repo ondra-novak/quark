@@ -68,6 +68,29 @@ void QuarkApp::runOrder(const Document &order, bool update) {
 
 }
 
+void QuarkApp::rejectOrder(const Document &order, const OrderErrorException &e, bool update) {
+	LOGDEBUG4("Order rejected", order.getIDValue(), e.what(), update?"update":"new order");
+	const OrderRangeError *re = dynamic_cast<const OrderRangeError *>(&e);
+	Value rangeValue;
+	if (re) {
+		rangeValue = re->getRangeValue();
+	}
+
+	Object changes;
+	if (update) {
+		changes.set("updateStatus","rejected")
+				   ("updateReq",json::undefined);
+	} else {
+		changes.set(FIELD_STATUS,"rejected");
+					("finished",true);
+	}
+	changes.set("error", Object("code",e.getCode())
+						("message",e.getMessage())
+						("rangeValue",rangeValue));
+	saveOrder(order,changes);
+
+}
+
 void QuarkApp::runOrder2(const Document &order, bool update) {
 
 	LOGDEBUG3("Executing order", order.getIDValue(), update?"(update)":"(new order)");
@@ -79,32 +102,17 @@ void QuarkApp::runOrder2(const Document &order, bool update) {
 		txi.orderId = order.getIDValue();
 		txi.order = docOrder2POrder(order);
 
-		//run transaction
-		runTransaction(txi);
 
 		if (order["status"].getString() != "active")
 			saveOrder(order,Object("status","active"));
+
+		//run transaction
+		runTransaction(txi);
+
 		//handle various exceptions
 	 }catch (OrderRangeError &e) {
-		LOGDEBUG3("Order rejected", order.getIDValue(), e.what());
-		saveOrder(order,
-				Object(FIELD_STATUS, "rejected")
-									("error",Object("code", e.getCode())
-												  ("message",e.getMessage())
-												  ("rangeValue",e.getRangeValue()))
-									("finished",true)
-									);
-			return;
-	} catch (OrderErrorException &e) {
-		LOGDEBUG3("Order rejected", order.getIDValue(), e.what());
-		saveOrder(order,
-				Object(FIELD_STATUS, "rejected")
-							("error",Object("code", e.getCode())
-							  ("message",e.getMessage()))
-							("finished",true)
-				);
-		return;
-	}
+		 rejectOrder(order, e, update);
+	 }
 
 }
 

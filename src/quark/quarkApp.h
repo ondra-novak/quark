@@ -26,6 +26,8 @@ using namespace couchit;
 using namespace json;
 
 
+class OrderErrorException;
+
 class QuarkApp {
 public:
 	QuarkApp();
@@ -64,6 +66,7 @@ protected:
 
 	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u);
 	void rejectOrderBudget(Document order, bool update);
+	void rejectOrder(const Document &order, const OrderErrorException &e, bool update);
 
 private:
 	POrder docOrder2POrder(const Document& order);
