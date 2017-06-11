@@ -3,28 +3,32 @@
 #include <imtjson/value.h>
 #include <imtjson/rpc.h>
 #include <iosfwd>
+#include "marketControl.h"
 
 namespace quark {
 
 using namespace json;
 using namespace couchit;
 
-class RpcApp {
+class RpcApp: public RefCntObj {
 public:
 	RpcApp(Value svctable):svctable(svctable) {}
 
 
 	void run(std::istream &input, std::ostream &out);
 
+
+
 protected:
 
-	typedef std::unique_ptr<CouchDB> PCouchDB;
+	void rpcInit(RpcRequest req);
 
-	PCouchDB ordersDb;
-	PCouchDB tradesDb;
 	Value svctable;
 
 	RpcServer rpcServer;
+	PMarketControl mcontrol;
 };
+
+typedef RefCntPtr<RpcApp> PRpcApp;
 
 }

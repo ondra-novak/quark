@@ -6,4 +6,4 @@ target_link_libraries (quark_rpc LINK_PUBLIC couchit imtjson)
  
 install(TARGETS quark_rpc
         DESTINATION "bin"
-        ) 
+        )  

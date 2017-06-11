@@ -9,6 +9,7 @@
 
 #include <imtjson/binjson.tcc>
 #include <imtjson/utf8.h>
+#include "marketControl.h"
 
 namespace quark {
 
@@ -16,9 +17,11 @@ namespace quark {
 void RpcApp::run(std::istream& input, std::ostream& output) {
 
 
+	PRpcApp me(this);
 	rpcServer.add_listMethods();
 	rpcServer.add_ping();
 	rpcServer.add_multicall();
+	rpcServer.add("init", me, &RpcApp::rpcInit);
 
 	do {
 		int c = input.get();
@@ -47,6 +50,20 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 	} while (true);
 
 
+}
+
+void RpcApp::rpcInit(RpcRequest req) {
+	static Value args = Value(json::array,{Object("market","string")});
+	if (!req.checkArgs(args)) return req.setArgError();
+	StrViewA market = req.getArgs()[0]["market"].getString();
+	Value cfg = svctable[market];
+	if (cfg.defined()) {
+		mcontrol = new MarketControl(cfg);
+		mcontrol->initRpc(rpcServer);
+		req.setResult(true);
+	} else {
+		req.setError(404,"Market is not hosted at this node");
+	}
 }
 
 } /* namespace quark */
