@@ -22,10 +22,10 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 	rpcServer.add_ping("ping");
 	rpcServer.add_multicall("multicall");
 	rpcServer.add("init", me, &RpcApp::rpcInit);
-	rpcServer.add("testNotify",[] (RpcRequest req) {
-			req.sendNotify("Notify",{"PreResponse"});
-			req.setResult("Response");
-			req.sendNotify("Notify",{"PostResponse"});
+	rpcServer.add("delay",[] (RpcRequest req) {
+		if (!req.checkArgs(Value(json::array,{"number"}))) return req.setArgError();
+		std::this_thread::sleep_for(std::chrono::seconds(req.getArgs()[0].getUInt()));
+		req.setResult(true);
 	});
 
 	do {
@@ -39,6 +39,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 		RpcRequest rq = RpcRequest::create(v, [&](Value response) {
 			std::lock_guard<std::mutex> _(streamLock);
 			response.toStream(output);
+			output << std::endl;
 		},RpcFlags::notify);
 		rpcServer(rq);
 
