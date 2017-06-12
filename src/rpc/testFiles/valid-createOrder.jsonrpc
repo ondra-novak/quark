@@ -1,0 +1,2 @@
+{"method":"init","params":[{"market":"btcusd"}],"id":1}
+{"method":"Order.create","params":{"user":"ntest","type":"limit","dir":"buy","limitPrice":2000,"size":1.2,"orderId":"123456"},"id":2}

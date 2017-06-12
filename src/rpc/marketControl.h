@@ -23,6 +23,8 @@ protected:
 
 	static couchit::Config initConfig(Value cfg, StrViewA suffix);
 
+	void rpcOrderCreate(RpcRequest rq);
+
 };
 
 typedef RefCntPtr<MarketControl> PMarketControl;

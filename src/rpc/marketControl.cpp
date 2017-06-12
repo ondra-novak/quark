@@ -8,6 +8,7 @@
 #include "marketControl.h"
 
 #include <couchit/couchDB.h>
+#include <couchit/exception.h>
 #include <imtjson/rpc.h>
 
 namespace quark {
@@ -34,9 +35,13 @@ static void notImpl(RpcRequest req) {
 	req.setError(501,"Not implemented yet!");
 }
 
+
+
+
 void MarketControl::initRpc(RpcServer& rpcServer) {
 
-	rpcServer.add("Order.create", notImpl);
+	PMarketControl me = this;
+	rpcServer.add("Order.create", me, &MarketControl::rpcOrderCreate);
 	rpcServer.add("Order.modify", notImpl);
 	rpcServer.add("Order.cancel", notImpl);
 	rpcServer.add("Stream.orders", notImpl);
@@ -45,8 +50,24 @@ void MarketControl::initRpc(RpcServer& rpcServer) {
 }
 
 
+void MarketControl::rpcOrderCreate(RpcRequest rq) {
+	Value args = rq.getArgs();
+	if (args.size() != 1 || args[0].type() != json::object) {
+		rq.setArgError(json::undefined);
+	}
+	CouchDB::PConnection conn = ordersDb.getConnection("_design/orders/_update/order");
+	try {
+		Value res = ordersDb.requestPOST(conn,args[0],nullptr,0);
+		rq.setResult(res["orderId"]);
+	} catch (const couchit::RequestError &e) {
+		rq.setError(e.getCode(), e.getMessage(),e.getExtraInfo());
+	}
+
 
 }
+
+}
+
 /* namespace quark */
 
 

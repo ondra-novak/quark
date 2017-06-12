@@ -1,0 +1,2 @@
+{"method":"init","params":[{"market":"btcusd"}],"id":1}
+{"method":"Order.create","params":{"aaa":"bbb"},"id":2}
