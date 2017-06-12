@@ -18,10 +18,15 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 
 
 	PRpcApp me(this);
-	rpcServer.add_listMethods();
-	rpcServer.add_ping();
-	rpcServer.add_multicall();
+	rpcServer.add_listMethods("methods");
+	rpcServer.add_ping("ping");
+	rpcServer.add_multicall("multicall");
 	rpcServer.add("init", me, &RpcApp::rpcInit);
+	rpcServer.add("testNotify",[] (RpcRequest req) {
+			req.sendNotify("Notify",{"PreResponse"});
+			req.setResult("Response");
+			req.sendNotify("Notify",{"PostResponse"});
+	});
 
 	do {
 		int c = input.get();
@@ -29,21 +34,13 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 			c = input.get();
 		}
 		if (c == EOF) return;
-		if (c == 0) {
-			Value v = Value::parseBinary(fromStream(input));
-			RpcRequest rq = RpcRequest::create(v, [&](Value response) {
-				response.serializeBinary(toStream(output));
-			});
-			rpcServer(rq);
-
-		} else {
-			input.putback(c);
-			Value v = Value::fromStream(input);
-			RpcRequest rq = RpcRequest::create(v, [&](Value response) {
-				response.toStream(output);
-			});
-			rpcServer(rq);
-		}
+		input.putback(c);
+		Value v = Value::fromStream(input);
+		RpcRequest rq = RpcRequest::create(v, [&](Value response) {
+			std::lock_guard<std::mutex> _(streamLock);
+			response.toStream(output);
+		},RpcFlags::notify);
+		rpcServer(rq);
 
 
 

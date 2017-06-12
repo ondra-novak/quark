@@ -3,6 +3,8 @@
 #include <imtjson/value.h>
 #include <imtjson/rpc.h>
 #include <iosfwd>
+#include <mutex>
+
 #include "marketControl.h"
 
 namespace quark {
@@ -27,6 +29,7 @@ protected:
 
 	RpcServer rpcServer;
 	PMarketControl mcontrol;
+	std::mutex streamLock;
 };
 
 typedef RefCntPtr<RpcApp> PRpcApp;
