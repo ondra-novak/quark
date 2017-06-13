@@ -213,6 +213,7 @@ MarketControl::FeedControl::FeedControl(CouchDB& db, Value since)
 {
 	if (since.defined())
 		feed.since(since);
+	feed.setTimeout(-1);
 	feed.includeDocs(true);
 }
 
