@@ -46,7 +46,7 @@ void MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Order.cancel", me, &MarketControl::rpcOrderCancel);
 	rpcServer.add("Order.get", me, &MarketControl::rpcOrderGet);
 	rpcServer.add("Stream.orders",  me, &MarketControl::rpcStreamOrders);
-	rpcServer.add("Stream.trades", notImpl);
+	rpcServer.add("Stream.trades", me, &MarketControl::rpcStreamTrades);
 
 }
 
@@ -114,7 +114,7 @@ public:
 	virtual void init() override {
 	}
 	virtual void onEvent(Value v) override {
-		rq.sendNotify(streamName,{v["seq"],v["doc"]});
+		rq.sendNotify(streamName,{v["seq"].toString(),v["doc"]});
 	}
 	~BasicFeed() {
 		stop();
@@ -128,7 +128,7 @@ protected:
 
 void MarketControl::rpcStreamOrders(RpcRequest rq) {
 	static Value turnOffArgs = Value(json::array,{false});
-	static Value turnOnArgs = {true,"string"};
+	static Value turnOnArgs = {true,{"string","optional"} };
 	if (rq.checkArgs(turnOffArgs)) {
 
 		ordersFeed = nullptr;
@@ -136,7 +136,29 @@ void MarketControl::rpcStreamOrders(RpcRequest rq) {
 
 
 	} else if (rq.checkArgs(turnOnArgs)) {
-		ordersFeed = new BasicFeed(ordersDb, rq.getArgs()[1], rq, "order");
+		Value since = rq.getArgs()[1];
+		ordersFeed = new BasicFeed(ordersDb, since, rq, "order");
+		ordersFeed->start();
+		rq.setResult(true);
+
+
+	} else {
+		rq.setArgError();
+	}
+}
+
+void MarketControl::rpcStreamTrades(RpcRequest rq) {
+	static Value turnOffArgs = Value(json::array,{false});
+	static Value turnOnArgs = {true,{"string","optional"} };
+	if (rq.checkArgs(turnOffArgs)) {
+
+		ordersFeed = nullptr;
+		rq.setResult(true);
+
+
+	} else if (rq.checkArgs(turnOnArgs)) {
+		Value since = rq.getArgs()[1];
+		ordersFeed = new BasicFeed(tradesDb, since, rq, "trade");
 		ordersFeed->start();
 		rq.setResult(true);
 
@@ -189,7 +211,8 @@ void MarketControl::FeedControl::start() {
 MarketControl::FeedControl::FeedControl(CouchDB& db, Value since)
 	:feed(db.createChangesFeed()), stopped(true)
 {
-	feed.since(since);
+	if (since.defined())
+		feed.since(since);
 	feed.includeDocs(true);
 }
 
