@@ -48,6 +48,7 @@ void MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Order.get", me, &MarketControl::rpcOrderGet);
 	rpcServer.add("Stream.orders",  me, &MarketControl::rpcStreamOrders);
 	rpcServer.add("Stream.trades", me, &MarketControl::rpcStreamTrades);
+	rpcServer.add("Stream.lastId", me, &MarketControl::rpcStreamLastId);
 
 }
 
@@ -213,6 +214,15 @@ MarketControl::FeedControl::FeedControl(CouchDB& db, Value since)
 		feed.since(since);
 	feed.setTimeout(-1);
 	feed.includeDocs(true);
+}
+
+void MarketControl::rpcStreamLastId(RpcRequest rq) {
+	if (!rq.checkArgs(json::array)) return rq.setArgError();
+
+	rq.setResult(Object("orders",ordersDb.getLastSeqNumber())
+					   ("trades",tradesDb.getLastSeqNumber())
+			);
+
 }
 
 }

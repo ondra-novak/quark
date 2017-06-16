@@ -33,6 +33,7 @@ int main(int c, char **args) {
 
 
 	json::maxPrecisionDigits=9;
+	couchit::CouchDB::fldTimestamp = "updateTime";
 
 	if (c != 2) {
 

@@ -41,6 +41,9 @@ StrViewA FIELD_TMCREATED = "createTime";
 
 json::Value validationError(StrViewA field, StrViewA message) {
 
+	throw ValidatonError(Object
+			("field",field)
+			("message", message));
 /*	start(Object("Content-Type","application/json"),400);
 	sendJSON(Object(FIELD_STATUS, "error")
 			("field",field)
@@ -143,6 +146,7 @@ json::Value OrderControl::create(json::Value reqOrder) {
 	time(&t);
 
 	Document doc = db.newDocument("o.");
+	doc.setBaseObject(reqOrder);
 	doc.set(FIELD_STATUS,"validating")
 		.set(FIELD_TMCREATED, t);
 	doc.enableTimestamp();

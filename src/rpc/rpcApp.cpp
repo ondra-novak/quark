@@ -39,6 +39,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 				output << std::endl;
 			},RpcFlags::notify);
 			rpcServer(rq);
+			v = readQueue();
 		}
 
 	});
