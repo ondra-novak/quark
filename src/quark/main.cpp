@@ -35,6 +35,8 @@ int main(int c, char **args) {
 	using namespace couchit;
 	using namespace json;
 
+	json::maxPrecisionDigits=9;
+
 	CouchDBLogProvider logProvider;
 
 	setLogProvider(&logProvider);
