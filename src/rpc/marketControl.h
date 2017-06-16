@@ -6,6 +6,8 @@
 #include <imtjson/value.h>
 #include <thread>
 
+#include "orderControl.h"
+
 using couchit::CouchDB;
 namespace quark {
 
@@ -58,6 +60,7 @@ protected:
 
 
 	PFeedControl ordersFeed, tradesFeed;
+	OrderControl orderControl;
 
 
 

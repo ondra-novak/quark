@@ -16,6 +16,7 @@ namespace quark {
 MarketControl::MarketControl(Value cfg)
 	:ordersDb(initConfig(cfg,"orders"))
 	,tradesDb(initConfig(cfg,"trades"))
+	,orderControl(ordersDb)
 {
 
 
@@ -52,33 +53,34 @@ void MarketControl::initRpc(RpcServer& rpcServer) {
 
 
 void MarketControl::rpcOrderCreate(RpcRequest rq) {
+	static Value chkargs (json::array,{Object("%","any")});
+	if (!rq.checkArgs(chkargs)) return rq.setArgError();
 	Value args = rq.getArgs();
-	if (args.size() != 1 || args[0].type() != json::object) {
-		rq.setArgError(json::undefined);
-		return;
-	}
-	CouchDB::PConnection conn = ordersDb.getConnection("_design/orders/_update/order");
 	try {
-		Value res = ordersDb.requestPOST(conn,args[0],nullptr,0);
-		rq.setResult(res["orderId"]);
-	} catch (const couchit::RequestError &e) {
-		rq.setError(e.getCode(), e.getMessage(),e.getExtraInfo());
+		rq.setResult(orderControl.create(args[0]));
+	} catch (ValidatonError &e) {
+		rq.setError(400,"Validation failed", e.getError());
 	}
 }
 
 void MarketControl::rpcOrderUpdate(RpcRequest rq) {
+	static Value chkargs1 = {"string",Object("%","any")};
+	static Value chkargs2 = {"string",Object("%","any"), "string"};
 	Value args = rq.getArgs();
-	if (args.size() != 2 || args[0].type() != json::string || args[1].type() != json::object) {
-		rq.setArgError(json::undefined);
-		return;
-	}
-	CouchDB::PConnection conn = ordersDb.getConnection("_design/orders/_update/order");
-	conn->add(args[0].getString());
 	try {
-		Value res = ordersDb.requestPUT(conn,args[1],nullptr,0);
-		rq.setResult(res["orderId"]);
-	} catch (const couchit::RequestError &e) {
-		rq.setError(e.getCode(), e.getMessage(),e.getExtraInfo());
+		if (rq.checkArgs(chkargs1)) {
+			rq.setResult(orderControl.modify(args[0],args[1],json::undefined));
+		} else if (rq.checkArgs(chkargs2)) {
+			rq.setResult(orderControl.modify(args[0],args[1],args[2]));
+		} else {
+			rq.setArgError();
+		}
+	} catch (ValidatonError &e) {
+		rq.setError(400,"Validation failed", e.getError());
+	} catch (OrderNotFoundError &e) {
+		rq.setError(404,"Order not found");
+	} catch (ConflictError &e) {
+		rq.setError(409,"Conflict",e.getActualDoc());
 	}
 }
 
@@ -86,13 +88,10 @@ void MarketControl::rpcOrderCancel(RpcRequest rq) {
 	static Value chkargs (json::array,{"string"});
 	if (!rq.checkArgs(chkargs)) return rq.setArgError();
 	Value args = rq.getArgs();
-	CouchDB::PConnection conn = ordersDb.getConnection("_design/orders/_update/order");
-	conn->add(args[0].getString());
 	try {
-		Value res = ordersDb.requestDELETE(conn,nullptr,0);
-		rq.setResult(res["orderId"]);
-	} catch (const couchit::RequestError &e) {
-		rq.setError(e.getCode(), e.getMessage(),e.getExtraInfo());
+		rq.setResult(orderControl.cancel(args[0]));
+	} catch (OrderNotFoundError &e) {
+		rq.setError(404,"Order not found");
 	}
 }
 
@@ -101,10 +100,9 @@ void MarketControl::rpcOrderGet(RpcRequest rq) {
 	if (!rq.checkArgs(chkargs)) return rq.setArgError();
 	Value args = rq.getArgs();
 	try {
-		Value res = ordersDb.get(args[0].getString());
-		rq.setResult(res);
+		rq.setResult(orderControl.getOrder(args[0]));
 	} catch (const couchit::RequestError &e) {
-		rq.setError(e.getCode(), e.getMessage(),e.getExtraInfo());
+		rq.setError(404,"Order not found");
 	}
 }
 

@@ -28,24 +28,37 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 		req.setResult(true);
 	});
 
+
+	executor = std::thread([&]{
+
+		Value v = readQueue();
+		while (v.defined()) {
+			RpcRequest rq = RpcRequest::create(v, [&](Value response) {
+				std::lock_guard<std::mutex> _(streamLock);
+				response.toStream(output);
+				output << std::endl;
+			},RpcFlags::notify);
+			rpcServer(rq);
+		}
+
+	});
+
+
 	do {
 		int c = input.get();
 		while (c != EOF && isspace(c)) {
 			c = input.get();
 		}
-		if (c == EOF) return;
+		if (c == EOF) break;
 		input.putback(c);
 		Value v = Value::fromStream(input);
-		RpcRequest rq = RpcRequest::create(v, [&](Value response) {
-			std::lock_guard<std::mutex> _(streamLock);
-			response.toStream(output);
-			output << std::endl;
-		},RpcFlags::notify);
-		rpcServer(rq);
-
+		writeQueue(v);
 
 
 	} while (true);
+	writeQueue(json::undefined);
+	executor.join();
+	mcontrol = nullptr;
 
 
 }
@@ -62,6 +75,20 @@ void RpcApp::rpcInit(RpcRequest req) {
 	} else {
 		req.setError(404,"Market is not hosted at this node");
 	}
+}
+
+Value RpcApp::readQueue() {
+	std::unique_lock<std::mutex> lock(queueLock);
+	queueTrig.wait(lock, [&]{return !cmdQueue.empty();});
+	Value v = cmdQueue.front();
+	cmdQueue.pop();
+	return v;
+}
+
+void RpcApp::writeQueue(Value v) {
+	std::unique_lock<std::mutex> lock(queueLock);
+	cmdQueue.push(v);
+	queueTrig.notify_all();
 }
 
 } /* namespace quark */

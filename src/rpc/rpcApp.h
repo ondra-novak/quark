@@ -4,6 +4,8 @@
 #include <imtjson/rpc.h>
 #include <iosfwd>
 #include <mutex>
+#include <queue>
+
 
 #include "marketControl.h"
 
@@ -30,6 +32,15 @@ protected:
 	RpcServer rpcServer;
 	PMarketControl mcontrol;
 	std::mutex streamLock;
+
+	std::queue<Value> cmdQueue;
+	std::mutex queueLock;
+	std::condition_variable queueTrig;
+	std::thread executor;
+
+private:
+	Value readQueue();
+	void writeQueue(Value v);
 };
 
 typedef RefCntPtr<RpcApp> PRpcApp;
