@@ -1,0 +1,37 @@
+#pragma once
+#include <couchit/couchDB.h>
+#include <imtjson/value.h>
+#include <imtjson/rpc.h>
+#include <iosfwd>
+#include <mutex>
+
+#include "marketControl.h"
+
+namespace quark {
+
+using namespace json;
+using namespace couchit;
+
+class RpcApp: public RefCntObj {
+public:
+	RpcApp(Value svctable):svctable(svctable) {}
+
+
+	void run(std::istream &input, std::ostream &out);
+
+
+
+protected:
+
+	void rpcInit(RpcRequest req);
+
+	Value svctable;
+
+	RpcServer rpcServer;
+	PMarketControl mcontrol;
+	std::mutex streamLock;
+};
+
+typedef RefCntPtr<RpcApp> PRpcApp;
+
+}
