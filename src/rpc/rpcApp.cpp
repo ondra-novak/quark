@@ -45,22 +45,32 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 	});
 
 
-	do {
-		int c = input.get();
-		while (c != EOF && isspace(c)) {
-			c = input.get();
-		}
-		if (c == EOF) break;
-		input.putback(c);
-		Value v = Value::fromStream(input);
-		writeQueue(v);
+	try {
+		do {
+			int c = input.get();
+			while (c != EOF && isspace(c)) {
+				c = input.get();
+			}
+			if (c == EOF) break;
+			input.putback(c);
+			Value v = Value::fromStream(input);
+			writeQueue(v);
 
 
-	} while (true);
-	writeQueue(json::undefined);
-	executor.join();
-	mcontrol = nullptr;
+		} while (true);
+		writeQueue(json::undefined);
+		executor.join();
+		mcontrol = nullptr;
+	} catch (std::exception &e) {
+		writeQueue(json::undefined);
+		executor.join();
+		mcontrol = nullptr;
+		Value resp = Object("error",Object("code",-32700)("message","Parse error")("data",e.what()))
+						   ("result",nullptr)
+						   ("id",nullptr);
+		resp.toStream(output);
 
+	}
 
 }
 
