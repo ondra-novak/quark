@@ -124,6 +124,14 @@ protected:
 	String streamName;
 };
 
+class MarketControl::OrderFeed: public BasicFeed {
+public:
+	using BasicFeed::BasicFeed;
+	virtual void init() override {
+		feed.setFilter(couchit::Filter("orders/stream",couchit::Filter::includeDocs));
+	}
+
+};
 
 void MarketControl::rpcStreamOrders(RpcRequest rq) {
 	static Value turnOffArgs = Value(json::array,{false});
@@ -136,7 +144,7 @@ void MarketControl::rpcStreamOrders(RpcRequest rq) {
 
 	} else if (rq.checkArgs(turnOnArgs)) {
 		Value since = rq.getArgs()[1];
-		ordersFeed = new BasicFeed(ordersDb, since, rq, "order");
+		ordersFeed = new OrderFeed(ordersDb, since, rq, "order");
 		ordersFeed->start();
 		rq.setResult(true);
 

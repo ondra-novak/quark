@@ -56,6 +56,7 @@ protected:
 	};
 
 	class BasicFeed;
+	class OrderFeed;
 
 	typedef RefCntPtr<FeedControl> PFeedControl;
 
