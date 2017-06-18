@@ -1,6 +1,8 @@
 #pragma once
 #include <imtjson/json.h>
 
+#include "constants.h"
+
 
 namespace quark {
 
@@ -39,23 +41,7 @@ public:
 	Order(const OrderJsonData &data);
 
 
-	enum Dir {
-		buy,
-		sell
-	};
 
-	enum Type {
-		market,
-		limit,
-		postlimit,
-		stop,
-		stoplimit,
-		fok,
-		ioc,
-		trailingStop,
-		trailingStopLimit,
-		trailingLimit
-	};
 
 	enum State {
 		prepared,
@@ -69,7 +55,7 @@ public:
 
 	typedef json::Value Value;
 
-	Dir getDir() const {
+	OrderDir::Type getDir() const {
 		return dir;
 	}
 
@@ -104,7 +90,7 @@ public:
 		return triggerPrice;
 	}
 
-	Type getType() const {
+	OrderType::Type getType() const {
 		return type;
 	}
 
@@ -115,7 +101,7 @@ public:
 
 
 	POrder changeState(State newState) const;
-	POrder changeType(Type newType) const;
+	POrder changeType(OrderType::Type newType) const;
 	POrder updateAfterTrade(std::size_t price, std::size_t size);
 	///determines, whether the order will be filled complete when trade operation executes on give price and size
 	bool willBeFilled(std::size_t price, std::size_t size) const;
@@ -134,8 +120,8 @@ protected:
 	int domPriority;
 	int queuePriority;
 	std::size_t queuePos;
-	Dir dir;
-	Type type;
+	OrderDir::Type dir;
+	OrderType::Type type;
 	State state;
 
 

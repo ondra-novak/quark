@@ -17,6 +17,7 @@ using namespace couchit;
 StrViewA FIELD__ID = "_id";
 StrViewA FIELD_STATUS = "status";
 StrViewA FIELD_USER = "user";
+StrViewA FIELD_CONTEXT = "context";
 StrViewA FIELD_TRAILING_DISTANCE = "trailingDistance";
 StrViewA FIELD_STOP_PRICE = "stopPrice";
 StrViewA FIELD_LIMIT_PRICE = "limitPrice";
@@ -38,6 +39,7 @@ StrViewA LIMIT = "limit";
 StrViewA FIELD_CANCELED = "canceled";
 StrViewA  FIELD_UPDATE_REQ = "updateReq";
 StrViewA FIELD_TMCREATED = "createTime";
+StrViewA MARGIN = "margin";
 
 json::Value validationError(StrViewA field, StrViewA message) {
 

@@ -65,7 +65,7 @@ public:
 	POrder updateOrder(const OrderId &orderId, const POrder &newOrder);
 	POrder updateOrder(const POrder &newOrder) {return updateOrder(newOrder->getId(), newOrder);}
 
-	std::size_t calcBudgetForMarketOrder(Order::Dir direction, std::size_t size) const;
+	std::size_t calcBudgetForMarketOrder(OrderDir::Type direction, std::size_t size) const;
 
 
 
@@ -95,13 +95,13 @@ public:
 	json::Value getCurrentTx() const;
 	std::size_t getLastPrice() const;
 
-	OrderQueue &selectOpositeOrderbook(Order::Dir direction);
-	OrderQueue &selectFriendlyOrderbook(Order::Dir direction);
-	OrderQueue &selectStopQueue(Order::Dir direction);
+	OrderQueue &selectOpositeOrderbook(OrderDir::Type direction);
+	OrderQueue &selectFriendlyOrderbook(OrderDir::Type direction);
+	OrderQueue &selectStopQueue(OrderDir::Type direction);
 
-	const OrderQueue &selectOpositeOrderbook(Order::Dir direction) const ;
-	const OrderQueue &selectFriendlyOrderbook(Order::Dir direction) const ;
-	const OrderQueue &selectStopQueue(Order::Dir direction) const ;
+	const OrderQueue &selectOpositeOrderbook(OrderDir::Type direction) const ;
+	const OrderQueue &selectFriendlyOrderbook(OrderDir::Type direction) const ;
+	const OrderQueue &selectStopQueue(OrderDir::Type direction) const ;
 
 	bool isKnownOrder(const OrderId &orderId) const;
 

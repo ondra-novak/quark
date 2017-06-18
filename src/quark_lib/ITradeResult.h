@@ -39,7 +39,7 @@ public:
 				bool fullSell,
 				std::size_t size,
 				std::size_t price,
-				Order::Dir dir):AbstractTradeResult(trTrade)
+				OrderDir::Type dir):AbstractTradeResult(trTrade)
 		,buyOrder(buyOrder)
 		,sellOrder(sellOrder)
 		,fullBuy(fullBuy)
@@ -52,7 +52,7 @@ public:
 		return buyOrder;
 	}
 
-	Order::Dir getDir() const {
+	OrderDir::Type getDir() const {
 		return dir;
 	}
 
@@ -83,7 +83,7 @@ protected:
 	bool fullSell;
 	std::size_t size;
 	std::size_t price;
-	Order::Dir dir;
+	OrderDir::Type dir;
 };
 
 class TradeResultOderMove: public AbstractTradeResult {

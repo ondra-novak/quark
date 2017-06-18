@@ -351,7 +351,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 					const quark::TradeResultTrade &t = dynamic_cast<const quark::TradeResultTrade &>(r);
 					double price = marketCfg->pipToPrice(t.getPrice());
 					double amount = marketCfg->sizeToAmount(t.getSize());
-					Value dir = t.getDir()== Order::buy?"buy":"sell";
+					Value dir = OrderDir::str[t.getDir()];
 					logInfo({"Trade",dir,price,amount});
 					Document &buyOrder = o2u[t.getBuyOrder()->getId()];
 					Document &sellOrder = o2u[t.getSellOrder()->getId()];
@@ -396,20 +396,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 			case quark::trOrderTrigger: {
 					const quark::TradeResultOrderTrigger &t = dynamic_cast<const quark::TradeResultOrderTrigger &>(r);
 					Document &o = o2u[t.getOrder()->getId()];
-					Order::Type ty = t.getOrder()->getType();
-					StrViewA st;
-					switch (ty) {
-					case Order::market: st = "market";break;
-					case Order::limit: st = "limit";break;
-					case Order::postlimit: st = "postlimit";break;
-					case Order::stop: st = "stop";break;
-					case Order::stoplimit: st = "stoplimit";break;
-					case Order::fok: st = "fok";break;
-					case Order::ioc: st = "loc";break;
-					case Order::trailingStop: st = "trailing-stop";break;
-					case Order::trailingStopLimit: st = "traling-stoplimit";break;
-					case Order::trailingLimit: st = "traling-limit";break;
-					}
+					OrderType::Type ty = t.getOrder()->getType();
+					StrViewA st = OrderType::str[ty];
 					o("type", st);
 				}break;
 			}

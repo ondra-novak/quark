@@ -60,7 +60,7 @@ json::Value processTransaction(json::Value id, json::Value time, json::Value e) 
 							  ("remain",t.isFullSell()?0:t.getSellOrder()->getSize()-t.getSize()))
 					 ("size",t.getSize())
 					 ("price",t.getPrice())
-					 ("dir",t.getDir() == quark::Order::buy?"buy":"sell");
+					 ("dir",quark::OrderDir::str[t.getDir()]);
 					 outres.push_back(o);
 				}break;
 			case quark::trOrderMove: {

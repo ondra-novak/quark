@@ -95,11 +95,11 @@ void CurrentState::rebuildQueues() {
 
 		switch (o.second->getState()) {
 		case Order::orderbook:
-			if (o.second->getDir() == Order::buy) orderbook_bid.insert(o.second);
+			if (o.second->getDir() == OrderDir::buy) orderbook_bid.insert(o.second);
 			else orderbook_ask.insert(o.second);
 			break;
 		case Order::stopQueue:
-			if (o.second->getDir() == Order::buy) stop_above.insert(o.second);
+			if (o.second->getDir() == OrderDir::buy) stop_above.insert(o.second);
 			else stop_below.insert(o.second);
 			break;
 		case Order::marketQueue:
@@ -107,8 +107,8 @@ void CurrentState::rebuildQueues() {
 			break;
 		}
 
-		Order::Type t = o.second->getType();
-		if (t == Order::trailingLimit || t == Order::trailingStop || t == Order::trailingStopLimit) {
+		OrderType::Type t = o.second->getType();
+		if (t == OrderType::trailingLimit || t == OrderType::trailingStop || t == OrderType::trailingStopLimit) {
 			trailings.push_back(o.first);
 		}
 
@@ -161,57 +161,57 @@ POrder CurrentState::updateOrder(const OrderId &orderId, const POrder &newOrder)
 
 }
 
-std::size_t CurrentState::calcBudgetForMarketOrder(Order::Dir direction,
+std::size_t CurrentState::calcBudgetForMarketOrder(OrderDir::Type direction,
 		std::size_t size) const {
 }
 
 
-CurrentState::OrderQueue& CurrentState::selectOpositeOrderbook(Order::Dir direction) {
+CurrentState::OrderQueue& CurrentState::selectOpositeOrderbook(OrderDir::Type direction) {
 	switch (direction) {
-	case Order::buy: return orderbook_ask;
-	case Order::sell: return orderbook_bid;
+	case OrderDir::buy: return orderbook_ask;
+	case OrderDir::sell: return orderbook_bid;
 	default: throw std::runtime_error("Corrupted order");
 	}
 }
 
-CurrentState::OrderQueue& CurrentState::selectFriendlyOrderbook(Order::Dir direction) {
+CurrentState::OrderQueue& CurrentState::selectFriendlyOrderbook(OrderDir::Type direction) {
 	switch (direction) {
-	case Order::buy: return orderbook_bid;
-	case Order::sell: return orderbook_ask;
+	case OrderDir::buy: return orderbook_bid;
+	case OrderDir::sell: return orderbook_ask;
 	default: throw std::runtime_error("Corrupted order");
 	}
 }
 
-CurrentState::OrderQueue& CurrentState::selectStopQueue(Order::Dir direction) {
+CurrentState::OrderQueue& CurrentState::selectStopQueue(OrderDir::Type direction) {
 	switch (direction) {
-	case Order::buy: return stop_above;
-	case Order::sell: return stop_below;
+	case OrderDir::buy: return stop_above;
+	case OrderDir::sell: return stop_below;
 	default: throw std::runtime_error("Corrupted order");
 	}
 }
 
 const CurrentState::OrderQueue& CurrentState::selectOpositeOrderbook(
-		Order::Dir direction) const {
+		OrderDir::Type direction) const {
 	switch (direction) {
-	case Order::buy: return orderbook_ask;
-	case Order::sell: return orderbook_bid;
+	case OrderDir::buy: return orderbook_ask;
+	case OrderDir::sell: return orderbook_bid;
 	default: throw std::runtime_error("Corrupted order");
 	}
 }
 
 const CurrentState::OrderQueue& CurrentState::selectFriendlyOrderbook(
-		Order::Dir direction) const {
+		OrderDir::Type direction) const {
 	switch (direction) {
-	case Order::buy: return orderbook_bid;
-	case Order::sell: return orderbook_ask;
+	case OrderDir::buy: return orderbook_bid;
+	case OrderDir::sell: return orderbook_ask;
 	default: throw std::runtime_error("Corrupted order");
 	}
 }
 
-const CurrentState::OrderQueue& CurrentState::selectStopQueue(Order::Dir direction) const {
+const CurrentState::OrderQueue& CurrentState::selectStopQueue(OrderDir::Type direction) const {
 	switch (direction) {
-	case Order::buy: return stop_above;
-	case Order::sell: return stop_below;
+	case OrderDir::buy: return stop_above;
+	case OrderDir::sell: return stop_below;
 	default: throw std::runtime_error("Corrupted order");
 	}
 }
@@ -271,7 +271,7 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 
 			while (!market.empty()) {
 				POrder order = *market.begin();
-				OrderQueue &orderbook = order->getDir() == Order::buy?orderbook_ask:orderbook_bid;
+				OrderQueue &orderbook = order->getDir() == OrderDir::buy?orderbook_ask:orderbook_bid;
 				if (!pairInQueue(orderbook ,order,output)) {
 					break;
 				} else {
@@ -303,12 +303,12 @@ CurrentState::OrderQueue &CurrentState::getQueueByState(const POrder &order) {
 	switch (order->getState())
 	{
 	case Order::orderbook:
-		if (order->getDir() == Order::buy) return orderbook_bid;
-		else if (order->getDir() == Order::sell) return orderbook_ask;
+		if (order->getDir() == OrderDir::buy) return orderbook_bid;
+		else if (order->getDir() == OrderDir::sell) return orderbook_ask;
 		else throw std::runtime_error("corrupted order direction");
 	case Order::stopQueue:
-		if (order->getDir() == Order::buy) return stop_above;
-		else if (order->getDir() == Order::sell) return stop_below;
+		if (order->getDir() == OrderDir::buy) return stop_above;
+		else if (order->getDir() == OrderDir::sell) return stop_below;
 		else throw std::runtime_error("corrupted order direction");
 	case Order::marketQueue:
 		return market;
@@ -338,17 +338,17 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 	while (!curQueue.empty()) {
 		POrder o = curQueue.top();
 
-		OrderQueue &orderbook = order->getDir() == Order::buy?orderbook_ask:orderbook_bid;
-		OrderQueue &stopQueue = order->getDir() == Order::buy?stop_above:stop_below;
+		OrderQueue &orderbook = order->getDir() == OrderDir::buy?orderbook_ask:orderbook_bid;
+		OrderQueue &stopQueue = order->getDir() == OrderDir::buy?stop_above:stop_below;
 		curQueue.pop();
 		switch (o->getType()) {
-		case Order::limit:
+		case OrderType::limit:
 			if (!pairInQueue(orderbook, o, out)) {
 				POrder newOrder = updateOrder(o->changeState(Order::orderbook));
 				getQueueByState(newOrder).insert(newOrder);
 			}
 			break;
-		case Order::postlimit:
+		case OrderType::maker:
 			if (willOrderPair(orderbook, o)) {
 				cancelOrder(o);
 				out(TradeResultOrderCancel(o,OrderErrorException::orderPostLimitConflict));
@@ -357,22 +357,22 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 				getQueueByState(newOrder).insert(newOrder);
 			}
 			break;
-		case Order::stop:
-		case Order::stoplimit:
+		case OrderType::stop:
+		case OrderType::stoplimit:
 			stopQueue.insert(
 					updateOrder(o->changeState(Order::stopQueue)));
 			break;
-		case Order::fok:
+		case OrderType::fok:
 			if (!pairInQueue(orderbook, o, out)) {
 				throw OrderErrorException(o->getId(), OrderErrorException::orderFOKFailed, "FOK failed");
 			}
 			break;
-		case Order::market:
+		case OrderType::market:
 			if (!pairInQueue(orderbook, o, out)) {
 				market.insert(updateOrder(o->changeState(Order::marketQueue)));
 			}
 			break;
-		case Order::ioc:
+		case OrderType::ioc:
 			if (!pairInQueue(orderbook, o, out)) {
 				cancelOrder(o);
 				out(TradeResultOrderCancel(o, OrderErrorException::orderIOCCanceled));
@@ -397,7 +397,7 @@ bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order) {
 bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output out) {
 	if (queue.empty()) return false;
 	auto b = queue.begin();
-	if (order->getType() == Order::market || queue.inOrder(*b, order) || (*b)->getLimitPrice() == order->getLimitPrice()) {
+	if (order->getType() == OrderType::market || queue.inOrder(*b, order) || (*b)->getLimitPrice() == order->getLimitPrice()) {
 
 		POrder maker = *b;
 		POrder taker = order;
@@ -416,7 +416,7 @@ bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output ou
 
 		POrder buy, sell;
 		bool fullBuy, fullSell;
-		if (taker->getDir() == Order::buy) {
+		if (taker->getDir() == OrderDir::buy) {
 			buy = taker;
 			sell = maker;
 			fullBuy = newTaker == nullptr;
@@ -467,14 +467,14 @@ void CurrentState::runTriggers(OrderQueue& queue, std::size_t price, Cmp cmp, Ou
 
 			POrder f = *b;
 			switch (f->getType()) {
-			case Order::stop:
-				newOrder = f->changeType(Order::market);
+			case OrderType::stop:
+				newOrder = f->changeType(OrderType::market);
 				updateOrder(newOrder->getId(), newOrder);
 				curQueue.push(newOrder);
 				out(TradeResultOrderTrigger(newOrder));
 				break;
-			case Order::stoplimit:
-				newOrder = f->changeType(Order::limit);
+			case OrderType::stoplimit:
+				newOrder = f->changeType(OrderType::limit);
 				updateOrder(newOrder->getId(), newOrder);
 				curQueue.push(newOrder);
 				out(TradeResultOrderTrigger(newOrder));
