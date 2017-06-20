@@ -38,10 +38,10 @@ public:
 	 * The argument of the response is true=budget allocated, false=allocation rejected
 	 */
 
-	bool allocBudget(json::Value user, json::Value order, const BlockedBudget &budget, Callback callback);
+	bool allocBudget(json::Value user, json::Value order, const OrderBudget &budget, Callback callback);
 
 
-	virtual void requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback) = 0;
+	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback) = 0;
 
 protected:
 
@@ -64,7 +64,7 @@ protected:
 		}
 	};
 
-	typedef std::map<Key, BlockedBudget, CmpKey> BudgetUserMap;
+	typedef std::map<Key, OrderBudget, CmpKey> BudgetUserMap;
 
 	BudgetUserMap budgetMap;
 	std::mutex requestLock;
@@ -78,11 +78,11 @@ protected:
 		allocAsync,
 	};
 	bool sendServerRequest(AllocationResult r, json::Value user,
-			BlockedBudget total, Callback callback);
+			OrderBudget total, Callback callback);
 
 
 	AllocationResult updateBudget(json::Value user,json::Value order,
-			const BlockedBudget &toBlock, BlockedBudget &total);
+			const OrderBudget &toBlock, OrderBudget &total);
 };
 
 
@@ -91,7 +91,7 @@ typedef json::RefCntPtr<AbstractMoneyService> PMoneyService;
 
 class ErrorMoneyService: public AbstractMoneyService {
 public:
-	virtual void requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback);
+	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback);
 };
 }
 

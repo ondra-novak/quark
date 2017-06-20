@@ -10,7 +10,7 @@ void MockupMoneyService::start() {
 }
 
 void MockupMoneyService::requestBudgetOnServer(json::Value user,
-						BlockedBudget total, Callback callback) {
+						OrderBudget total, Callback callback) {
 	std::lock_guard<std::mutex> _(queueLock);
 	if (workerThread == nullptr) {
 		start();
@@ -49,24 +49,10 @@ void MockupMoneyService::worker() {
 	}
 }
 
-bool MockupMoneyService::allocBudget(json::Value user, const BlockedBudget& b) {
-	BlockedBudget &cur = userMap[user];
-	BlockedBudget final = cur + b;
-	if (final.raisedThen(maxBudgetPerUser)) {
-		logError({"Rejected budget allocation:",user,b.toJson(),cur.toJson()});
-		if (cur == BlockedBudget()) {
-			logInfo({"Budget user erased",user});
-			userMap.erase(user);
-		}
-		return false;
-	} else {
-		cur = final;
-		logInfo({"Accepted budget allocation:",user,b.toJson(),final.toJson()});
-		if (cur == BlockedBudget()) {
-			logInfo({"Budget user erased",user});
-			userMap.erase(user);
-		}
-		return true;
+bool MockupMoneyService::allocBudget(json::Value user, const OrderBudget& b) {
+	switch (b.type) {
+	case OrderBudget::currency: return b.value < maxCurrency;
+	case OrderBudget::asset: return b.value < maxAssets;
 	}
 }
 

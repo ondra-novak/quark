@@ -43,6 +43,8 @@ MarketConfig::MarketConfig(json::Value v)
 ,maxSlippagePtc(mandatory(v,"maxSlippagePtc").getNumber())
 
 ,signature(mandatory(v,"signature"))
+,currencySign(mandatory(v,"currencySign"))
+,assetSign(mandatory(v,"assetSign"))
 {
 
 	double maxSize = pow(2,sizeof(std::size_t)*8);

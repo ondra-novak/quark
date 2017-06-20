@@ -42,6 +42,8 @@ public:
 	double pipToBudget(std::size_t pip);
 
 	json::String signature;
+	json::String currencySign;
+	json::String assetSign;
 
 };
 

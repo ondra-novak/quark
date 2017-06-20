@@ -15,49 +15,44 @@
 
 namespace quark {
 
-BlockedBudget::BlockedBudget():assets(0),currency(0) {
+NamedEnum<OrderBudget::Type> OrderBudget::str({
+	{OrderBudget::asset,"asset"},
+	{OrderBudget::currency,"currency"}
+});
+
+OrderBudget::OrderBudget():type(currency),value(0) {
 
 }
 
-BlockedBudget::BlockedBudget(Value fromjson)
-	:assets(fromjson["assets"].getNumber())
-	,currency(fromjson["currency"].getNumber())
+
+Value OrderBudget::toJson() const {
+	return Object("type",str[type])
+			("value",value);
+}
+
+OrderBudget OrderBudget::operator -(const OrderBudget& other) const {
+	return OrderBudget(type, value - other.value);
+}
+
+OrderBudget OrderBudget::operator +(const OrderBudget& other) const {
+	return OrderBudget(type, value + other.value);
+}
+
+OrderBudget::OrderBudget(Type type, double value)
+	:type(type),value(value)
 {
 }
 
-Value BlockedBudget::toJson() const {
-	return Object("assets",assets)
-			("currency",currency);
-}
-
-BlockedBudget BlockedBudget::operator -(const BlockedBudget& other) const {
-	BlockedBudget b;
-	b.assets = assets - other.assets;
-	b.currency = currency - other.currency;
-	return b;
-}
-
-BlockedBudget BlockedBudget::operator +(const BlockedBudget& other) const {
-	BlockedBudget b;
-	b.assets = assets + other.assets;
-	b.currency = currency + other.currency;
-	return b;
-}
-
-BlockedBudget::BlockedBudget(double assets, double currency)
-	:assets(assets),currency(currency)
-{
-}
-
-BlockedBudget BlockedBudget::adjust(const MarketConfig &cfg) const {
-	return BlockedBudget(
-		assets<0?0:(floor(assets / cfg.granuality)*cfg.granuality),
-		currency<0?0:(floor(currency/cfg.granuality/cfg.pipSize)*cfg.granuality*cfg.pipSize));
+OrderBudget OrderBudget::adjust(const MarketConfig &cfg) const {
+	if (type == asset)
+		return OrderBudget(type,value<0?0:(floor(value / cfg.granuality)*cfg.granuality));
+	else
+		return OrderBudget(type,value<0?0:(floor(value/cfg.granuality/cfg.pipSize)*cfg.granuality*cfg.pipSize));
 
 }
 
-BlockedBudget BlockedBudget::operator -() const {
-	return BlockedBudget(-assets,-currency);
+OrderBudget OrderBudget::operator -() const {
+	return OrderBudget(type,-value);
 }
 
 } /* namespace quark */

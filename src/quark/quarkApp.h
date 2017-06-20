@@ -61,7 +61,7 @@ protected:
 	void checkUpdate(Document order);
 	Document saveOrder(Document order, Object newItems);
 	void matchOrder(Document order);
-	BlockedBudget calculateBudget(const Document &order);
+	OrderBudget calculateBudget(const Document &order);
 	void runTransaction(const TxItem &txitm);
 
 	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u);

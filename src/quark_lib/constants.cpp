@@ -63,13 +63,21 @@ STRCONST(timeModified);
 
 namespace Status {
 
+StrViewA strValidating("validating");
+StrViewA strActive("active");
+StrViewA strFinished("finished");
+StrViewA strRejected("rejected");
+StrViewA strAccepted("accepted");
+StrViewA strCanceled("canceled");
+
+
 json::NamedEnum<Type> str({
-	ENUMDEF(validating),
-	ENUMDEF(active),
-	ENUMDEF(finished),
-	ENUMDEF(rejected),
-	ENUMDEF(canceled),
-	ENUMDEF(accepted)}
+	{validating, strValidating},
+	{active, strActive},
+	{finished, strFinished},
+	{rejected, strRejected},
+	{canceled, strCanceled},
+	{accepted, strAccepted}}
 );
 }
 

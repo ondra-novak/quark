@@ -1,33 +1,50 @@
 #pragma once
 #include <imtjson/value.h>
+#include <imtjson/namedEnum.h>
 
 namespace quark {
 
 class MarketConfig;
 using namespace json;
 
-class BlockedBudget {
+class OrderBudget {
 public:
 
-	double assets;
-	double currency;
-	BlockedBudget();
-	BlockedBudget(double assets, double currency);
-	BlockedBudget(Value fromjson);
+	enum Type {
+		currency,
+		asset
+	};
+
+	static NamedEnum<Type> str;
+
+	Type type;
+	double value;
+
+	OrderBudget();
+	OrderBudget(Type type, double value);
 	Value toJson() const;
 
-	BlockedBudget operator-(const BlockedBudget &other) const;
-	BlockedBudget operator+(const BlockedBudget &other) const;
-	BlockedBudget adjust(const MarketConfig &cfg) const;
-	BlockedBudget operator-() const;
-	bool operator==(const BlockedBudget &b) const {
-		return assets == b.assets && currency == b.currency;
+	OrderBudget operator-(const OrderBudget &other) const;
+	OrderBudget operator+(const OrderBudget &other) const;
+	OrderBudget adjust(const MarketConfig &cfg) const;
+	OrderBudget operator-() const;
+	bool operator==(const OrderBudget &b) const {
+		return type == b.type && value == b.value;
 	}
-	bool operator!=(const BlockedBudget &b) const {
+	bool operator!=(const OrderBudget &b) const {
 		return !operator==(b);
 	}
-	bool raisedThen(const BlockedBudget &other) const {
-		return assets > other.assets || currency > other.currency;
+	bool operator>(const OrderBudget &b) const {
+		return value > b.value;
+	}
+	bool operator<(const OrderBudget &b) const {
+		return value < b.value;
+	}
+	bool operator>=(const OrderBudget &b) const {
+		return value >= b.value;
+	}
+	bool operator<=(const OrderBudget &b) const {
+		return value <= b.value;
 	}
 
 

@@ -14,3 +14,4 @@ add_subdirectory (src/quark_lib)
 add_subdirectory (src/quark_test)
 add_subdirectory (src/rpc)
 add_compile_options(-std=c++11)
+ 

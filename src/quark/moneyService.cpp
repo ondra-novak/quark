@@ -12,7 +12,7 @@
 namespace quark {
 
 bool AbstractMoneyService::sendServerRequest(AllocationResult r, json::Value user,
-		BlockedBudget total, Callback callback) {
+		OrderBudget total, Callback callback) {
 	switch (r) {
 	case allocNeedSync:
 		requestBudgetOnServer(user, total, callback);
@@ -26,10 +26,10 @@ bool AbstractMoneyService::sendServerRequest(AllocationResult r, json::Value use
 }
 
 bool AbstractMoneyService::allocBudget(json::Value user,
-		json::Value order, const BlockedBudget& budget,
+		json::Value order, const OrderBudget& budget,
 		Callback callback) {
 
-	BlockedBudget total;
+	OrderBudget total;
 	AllocationResult  r  = updateBudget(user,order,budget, total);
 	return sendServerRequest(r, user, total, callback);
 
@@ -37,7 +37,7 @@ bool AbstractMoneyService::allocBudget(json::Value user,
 
 
 AbstractMoneyService::AllocationResult AbstractMoneyService::updateBudget(json::Value user,
-		json::Value order, const BlockedBudget& toBlock, BlockedBudget& total) {
+		json::Value order, const OrderBudget& toBlock, OrderBudget& total) {
 
 	std::lock_guard<std::mutex> _(requestLock);
 	AllocationResult r;
@@ -45,7 +45,7 @@ AbstractMoneyService::AllocationResult AbstractMoneyService::updateBudget(json::
 
 	auto p = budgetMap.find(k);
 
-	if (toBlock == BlockedBudget()) {
+	if (toBlock == OrderBudget()) {
 		if (p == budgetMap.end()) {
 			r = allocNoChange;
 		} else {
@@ -57,8 +57,8 @@ AbstractMoneyService::AllocationResult AbstractMoneyService::updateBudget(json::
 			budgetMap.insert(std::make_pair(k, toBlock));
 			r = allocNeedSync;
 		} else{
-			BlockedBudget &b = p->second;;
-			if (toBlock.raisedThen(b)) {
+			OrderBudget &b = p->second;;
+			if (toBlock > b) {
 				r = allocNeedSync;
 			} else if (toBlock == b) {
 				r = allocNoChange;
@@ -69,7 +69,7 @@ AbstractMoneyService::AllocationResult AbstractMoneyService::updateBudget(json::
 		}
 	}
 
-	total = BlockedBudget();
+	total = OrderBudget();
 	auto low = budgetMap.lower_bound(Key(user,json::null));
 	auto high = budgetMap.upper_bound(Key(user,json::object));
 	for (auto iter = low; iter!= high; ++iter) {
@@ -78,7 +78,7 @@ AbstractMoneyService::AllocationResult AbstractMoneyService::updateBudget(json::
 	return r;
 }
 
-void ErrorMoneyService::requestBudgetOnServer(json::Value user, BlockedBudget total, Callback callback) {
+void ErrorMoneyService::requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback) {
 	std::thread thr([=] {callback(false);});
 	thr.detach();
 }

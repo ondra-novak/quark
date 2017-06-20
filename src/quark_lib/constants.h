@@ -72,6 +72,16 @@ enum Type {
 	canceled
 };
 
+using json::StrViewA;
+
+
+extern StrViewA strValidating;
+extern StrViewA strActive;
+extern StrViewA strFinished;
+extern StrViewA strRejected;
+extern StrViewA strAccepted;
+extern StrViewA strCanceled;
+
 extern json::NamedEnum<Type> str;
 
 }

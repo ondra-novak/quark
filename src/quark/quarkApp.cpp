@@ -21,7 +21,6 @@
 namespace quark {
 
 const StrViewA QuarkApp::marketConfigDocName("settings");
-const StrViewA QuarkApp::FIELD_STATUS("status");
 
 QuarkApp::QuarkApp() {
 	// TODO Auto-generated constructor stub
@@ -81,8 +80,8 @@ void QuarkApp::rejectOrder(const Document &order, const OrderErrorException &e, 
 		changes.set("updateStatus","rejected")
 				   ("updateReq",json::undefined);
 	} else {
-		changes.set(FIELD_STATUS,"rejected");
-					("finished",true);
+		changes.set(OrderFields::status,Status::strRejected);
+					(OrderFields::finished,true);
 	}
 	changes.set("error", Object("code",e.getCode())
 						("message",e.getMessage())
@@ -135,7 +134,7 @@ void QuarkApp::processOrder(Value cmd) {
 
 	if (marketCfg == nullptr) {
 		LOGDEBUG2("Rejected order (no market)", orderDoc.getIDValue());
-		orderDoc(FIELD_STATUS, "rejected")
+		orderDoc(OrderFields::status, Status::strRejected)
 		   ("error",Object("message","market is not opened yet"))
 		   ("finished",true);
 		ordersDb->put(orderDoc);
@@ -184,7 +183,7 @@ void QuarkApp::checkUpdate(Document order) {
 
 		//unblocks the blocked budget by this command
 		//this can be done asynchronously without waiting
-		moneyService->allocBudget(order["user"],order.getIDValue(), BlockedBudget(), nullptr);
+		moneyService->allocBudget(order["user"],order.getIDValue(), OrderBudget(), nullptr);
 		//save the order
 		saveOrder(order, Object("updateReq",json::undefined)
 						("status",req["status"])
@@ -234,7 +233,7 @@ Document QuarkApp::saveOrder(Document order, Object newItems) {
 
 
 
-BlockedBudget QuarkApp::calculateBudget(const Document &order) {
+OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
 	Value dir = order["dir"];
 	Value size = order["size"];
@@ -249,7 +248,7 @@ BlockedBudget QuarkApp::calculateBudget(const Document &order) {
 
 			if (budget.defined())dbudget = std::min(dbudget, budget.getNumber());
 
-			return BlockedBudget(0,dbudget).adjust(*marketCfg);
+			return OrderBudget(OrderBudget::currency,dbudget).adjust(*marketCfg);
 		}
 		Value stopPrice = order["stopPrice"];
 		if (stopPrice.defined()) {
@@ -257,17 +256,17 @@ BlockedBudget QuarkApp::calculateBudget(const Document &order) {
 
 			if (budget.defined()) dbudget = std::min(dbudget, budget.getNumber());
 
-			return BlockedBudget(0,dbudget).adjust(*marketCfg);
+			return OrderBudget(OrderBudget::currency,dbudget).adjust(*marketCfg);
 		}
 
 		if (budget.defined()) {
-			return BlockedBudget(0,budget.getNumber()).adjust(*marketCfg);
+			return OrderBudget(OrderBudget::currency,budget.getNumber()).adjust(*marketCfg);
 		}
 
-		return BlockedBudget(0,marketCfg->pipToPrice(coreState.getLastPrice())*slippage);
+		return OrderBudget(OrderBudget::currency,marketCfg->pipToPrice(coreState.getLastPrice())*slippage);
 	} else {
 
-		return BlockedBudget(size.getNumber(), 0);
+		return OrderBudget(OrderBudget::asset, size.getNumber());
 
 	}
 
