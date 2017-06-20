@@ -10,6 +10,9 @@
 #include <couchit/couchDB.h>
 #include <couchit/changes.h>
 #include <couchit/document.h>
+#include <imtjson/stringview.h>
+#include "../quark_lib/constants.h"
+
 
 #include "rpcApp.h"
 
@@ -33,7 +36,7 @@ int main(int c, char **args) {
 
 
 	json::maxPrecisionDigits=9;
-	couchit::CouchDB::fldTimestamp = "updateTime";
+	couchit::CouchDB::fldTimestamp = OrderFields::timeModified;
 
 	if (c != 2) {
 

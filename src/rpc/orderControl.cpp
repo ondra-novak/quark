@@ -8,38 +8,13 @@
 #include "orderControl.h"
 
 #include <couchit/document.h>
+#include "../quark_lib/constants.h"
 
 namespace quark {
 
 using namespace json;
 using namespace couchit;
 
-StrViewA FIELD__ID = "_id";
-StrViewA FIELD_STATUS = "status";
-StrViewA FIELD_USER = "user";
-StrViewA FIELD_CONTEXT = "context";
-StrViewA FIELD_TRAILING_DISTANCE = "trailingDistance";
-StrViewA FIELD_STOP_PRICE = "stopPrice";
-StrViewA FIELD_LIMIT_PRICE = "limitPrice";
-StrViewA FIELD_SIZE = "size";
-StrViewA FIELD_TYPE = "type";
-StrViewA FIELD_DIR = "dir";
-StrViewA SELL = "sell";
-StrViewA BUY = "buy";
-StrViewA TRAILING_STOPLIMIT = "trailing-stoplimit";
-StrViewA TRAILING_LIMIT = "trailing-limit";
-StrViewA TRAILING_STOP = "trailing-stop";
-StrViewA FOK = "fok";
-StrViewA IOC = "ioc";
-StrViewA POSTLIMIT = "postlimit";
-StrViewA STOPLIMIT = "stoplimit";
-StrViewA STOP = "stop";
-StrViewA MARKET = "market";
-StrViewA LIMIT = "limit";
-StrViewA FIELD_CANCELED = "canceled";
-StrViewA  FIELD_UPDATE_REQ = "updateReq";
-StrViewA FIELD_TMCREATED = "createTime";
-StrViewA MARGIN = "margin";
 
 json::Value validationError(StrViewA field, StrViewA message) {
 
@@ -61,96 +36,122 @@ OrderControl::OrderControl(couchit::CouchDB& db):db(db) {
 
 json::Value OrderControl::create(json::Value reqOrder) {
 
-	Value x = reqOrder[FIELD_DIR];
-		if (x.getString() != BUY && x.getString() != SELL) {
-			return validationError(FIELD_DIR,
-					"Mandatory field must either 'buy' or 'sell'");
+
+	Value x = reqOrder[OrderFields::dir];
+	if (!OrderDir::str.find(x.getString())) {
+			return validationError(OrderFields::dir,OrderDir::str.allEnums());
 	}
 
-		x = reqOrder[FIELD_TYPE];
-	StrViewA xtype = x.getString();
-		if (xtype != LIMIT
-		&& xtype != MARKET
-		&& xtype != STOP
-		&& xtype != STOPLIMIT
-		&& xtype != POSTLIMIT
-		&& xtype != IOC
-		&& xtype != FOK
-		&& xtype != TRAILING_STOP
-		&& xtype != TRAILING_STOPLIMIT
-		&& xtype != TRAILING_LIMIT
-		)
-			return validationError(FIELD_TYPE, "Unknown order type");
+	x = reqOrder[OrderFields::type];
+	const OrderType::Type *t = OrderType::str.find(x.getString());
+	if (!t)
+			return validationError(OrderFields::type, OrderType::str.allEnums());
 
 
-	x = reqOrder[FIELD_SIZE];
+	x = reqOrder[OrderFields::size];
 	if (x.getNumber() <= 0) {
-			return validationError(FIELD_SIZE,
+			return validationError(OrderFields::size,
 					"Zero or negative size is not allowed");
 	}
-		x = reqOrder[FIELD_LIMIT_PRICE];
+		x = reqOrder[OrderFields::limitPrice];
 	if (x.defined() )
 	{
 		if ( x.getNumber() <= 0)
-				return validationError(FIELD_LIMIT_PRICE,
+				return validationError(OrderFields::limitPrice,
+						"Must not be negative or zeroed");
+
+	} else {
+		if (*t == OrderType::limit || *t == OrderType::stoplimit
+				|| *t == OrderType::maker
+				|| *t == OrderType::ioc
+				|| *t == OrderType::fok
+				|| *t == OrderType::trailingLimit
+				|| *t == OrderType::trailingStopLimit) {
+				return validationError(OrderFields::limitPrice, "Must be defined");
+		}
+	}
+
+	x = reqOrder[OrderFields::stopPrice];
+	if (x.defined() )
+	{
+		if ( x.getNumber() <= 0)
+				return validationError(OrderFields::stopPrice,
 						"Must not be negative or zeroed");
 
 	} else {
 		if (
-				xtype == LIMIT || xtype == STOPLIMIT
-						|| xtype == POSTLIMIT
-					|| xtype == IOC
-										|| xtype == FOK
-					|| xtype == TRAILING_LIMIT
-					|| xtype == TRAILING_STOPLIMIT) {
-				return validationError(FIELD_LIMIT_PRICE, "Must be defined");
+				*t == OrderType::stop || *t == OrderType::stoplimit
+				|| *t == OrderType::trailingStop || *t == OrderType::trailingStopLimit) {
+				return validationError(OrderFields::stopPrice, "Must be defined");
 		}
 	}
 
-		x = reqOrder[FIELD_STOP_PRICE];
+		x = reqOrder[OrderFields::trailingDistance];
 	if (x.defined() )
 	{
 		if ( x.getNumber() <= 0)
-				return validationError(FIELD_STOP_PRICE,
-						"Must not be negative or zeroed");
+				return validationError(OrderFields::trailingDistance,"Must not be negative or zeroed");
 
 	} else {
-		if (
-				xtype == STOP || xtype == STOPLIMIT
-					|| xtype == STOP
-					|| xtype == TRAILING_STOP
-					|| xtype == TRAILING_STOPLIMIT) {
-				return validationError(FIELD_STOP_PRICE, "Must be defined");
-		}
-	}
-
-		x = reqOrder[FIELD_TRAILING_DISTANCE];
-	if (x.defined() )
-	{
-		if ( x.getNumber() <= 0)
-				return validationError(FIELD_TRAILING_DISTANCE,"Must not be negative or zeroed");
-
-	} else {
-			if (xtype == TRAILING_STOP
-			|| xtype == TRAILING_STOPLIMIT
-					|| xtype == TRAILING_LIMIT) {
-				return validationError(FIELD_TRAILING_DISTANCE,
+			if (*t == OrderType::trailingStop || *t == OrderType::trailingStopLimit
+					|| *t == OrderType::trailingLimit) {
+				return validationError(OrderFields::trailingDistance,
 						"Must be defined");
 		}
 	}
 
-		x = reqOrder[FIELD_USER];
+	x = reqOrder[OrderFields::user];
 	if (!x.defined() ) {
-			return validationError(FIELD_USER, "must be defined");
+			return validationError(OrderFields::user, "must be defined");
+	}
+	x = reqOrder[OrderFields::context];
+	if (!x.defined() ) {
+			return validationError(OrderFields::context, "must be defined");
+	}
+	if (!OrderContext::str.find(x.getString()))
+			return validationError(OrderFields::context, OrderContext::str.allEnums());
+	x = reqOrder[OrderFields::finished];
+	if (x.defined() ) {
+		return validationError(OrderFields::finished, "must not be defined");
+	}
+	x = reqOrder[OrderFields::fees];
+	if (x.defined() ) {
+		if (x.type() != json::number) {
+			if (x.type() != json::array)
+				return validationError(OrderFields::fees,"must be ethier number or array of two values [maker, taker]");
+			if (x.size() != 2)
+				return validationError(OrderFields::fees,"must be array of two values [maker, taker]");
+			if (x[0].type() != json::number)
+				return validationError(OrderFields::fees,"maker fee must be number");
+			if (x[1].type() != json::number)
+				return validationError(OrderFields::fees,"taker fee must be number");
+		}
+	}
+	x = reqOrder[OrderFields::budget];
+	if (x.defined()) {
+		if (x.type() != json::number)
+			return validationError(OrderFields::budget,"must be number");
+		if (x.getNumber()<0)
+			return validationError(OrderFields::budget,"must not be negative");
+	}
+	x = reqOrder[OrderFields::queuePriority];
+	if (x.defined()) {
+		if (x.type() != json::number)
+			return validationError(OrderFields::queuePriority,"must be number");
+	}
+	x = reqOrder[OrderFields::domPriority];
+	if (x.defined()) {
+		if (x.type() != json::number)
+			return validationError(OrderFields::domPriority,"must be number");
 	}
 
-	time_t t;
-	time(&t);
+	time_t ct;
+	time(&ct);
 
 	Document doc = db.newDocument("o.");
 	doc.setBaseObject(reqOrder);
-	doc.set(FIELD_STATUS,"validating")
-		.set(FIELD_TMCREATED, t);
+	doc.set( OrderFields::status,Status::str[Status::validating])
+		.set(OrderFields::timeCreated, ct);
 	doc.enableTimestamp();
 	db.put(doc);
 	return {doc.getIDValue(),doc.getRevValue()};
@@ -177,9 +178,15 @@ json::Value OrderControl::modify(json::Value orderId, json::Value reqOrder, json
 	Document doc = loadOrder(orderId, revId);
 	for (Value v : reqOrder) {
 		StrViewA x = v.getKey();
-			if (x == FIELD_DIR || x == FIELD_TYPE || x == FIELD_STATUS
-					|| x == FIELD__ID || x == FIELD_UPDATE_REQ
-					|| x == FIELD_USER) {
+			if (x == "" || x[0] == '_'
+				|| x == OrderFields::dir
+				|| x == OrderFields::type
+				|| x == OrderFields::status
+				|| x == OrderFields::updateReq
+				|| x == OrderFields::updateStatus
+				|| x == OrderFields::user
+				|| x == OrderFields::context
+				|| x == OrderFields::fees) {
 			return validationError(x,"The field is read-only");
 		}
 		if (!doc[x].defined()) {
@@ -188,15 +195,15 @@ json::Value OrderControl::modify(json::Value orderId, json::Value reqOrder, json
 		if (v.type() != doc[x].type()) {
 			return validationError(x,"The field has different type");
 		}
-			if ((x == FIELD_LIMIT_PRICE || x == FIELD_STOP_PRICE
-					|| x == FIELD_TRAILING_DISTANCE)
+			if ((x == OrderFields::limitPrice || x == OrderFields::stopPrice
+					|| x == OrderFields::trailingDistance)
 					&& v.getNumber() <= 0) {
 			return validationError(x,"Zero or negative value is not allowed");
 		}
 	}
 
-	doc.set(FIELD_UPDATE_REQ, reqOrder)
-			("updateStatus","validation");
+	doc.set(OrderFields::updateReq, reqOrder)
+			(OrderFields::updateStatus,Status::str[Status::validating]);
 
 	try {
 		db.put(doc);
@@ -212,7 +219,7 @@ json::Value OrderControl::modify(json::Value orderId, json::Value reqOrder, json
 
 json::Value OrderControl::cancel(json::Value orderId) {
 	Document doc = loadOrder(orderId,Value());
-	doc.set(FIELD_UPDATE_REQ,Object(FIELD_STATUS, FIELD_CANCELED));
+	doc.set(OrderFields::updateReq,Object(OrderFields::status, Status::str[Status::canceled]));
 	try {
 		db.put(doc);
 		return doc.getRevValue();

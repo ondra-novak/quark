@@ -55,6 +55,8 @@ STRCONST(finished);
 STRCONST(fees);
 STRCONST(updateReq);
 STRCONST(updateStatus);
+STRCONST(timeCreated);
+STRCONST(timeModified);
 
 
 }
@@ -66,8 +68,18 @@ json::NamedEnum<Type> str({
 	ENUMDEF(active),
 	ENUMDEF(finished),
 	ENUMDEF(rejected),
+	ENUMDEF(canceled),
 	ENUMDEF(accepted)}
 );
-}}
+}
+
+namespace OrderContext {
+json::NamedEnum<Type> str({
+		ENUMDEF(exchange),
+		ENUMDEF(margin)
+	});
+}
+
+}
 
 

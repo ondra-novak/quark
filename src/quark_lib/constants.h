@@ -57,6 +57,8 @@ namespace OrderFields {
 	extern StrViewA fees;
 	extern StrViewA updateReq;
 	extern StrViewA updateStatus;
+	extern StrViewA timeCreated;
+	extern StrViewA timeModified;
 }
 
 namespace Status {
@@ -66,13 +68,23 @@ enum Type {
 	active,
 	finished,
 	rejected,
-	accepted
+	accepted,
+	canceled
 };
 
 extern json::NamedEnum<Type> str;
 
 }
 
+
+namespace OrderContext {
+enum Type {
+	exchange,
+	margin
+};
+
+extern json::NamedEnum<Type> str;
+}
 
 
 }

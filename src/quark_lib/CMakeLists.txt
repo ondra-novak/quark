@@ -9,4 +9,4 @@ install(TARGETS quarklib
         ) 
 INSTALL(FILES ${quarklib_HDR}
         DESTINATION "include/quarklib" 
-        )   
+        )    
