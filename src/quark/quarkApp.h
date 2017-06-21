@@ -38,6 +38,8 @@ public:
 
 	void exitApp();
 
+	static String createTradeId(const Document &orderA, const Document &orderB);
+
 protected:
 	void mainloop();
 

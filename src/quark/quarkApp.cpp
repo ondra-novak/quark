@@ -257,8 +257,11 @@ Document QuarkApp::saveOrder(Document order, Object newItems) {
 
 OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
+	if (order[OrderFields::finished].getBool()) return zeroBudget(order);
+
 	OrderDir::Type dir = OrderDir::str[order[OrderFields::dir].getString()];
 	Value size = order[OrderFields::size];
+
 	double slippage = 1+ marketCfg->maxSlippagePtc/100.0;
 	OrderContext::Type context = OrderContext::str[order[OrderFields::context].getString()];
 	if (dir == OrderDir::buy) {
@@ -322,9 +325,20 @@ View budget("_design/users/_view/budget",View::groupLevel|View::update|View::red
 void QuarkApp::runTransaction(const TxItem& txitm) {
 	transactionCounter++;
 	OrdersToUpdate &o2u = o2u_1;
-	coreState.matching(transactionCounter,Transaction(&txitm,1), [&](const ITradeResult &res){
-		receiveResults(res,o2u);
-	});
+	try {
+		coreState.matching(transactionCounter,Transaction(&txitm,1), [&](const ITradeResult &res){
+			receiveResults(res,o2u);
+		});
+	} catch (OrderErrorException &e) {
+		Value order = ordersDb->get(e.getOrderId().getString(), CouchDB::flgNullIfMissing);
+		if (order.isNull()) {
+			logError({"Unknown order exception", e.getOrderId(), e.getCode(), e.getMessage()});
+		} else {
+			Document doc(order);
+			rejectOrder(order,e,false);
+		}
+		return;
+	}
 
 	if (o2u.empty()) return;
 
@@ -344,7 +358,6 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 			q.keys(keys);
 			Result res = q.exec();
 			for (Row r : res) {
-
 
 				Document &d = o2u[r.key];
 				LOGDEBUG3("Updating order (mass)", r.key, d);
@@ -404,7 +417,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 						sellOrder("size",marketCfg->sizeToAmount(t.getSellOrder()->getSize()-t.getSize()));
 					Document trade;
 
-					trade("_id",String({"t.", t.getBuyOrder()->getId().getString().substr(2),t.getSellOrder()->getId().getString().substr(2)}))
+
+					trade("_id",createTradeId(buyOrder,sellOrder))
 						 ("price",price)
 						 ("buyOrder",t.getBuyOrder()->getId())
 						 ("sellOrder",t.getSellOrder()->getId())
@@ -692,5 +706,16 @@ Value QuarkApp::PendingOrders::unlock(Value id) {
 	return out;
 }
 
+String QuarkApp::createTradeId(const Document &orderA, const Document &orderB) {
+	if (orderA[OrderFields::finished].getBool()) {
+		return String({"t.",orderA.getID().substr(0,2)});
+	}
+	if (orderB[OrderFields::finished].getBool()) {
+		return String({"t.",orderB.getID().substr(0,2)});
+	}
+	throw std::runtime_error("Reported partial matching for both orders, this should not happen");
+}
+
 
 } /* namespace quark */
+

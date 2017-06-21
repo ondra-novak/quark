@@ -41,6 +41,7 @@ int main(int c, char **args) {
 	using namespace json;
 
 	json::maxPrecisionDigits=9;
+	CouchDB::fldTimestamp = OrderFields::timeModified;
 
 	CouchDBLogProvider logProvider;
 
