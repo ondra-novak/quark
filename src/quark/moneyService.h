@@ -15,13 +15,14 @@
 
 #include "blockedBudget.h"
 #include "marketConfig.h"
+#include "imoneyservice.h"
 
 namespace quark {
 
 
 ///Connects to money server and allocates budget for users
 /** It executes requests in batches. It also tracks blocked budget for opened commands*/
-class AbstractMoneyService: public json::RefCntObj {
+class AbstractMoneyService: public IMoneyService{
 public:
 
 	typedef std::function<void(bool)> Callback;
@@ -42,43 +43,19 @@ public:
 
 	bool allocBudget(json::Value user, json::Value order, const OrderBudget &budget, Callback callback);
 
-	///Report trade executed
-	/**
-	 * @param prevTrade ID of previous trade. If it doesn't match, function reports nothing and sends known last trade
-	 * @param id id of current trade
-	 * @param price price of the trade
-	 * @param size size of trade (amount)
-	 * @param dir taker's action (buy or sell)
-	 * @param timestamp unix timestamp of the trade (may duplicate)
-	 * @return if trade is reported, function returns id. If not, function retuns last known trade. Function
-	 * can return null to start reporting from the beginning
-	 */
-	virtual Value reportTrade(Value prevTrade, Value id, double price, double size, OrderDir::Type dir, std::size_t timestamp) = 0;
-	///Reports balance change for the user
-	/**
-	 * @param trade ID of trade as reference
-	 * @param user ID of user
-	 * @param context context (exchange or margin)
-	 * @param assetChange (asset change - position change for margin)
-	 * @param currencyChange (change of currency - or value of the position for margin trading)
-	 * @param fee fee
-	 * @retval true reported
-	 * @retval false referenced trade was not last trade, please start over
-	 */
-	virtual bool reportBalanceChange(Value trade, Value user, OrderContext::Type context, double assetChange, double currencyChange, double fee) = 0;
+
+	void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;}
+
+protected:
 
 
-	///Request budget allocation
+	///Request budget allocation directly on server
 	/**
 	 * @param user user ID
 	 * @param total absolute budget for given context
 	 * @param callback callback function
 	 */
 	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback) = 0;
-
-	void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;}
-
-protected:
 
 	struct Key {
 		json::Value user;
