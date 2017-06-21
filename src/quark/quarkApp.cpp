@@ -594,7 +594,9 @@ void QuarkApp::mainloop() {
 					if (chdoc.id == marketConfigDocName) {
 						try {
 							marketCfg = new MarketConfig(chdoc.doc);
+							moneyService->setMarketConfig(marketCfg);
 							logInfo("Market configuration updated");
+
 						} catch (std::exception &e) {
 							logError( {	"MarketConfig update failed", e.what()});
 						}
@@ -649,6 +651,7 @@ void QuarkApp::receiveMarketConfig() {
 	Value doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
 	if (doc != nullptr) {
 		marketCfg = new MarketConfig(doc);
+		moneyService->setMarketConfig(marketCfg);
 	}
 }
 

@@ -56,4 +56,19 @@ bool MockupMoneyService::allocBudget(json::Value user, const OrderBudget& b) {
 	}
 }
 
+
+Value MockupMoneyService::reportTrade(Value prevTrade, Value id,
+		double price, double size, OrderDir::Type dir, std::size_t timestamp) {
+
+	logInfo({"MoneyServer-Trade",id,price,size,OrderDir::str[dir],timestamp});
+
+}
+
+bool MockupMoneyService::reportBalanceChange(Value trade, Value user,
+		OrderContext::Type context, double assetChange, double currencyChange,
+		double fee) {
+
+	logInfo({"MoneyServer-BalChange", trade, user, OrderContext::str[context], assetChange, currencyChange, fee});
+}
+
 }

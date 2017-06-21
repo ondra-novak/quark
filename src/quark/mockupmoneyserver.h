@@ -15,6 +15,9 @@ public:
 	void stop();
 
 	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback);
+	virtual Value reportTrade(Value prevTrade, Value id, double price, double size, OrderDir::Type dir, std::size_t timestamp);
+	virtual bool reportBalanceChange(Value trade, Value user, OrderContext::Type context, double assetChange, double currencyChange, double fee);
+
 
 protected:
 
