@@ -50,10 +50,7 @@ void MockupMoneyService::worker() {
 }
 
 bool MockupMoneyService::allocBudget(json::Value user, const OrderBudget& b) {
-	switch (b.type) {
-	case OrderBudget::currency: return b.value < maxCurrency;
-	case OrderBudget::asset: return b.value < maxAssets;
-	}
+	return !(b.above(maxBudget));
 }
 
 

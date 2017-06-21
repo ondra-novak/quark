@@ -7,7 +7,7 @@ namespace quark {
 class MockupMoneyService: public AbstractMoneyService {
 public:
 
-	MockupMoneyService(double maxAssets, double maxCurrency, std::size_t serverLatency):maxAssets(maxAssets),maxCurrency(maxCurrency),serverLatency(serverLatency) {}
+	MockupMoneyService(OrderBudget maxBudget, std::size_t serverLatency):maxBudget(maxBudget),serverLatency(serverLatency) {}
 	~MockupMoneyService() {stop();}
 
 
@@ -23,8 +23,7 @@ protected:
 
 	std::unique_ptr<std::thread> workerThread;
 	std::size_t serverLatency;
-	double maxAssets;
-	double maxCurrency;
+	OrderBudget maxBudget;
 
 	struct QueueItem {
 		json::Value user;

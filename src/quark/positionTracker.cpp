@@ -22,17 +22,6 @@ static String getBlockID(Value user) {
 }
 
 bool PositionTracker::allocBudget(json::Value user, json::Value order, const OrderBudget& budget, Callback callback) {
-	if (budget.context != OrderContext::margin) return false;
-	if (budget.type != OrderBudget::asset) return false;
-	String id = getBlockID(user);
-	do {
-		Document doc = posDB.get(id, CouchDB::flgCreateNew);
-		double curPos = doc["position"].getNumber();
-
-
-
-	} while (true);
-
 
 	return false;
 }

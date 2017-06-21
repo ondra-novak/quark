@@ -11,42 +11,40 @@ using namespace json;
 class OrderBudget {
 public:
 
-	enum Type {
-		currency,
-		asset
-	};
+	///Blocked asset (sum of assets for sell commands)
+	double asset;
+	///Blocked currency (sum of currencies for buy commands)
+	double currency;
+	///Blocked margin (leverage is not applied)
+	double margin;
+	///Total margin assets blocked for short positions
+	double posShort;
+	///Total margin assets blocked for long positions
+	double posLong;
 
-	static NamedEnum<Type> str;
-
-	OrderContext::Type context;
-	Type type;
-	double value;
 
 	OrderBudget();
-	OrderBudget(OrderContext::Type context, Type type, double value);
+	OrderBudget(double asset,double currency);
+	OrderBudget(double margin,double posShort, double posLong);
+	OrderBudget(double asset,double currency,double margin,double posShort, double posLong);
 	Value toJson() const;
 
-	OrderBudget operator-(const OrderBudget &other) const;
 	OrderBudget operator+(const OrderBudget &other) const;
 	OrderBudget adjust(const MarketConfig &cfg) const;
-	OrderBudget operator-() const;
 	bool operator==(const OrderBudget &b) const {
-		return type == b.type && value == b.value;
+		return asset == b.asset
+				&& currency == b.currency
+				&& margin == b.margin;
 	}
 	bool operator!=(const OrderBudget &b) const {
 		return !operator==(b);
 	}
-	bool operator>(const OrderBudget &b) const {
-		return value > b.value;
-	}
-	bool operator<(const OrderBudget &b) const {
-		return value < b.value;
-	}
-	bool operator>=(const OrderBudget &b) const {
-		return value >= b.value;
-	}
-	bool operator<=(const OrderBudget &b) const {
-		return value <= b.value;
+
+	bool above(const OrderBudget &b) const {
+		return asset > b.asset
+				|| currency > b.currency
+				|| margin > b.margin;
+
 	}
 
 

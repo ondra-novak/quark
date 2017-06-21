@@ -260,56 +260,46 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 	if (order[OrderFields::finished].getBool()) return zeroBudget(order);
 
 	OrderDir::Type dir = OrderDir::str[order[OrderFields::dir].getString()];
-	Value size = order[OrderFields::size];
+	double size = order[OrderFields::size].getNumber();
 
 	double slippage = 1+ marketCfg->maxSlippagePtc/100.0;
 	OrderContext::Type context = OrderContext::str[order[OrderFields::context].getString()];
-	if (dir == OrderDir::buy) {
-
-		Value budget = order[OrderFields::budget];
-
-		Value limPrice = order[OrderFields::limitPrice];
-		if (limPrice.defined()) {
-			double dbudget = size.getNumber()*limPrice.getNumber();
-
-			if (budget.defined())dbudget = std::min(dbudget, budget.getNumber());
-
-			return OrderBudget(context, OrderBudget::currency,dbudget).adjust(*marketCfg);
-		}
-		Value stopPrice = order[OrderFields::stopPrice];
-		if (stopPrice.defined()) {
-			double dbudget = stopPrice.getNumber()*size.getNumber()*slippage;
-
-			if (budget.defined()) dbudget = std::min(dbudget, budget.getNumber());
-
-			return OrderBudget(context, OrderBudget::currency,dbudget).adjust(*marketCfg);
-		}
-
-		if (budget.defined()) {
-			return OrderBudget(context, OrderBudget::currency,budget.getNumber()).adjust(*marketCfg);
-		}
-
-		return OrderBudget(context, OrderBudget::currency,marketCfg->pipToPrice(coreState.getLastPrice())*slippage);
+	if (dir == OrderDir::sell && context != OrderContext::margin) {
+		return OrderBudget(size,0);
 	} else {
 
-		return OrderBudget(context, OrderBudget::asset, size.getNumber());
+		double reqbudget;
+		Value budget = order[OrderFields::budget];
+		if (budget.defined()) {
+			reqbudget = budget.getNumber();
+		} else {
+			Value limPrice = order[OrderFields::limitPrice];
+			Value stopPrice = order[OrderFields::stopPrice];
+			if (limPrice.defined()) {
+				reqbudget = size*limPrice.getNumber();
+			} else if (stopPrice.defined()) {
+				reqbudget = size*stopPrice.getNumber()*slippage;
+			} else {
+				reqbudget = coreState.getLastPrice() * size * slippage;
+			}
 
+		}
+
+		if (context == OrderContext::margin) {
+			if (dir == OrderDir::sell)
+				return OrderBudget(reqbudget,size,0);
+			else
+				return OrderBudget(reqbudget,0,size);
+		} else {
+			return OrderBudget(0, reqbudget);
+		}
 	}
-
 
 }
 
-OrderBudget QuarkApp::zeroBudget(const Document &order) {
+OrderBudget QuarkApp::zeroBudget(const Document &) {
 
-	OrderDir::Type dir = OrderDir::str[order[OrderFields::dir].getString()];
-	OrderContext::Type context = OrderContext::str[order[OrderFields::context].getString()];
-	if (dir == OrderDir::buy) {
-		return OrderBudget(context, OrderBudget::currency,0);
-	} else {
-		return OrderBudget(context, OrderBudget::asset, 0);
-
-	}
-
+	return OrderBudget();
 
 }
 

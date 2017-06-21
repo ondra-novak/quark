@@ -96,10 +96,9 @@ json::maxPrecisionDigits=9;
 			if (!mandatoryField(mscfg,"maxBudget")) return 5;
 			if (!mandatoryField(mscfg,"latency")) return 5;
 			Value budget = mscfg["maxBudget"];
-			double maxAssets = budget["asset"].getNumber();
-			double maxCurrency = budget["currency"].getNumber();
+			OrderBudget b(budget["asset"].getNumber(),budget["currency"].getNumber() ,budget["margin"].getNumber(), 0 ,0);
 			std::size_t latency =mscfg["latency"].getUInt();
-			moneyService = new MockupMoneyService(maxAssets,maxCurrency,latency);
+			moneyService = new MockupMoneyService(b,latency);
 		} else if (type == "error") {
 			moneyService = new ErrorMoneyService;
 		} else {

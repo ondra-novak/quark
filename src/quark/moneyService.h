@@ -60,18 +60,16 @@ protected:
 	struct Key {
 		json::Value user;
 		json::Value command;
-		OrderContext::Type context;
-		OrderBudget::Type type;
 
 		Key () {}
-		Key (json::Value user,json::Value command, OrderContext::Type context, OrderBudget::Type type)
-			:user(user),command(command),context(context),type(type) {}
+		Key (json::Value user,json::Value command)
+			:user(user),command(command) {}
 
-		static Key lBound(json::Value user,OrderContext::Type context, OrderBudget::Type type) {
-			return Key(user, nullptr, context,type);
+		static Key lBound(json::Value user) {
+			return Key(user, nullptr);
 		}
-		static Key uBound(json::Value user,OrderContext::Type context, OrderBudget::Type type) {
-			return Key(user, json::object, context,type);
+		static Key uBound(json::Value user) {
+			return Key(user, json::object);
 		}
 
 	};
@@ -81,15 +79,13 @@ protected:
 			int r = json::Value::compare(a.user,b.user) ;
 			if (r < 0) return true;
 			if (r == 0) {
-				if (a.context != b.context) return a.context < b.context;
-				if (a.type != b.type) return a.type < b.type;
 				return  json::Value::compare(a.command,b.command)<0;
 			}
 			return false;
 		}
 	};
 
-	typedef std::map<Key, double, CmpKey> BudgetUserMap;
+	typedef std::map<Key, OrderBudget, CmpKey> BudgetUserMap;
 
 	BudgetUserMap budgetMap;
 	std::mutex requestLock;

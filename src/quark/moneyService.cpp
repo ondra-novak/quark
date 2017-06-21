@@ -41,7 +41,7 @@ AbstractMoneyService::AllocationResult AbstractMoneyService::updateBudget(json::
 
 	std::lock_guard<std::mutex> _(requestLock);
 	AllocationResult r;
-	Key k(user,order,total.context, total.type);
+	Key k(user,order);
 
 	auto p = budgetMap.find(k);
 
@@ -54,29 +54,28 @@ AbstractMoneyService::AllocationResult AbstractMoneyService::updateBudget(json::
 		}
 	} else{
 		if (p == budgetMap.end()) {
-			budgetMap.insert(std::make_pair(k, toBlock.value));
+			budgetMap.insert(std::make_pair(k, toBlock));
 			r = allocNeedSync;
 		} else{
-			double &b = p->second;;
-			if (toBlock.value > b) {
+			OrderBudget &b = p->second;;
+			if (toBlock.above(b)) {
 				r = allocNeedSync;
-			} else if (toBlock.value == b) {
+			} else if (toBlock == b) {
 				r = allocNoChange;
 			} else {
 				r = allocAsync;
 			}
-			b = toBlock.value;
+			b = toBlock;
 		}
 	}
 
-	double sum = 0;
-	auto low = budgetMap.lower_bound(Key::lBound(user, total.context, total.type));
-	auto high = budgetMap.upper_bound(Key::uBound(user, total.context, total.type));
+	total = OrderBudget();
+	auto low = budgetMap.lower_bound(Key::lBound(user));
+	auto high = budgetMap.upper_bound(Key::uBound(user));
 	for (auto iter = low; iter!= high; ++iter) {
-			sum = sum + iter->second;
+			total = total + iter->second;
 
 	}
-	total = OrderBudget(toBlock.context, toBlock.type,  sum);
 	return r;
 }
 
