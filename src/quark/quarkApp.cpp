@@ -153,13 +153,13 @@ void QuarkApp::processOrder2(Value cmd) {
 		LOGDEBUG2("Rejected order (no market)", order.getIDValue());
 		order(OrderFields::status, Status::strRejected)
 		   (OrderFields::error,Object("message","market is not opened yet"))
-		   ("finished",true);
+		   (OrderFields::finished,true);
 		ordersDb->put(order);
 		return;
 	}
 
 	//skip finished orders
-	if (order["finished"].getBool()) {
+	if (order[OrderFields::finished].getBool()) {
 		LOGDEBUG2("Skipped finished order", order.getIDValue());
 		return;
 	}
@@ -197,7 +197,7 @@ bool QuarkApp::checkUpdate(Document order) {
 		//save the order
 		saveOrder(order, Object(OrderFields::cancelReq,json::undefined)
 						(OrderFields::status,Status::strCanceled)
-						("finished",true));
+						(OrderFields::finished,true));
 
 		return true;
 	} else {
@@ -276,7 +276,7 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
 			return OrderBudget(context, OrderBudget::currency,dbudget).adjust(*marketCfg);
 		}
-		Value stopPrice = order["stopPrice"];
+		Value stopPrice = order[OrderFields::stopPrice];
 		if (stopPrice.defined()) {
 			double dbudget = stopPrice.getNumber()*size.getNumber()*slippage;
 
@@ -325,9 +325,10 @@ View budget("_design/users/_view/budget",View::groupLevel|View::update|View::red
 void QuarkApp::runTransaction(const TxItem& txitm) {
 	transactionCounter++;
 	OrdersToUpdate &o2u = o2u_1;
+	Changeset trades = tradesDb->createChangeset();
 	try {
 		coreState.matching(transactionCounter,Transaction(&txitm,1), [&](const ITradeResult &res){
-			receiveResults(res,o2u);
+			receiveResults(res,o2u,trades);
 		});
 	} catch (OrderErrorException &e) {
 		Value order = ordersDb->get(e.getOrderId().getString(), CouchDB::flgNullIfMissing);
@@ -388,11 +389,12 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		}
 		while (rep);
 	}
+	trades.commit();
 
 }
 
 
-void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
+void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, Changeset &trades) {
 	time_t now;
 	time(&now);
 	switch (r.getType()) {
@@ -405,16 +407,16 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 					Document &buyOrder = o2u[t.getBuyOrder()->getId()];
 					Document &sellOrder = o2u[t.getSellOrder()->getId()];
 					if (t.isFullBuy())
-						buyOrder("finished",true)
+						buyOrder(OrderFields::finished,true)
 								(OrderFields::status,Status::strExecuted);
 					 else
-						buyOrder("size",marketCfg->sizeToAmount(t.getBuyOrder()->getSize()-t.getSize()));
+						buyOrder(OrderFields::size,marketCfg->sizeToAmount(t.getBuyOrder()->getSize()-t.getSize()));
 
 					if (t.isFullSell())
-						sellOrder("finished",true)
+						sellOrder(OrderFields::finished,true)
 								(OrderFields::status,Status::strExecuted);
 					else
-						sellOrder("size",marketCfg->sizeToAmount(t.getSellOrder()->getSize()-t.getSize()));
+						sellOrder(OrderFields::size,marketCfg->sizeToAmount(t.getSellOrder()->getSize()-t.getSize()));
 					Document trade;
 
 
@@ -422,17 +424,17 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 						 ("price",price)
 						 ("buyOrder",t.getBuyOrder()->getId())
 						 ("sellOrder",t.getSellOrder()->getId())
-						 ("size",amount)
+						 (OrderFields::size,amount)
 						 ("dir",dir)
 						 ("time",(std::size_t)now);
-					tradesDb->put(trade);
+					trades.update(trade);
 				}break;
 			case quark::trOrderMove: {
 					const quark::TradeResultOderMove &t = dynamic_cast<const quark::TradeResultOderMove &>(r);
 					POrder o = t.getOrder();
 					Document &changes = o2u[o->getId()];
 					if (o->getLimitPrice()) changes(OrderFields::limitPrice,marketCfg->pipToPrice(o->getLimitPrice()));
-					if (o->getTriggerPrice()) changes("stopPrice",marketCfg->pipToPrice(o->getTriggerPrice()));
+					if (o->getTriggerPrice()) changes(OrderFields::stopPrice,marketCfg->pipToPrice(o->getTriggerPrice()));
 				}break;
 			case quark::trOrderOk: {
 				}break;
@@ -440,7 +442,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 					const quark::TradeResultOrderCancel &t = dynamic_cast<const quark::TradeResultOrderCancel &>(r);
 					Document &o = o2u[t.getOrder()->getId()];
 					o(OrderFields::status,"canceled")
-					 ("finished",true)
+					 (OrderFields::finished,true)
 					 ("cancel_code",t.getCode());
 				}break;
 			case quark::trOrderTrigger: {
@@ -458,13 +460,13 @@ void QuarkApp::rejectOrderBudget(Document order, bool update) {
 		LOGDEBUG2("Order budget rejected (update)", order.getIDValue());
 		saveOrder(order,Object(OrderFields::updateReq,json::undefined)
 				(OrderFields::updateStatus,Status::strRejected)
-				("updateError","budget"));
+				(OrderFields::error,OrderFields::budget));
 	} else {
 		LOGDEBUG2("Order budget rejected (new order)", order.getIDValue());
 		saveOrder(order,Object(OrderFields::updateReq,json::undefined)
 				(OrderFields::status,Status::strRejected)
-				(OrderFields::error,"budget")
-				("finished",true));
+				(OrderFields::error,OrderFields::budget)
+				(OrderFields::finished,true));
 	}
 
 }
@@ -477,7 +479,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	odata.id = order["_id"];
 	odata.dir = String(order["dir"]);
 	odata.type = String(order["type"]);
-	x = order["size"].getNumber();
+	x = order[OrderFields::size].getNumber();
 	if (x < marketCfg->minSize)
 		throw OrderRangeError(odata.id, OrderRangeError::minOrderSize,
 				marketCfg->minSize);
@@ -501,7 +503,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	} else {
 		odata.limitPrice = 0;
 	}
-	if ((v = order["stopPrice"]).defined()) {
+	if ((v = order[OrderFields::stopPrice]).defined()) {
 		x = v.getNumber();
 		if (x < marketCfg->minPrice)
 			throw OrderRangeError(odata.id, OrderRangeError::minPrice,
@@ -515,7 +517,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	} else {
 		odata.stopPrice = 0;
 	}
-	if ((v = order["budget"]).defined()) {
+	if ((v = order[OrderFields::budget]).defined()) {
 		x = v.getNumber();
 		if (x < 0)
 			throw OrderRangeError(odata.id, OrderRangeError::invalidBudget, 0);
@@ -528,7 +530,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	} else {
 		v = order[OrderFields::limitPrice];
 		if (v.defined()) {
-			double expectedBudget = v.getNumber() * order["size"].getNumber();
+			double expectedBudget = v.getNumber() * order[OrderFields::size].getNumber();
 			if (expectedBudget > marketCfg->maxBudget)
 				throw OrderRangeError(odata.id,
 						OrderRangeError::outOfAllowedBudget,
@@ -707,6 +709,9 @@ Value QuarkApp::PendingOrders::unlock(Value id) {
 }
 
 String QuarkApp::createTradeId(const Document &orderA, const Document &orderB) {
+	//because one of orders are always fully executed, it should never generate trade again
+	//so we can use its ID to build unique trade ID
+
 	if (orderA[OrderFields::finished].getBool()) {
 		return String({"t.",orderA.getID().substr(0,2)});
 	}

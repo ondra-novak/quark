@@ -18,6 +18,9 @@
 
 namespace quark {
 
+
+
+
 ///Connects to money server and allocates budget for users
 /** It executes requests in batches. It also tracks blocked budget for opened commands*/
 class AbstractMoneyService: public json::RefCntObj {
@@ -40,6 +43,8 @@ public:
 	 */
 
 	bool allocBudget(json::Value user, json::Value order, const OrderBudget &budget, Callback callback);
+
+
 
 
 	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback) = 0;

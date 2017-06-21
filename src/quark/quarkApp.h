@@ -75,7 +75,7 @@ protected:
 	OrderBudget zeroBudget(const Document &order);
 	void runTransaction(const TxItem &txitm);
 
-	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u);
+	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u, Changeset &trades);
 	void rejectOrderBudget(Document order, bool update);
 	void rejectOrder(const Document &order, const OrderErrorException &e, bool update);
 
@@ -88,6 +88,7 @@ private:
 	static const StrViewA FIELD_STATUS;
 	std::function<void()> exitFn;
 	std::size_t transactionCounter = 0;
+
 
 
 	OrdersToUpdate o2u_1, o2u_2;
