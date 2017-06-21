@@ -53,6 +53,7 @@ namespace OrderFields {
 	extern StrViewA user;
 	extern StrViewA status;
 	extern StrViewA error;
+	extern StrViewA cancelReq;
 	extern StrViewA finished;
 	extern StrViewA fees;
 	extern StrViewA updateReq;
@@ -68,6 +69,7 @@ enum Type {
 	active,
 	finished,
 	rejected,
+	executed,
 	accepted,
 	canceled
 };
@@ -78,6 +80,7 @@ using json::StrViewA;
 extern StrViewA strValidating;
 extern StrViewA strActive;
 extern StrViewA strFinished;
+extern StrViewA strExecuted;
 extern StrViewA strRejected;
 extern StrViewA strAccepted;
 extern StrViewA strCanceled;

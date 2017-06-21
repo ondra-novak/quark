@@ -31,28 +31,28 @@ Value OrderBudget::toJson() const {
 }
 
 OrderBudget OrderBudget::operator -(const OrderBudget& other) const {
-	return OrderBudget(type, value - other.value);
+	return OrderBudget(context, type, value - other.value);
 }
 
 OrderBudget OrderBudget::operator +(const OrderBudget& other) const {
-	return OrderBudget(type, value + other.value);
+	return OrderBudget(context, type, value + other.value);
 }
 
-OrderBudget::OrderBudget(Type type, double value)
-	:type(type),value(value)
+OrderBudget::OrderBudget(OrderContext::Type context,Type type, double value)
+	:context(context),type(type),value(value)
 {
 }
 
 OrderBudget OrderBudget::adjust(const MarketConfig &cfg) const {
 	if (type == asset)
-		return OrderBudget(type,value<0?0:(floor(value / cfg.granuality)*cfg.granuality));
+		return OrderBudget(context, type,value<0?0:(floor(value / cfg.granuality)*cfg.granuality));
 	else
-		return OrderBudget(type,value<0?0:(floor(value/cfg.granuality/cfg.pipSize)*cfg.granuality*cfg.pipSize));
+		return OrderBudget(context, type,value<0?0:(floor(value/cfg.granuality/cfg.pipSize)*cfg.granuality*cfg.pipSize));
 
 }
 
 OrderBudget OrderBudget::operator -() const {
-	return OrderBudget(type,-value);
+	return OrderBudget(context, type,-value);
 }
 
 } /* namespace quark */

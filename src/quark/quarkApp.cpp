@@ -28,18 +28,24 @@ QuarkApp::QuarkApp() {
 	moneyService = new ErrorMoneyService;
 }
 
-void QuarkApp::runOrder(const Document &order, bool update) {
+void QuarkApp::processPendingOrders(Value user) {
+	Value cmd = pendingOrders.unlock(user);
+	while (cmd.defined()) {
+		processOrder2(cmd);
+		cmd = pendingOrders.unlock(user);
+	}
+}
+
+bool QuarkApp::runOrder(const Document &order, bool update) {
+
+	Value user = order[OrderFields::user];
 
 	//calculate budget
 	auto b = calculateBudget(order);
 
 	LOGDEBUG3("Budget calculated for the order", order.getIDValue(), b.toJson());
 
-	//function which allocates budget and call the callback when it is finished
-	auto allocBudget = [=](StdCallback cb) {
-		//allocate budget and call function
-		return !moneyService->allocBudget(order["user"],order.getIDValue(),
-				b,[=](bool response) {
+	if (!moneyService->allocBudget(order[OrderFields::user], order.getIDValue(), b, [=](bool response) {
 				//in positive response
 				if (response) {
 					//lock this object
@@ -53,16 +59,13 @@ void QuarkApp::runOrder(const Document &order, bool update) {
 					//reject the order
 					rejectOrderBudget(order, update);
 				}
-				//call the callback because we are finish
-				cb();
+
+				processPendingOrders(user);
 			}
-		);
-	};
-	//allocate budget async
-	if (!pendingOrders.async(order.getIDValue(), allocBudget)) {
-		//if allocation done synchronously
-		//go directly to stage 2
+		)) return false;
+	else {
 		runOrder2(order,update);
+		return true;
 	}
 
 }
@@ -77,20 +80,21 @@ void QuarkApp::rejectOrder(const Document &order, const OrderErrorException &e, 
 
 	Object changes;
 	if (update) {
-		changes.set("updateStatus","rejected")
-				   ("updateReq",json::undefined);
+		changes.set(OrderFields::updateStatus,Status::strRejected)
+				   (OrderFields::updateReq,json::undefined);
 	} else {
 		changes.set(OrderFields::status,Status::strRejected);
 					(OrderFields::finished,true);
 	}
-	changes.set("error", Object("code",e.getCode())
+	changes.set(OrderFields::error, Object("code",e.getCode())
 						("message",e.getMessage())
 						("rangeValue",rangeValue));
 	saveOrder(order,changes);
 
 }
 
-void QuarkApp::runOrder2(const Document &order, bool update) {
+void QuarkApp::runOrder2(Document order, bool update) {
+
 
 	LOGDEBUG3("Executing order", order.getIDValue(), update?"(update)":"(new order)");
 	//stage 2
@@ -102,11 +106,23 @@ void QuarkApp::runOrder2(const Document &order, bool update) {
 		txi.order = docOrder2POrder(order);
 
 
-		if (order["status"].getString() != "active")
-			saveOrder(order,Object("status","active"));
+		if (order[OrderFields::status].getString() != Status::strActive) {
+			try {
+				order.set(OrderFields::status, Status::strActive);
+				ordersDb->put(order);
+			} catch (const UpdateException &e) {
+				//in case of conflict...
+				if (e.getErrors()[0].isConflict()) {
+					logWarn({"Order creation conflict, waiting for fresh data", order.getIDValue()});
+					return;
+				}
+				throw;
+			}
+		}
 
 		//run transaction
 		runTransaction(txi);
+
 
 		//handle various exceptions
 	 }catch (OrderRangeError &e) {
@@ -118,94 +134,100 @@ void QuarkApp::runOrder2(const Document &order, bool update) {
 
 void QuarkApp::processOrder(Value cmd) {
 
-	Document orderDoc(cmd);
-	Sync _(ordLock);
-
-	LOGDEBUG2("Pop order", orderDoc.getIDValue());
-
-	//in case that this order is pending
-	if (pendingOrders.await(orderDoc.getIDValue(), [=] {
-		//schedule its processing for later
-		LOGDEBUG2("Postpone", orderDoc.getIDValue());
-		processOrder(ordersDb->get(orderDoc.getID()));
-			}))
-		//but exit now
+	Value user = cmd[OrderFields::user];
+	if (!pendingOrders.lock(user, cmd))
 		return;
 
+	processOrder2(cmd);
+	processPendingOrders(user);
+
+};
+
+void QuarkApp::processOrder2(Value cmd) {
+	Document order(cmd);
+	Sync _(ordLock);
+
+	LOGDEBUG2("Pop order", order.getIDValue());
+
 	if (marketCfg == nullptr) {
-		LOGDEBUG2("Rejected order (no market)", orderDoc.getIDValue());
-		orderDoc(OrderFields::status, Status::strRejected)
-		   ("error",Object("message","market is not opened yet"))
+		LOGDEBUG2("Rejected order (no market)", order.getIDValue());
+		order(OrderFields::status, Status::strRejected)
+		   (OrderFields::error,Object("message","market is not opened yet"))
 		   ("finished",true);
-		ordersDb->put(orderDoc);
+		ordersDb->put(order);
+		return;
 	}
 
 	//skip finished orders
-	if (orderDoc["finished"].getBool()) {
-		LOGDEBUG2("Skipped finished order", orderDoc.getIDValue());
+	if (order["finished"].getBool()) {
+		LOGDEBUG2("Skipped finished order", order.getIDValue());
 		return;
 	}
 
-	//if order is not part of matching - it is probably new or after the restart
-	if (!coreState.isKnownOrder(orderDoc.getIDValue())) {
-		//run order (may run async)
-		runOrder(orderDoc, false);
-	}
+	///process update on order - false = no update found
+	if (!checkUpdate(order)) {
 
-	//order has update defined
-	if (orderDoc["updateReq"].defined()) {
-		//if there is pending action on the order
-		if (!pendingOrders.await(orderDoc.getIDValue(), [=] {
-				Sync _(ordLock);
-				//perform checkUpdate after
-				checkUpdate(ordersDb->get(orderDoc.getID()));
-			})) {
-				//perform checkUpdate now
-				checkUpdate(orderDoc);
-			}
+		//if order is not part of matching - it is probably new or after the restart
+		if (!coreState.isKnownOrder(order.getIDValue())) {
+			//run order (may run async)
+			runOrder(order, false);
+
+		}
+
 	}
 }
 
-void QuarkApp::checkUpdate(Document order) {
+bool QuarkApp::checkUpdate(Document order) {
 
+	bool isKnown = coreState.isKnownOrder(order.getIDValue());
 
-	Value req = order["updateReq"];
-	if (!req.defined()) return;
-
-	if (req["status"] == "canceled") {
+	if (order[OrderFields::cancelReq].getBool()) {
+		//request to cancel order
 		LOGDEBUG2("Order is user canceled", order.getIDValue());
-		if (coreState.isKnownOrder(order.getIDValue())) {
+		if (isKnown) {
+			//remove order from market
 			TxItem txi;
 			txi.action = actionRemoveOrder;
 			txi.orderId = order.getIDValue();
 			runTransaction(txi);
 		}
-
 		//unblocks the blocked budget by this command
 		//this can be done asynchronously without waiting
-		moneyService->allocBudget(order["user"],order.getIDValue(), OrderBudget(), nullptr);
+		moneyService->allocBudget(order[OrderFields::user],order.getIDValue(), zeroBudget(order), nullptr);
 		//save the order
-		saveOrder(order, Object("updateReq",json::undefined)
-						("status",req["status"])
+		saveOrder(order, Object(OrderFields::cancelReq,json::undefined)
+						(OrderFields::status,Status::strCanceled)
 						("finished",true));
 
+		return true;
 	} else {
 
-		LOGDEBUG3("Order is updated by user", order.getIDValue(), order["updateReq"]);
+		Value req = order[OrderFields::updateReq];
+		if (!req.defined()) return false;
 
-		Object changes;
+
+		LOGDEBUG3("Order is updated by user", order.getIDValue(), order[OrderFields::updateReq]);
+
 		for (Value v : req) {
-			changes.set(v);
+			order.set(v);
 		}
-		changes.set("updateReq",json::undefined);
-		changes.set("updateStatus","accepted");
+		order.set(OrderFields::updateReq,json::undefined);
+		order.set(OrderFields::updateStatus,"accepted");
 
-		Document d = saveOrder(order, changes);
+		try {
+			ordersDb->put(order);
+		} catch (const UpdateException &e) {
+			if (e.getErrors()[0].isConflict()) {
+				logWarn({"Order update conflict, waiting for fresh data", order.getIDValue()});
+				return true;
+			}
+			throw;
+		}
 
-		runOrder(d, true);
+		runOrder(order, isKnown);
+
+		return true;
 	}
-
-
 
 }
 
@@ -235,20 +257,21 @@ Document QuarkApp::saveOrder(Document order, Object newItems) {
 
 OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
-	Value dir = order["dir"];
-	Value size = order["size"];
+	OrderDir::Type dir = OrderDir::str[order[OrderFields::dir].getString()];
+	Value size = order[OrderFields::size];
 	double slippage = 1+ marketCfg->maxSlippagePtc/100.0;
-	if (dir.getString() == "buy") {
+	OrderContext::Type context = OrderContext::str[order[OrderFields::context].getString()];
+	if (dir == OrderDir::buy) {
 
-		Value budget = order["budget"];
+		Value budget = order[OrderFields::budget];
 
-		Value limPrice = order["limitPrice"];
+		Value limPrice = order[OrderFields::limitPrice];
 		if (limPrice.defined()) {
 			double dbudget = size.getNumber()*limPrice.getNumber();
 
 			if (budget.defined())dbudget = std::min(dbudget, budget.getNumber());
 
-			return OrderBudget(OrderBudget::currency,dbudget).adjust(*marketCfg);
+			return OrderBudget(context, OrderBudget::currency,dbudget).adjust(*marketCfg);
 		}
 		Value stopPrice = order["stopPrice"];
 		if (stopPrice.defined()) {
@@ -256,17 +279,31 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
 			if (budget.defined()) dbudget = std::min(dbudget, budget.getNumber());
 
-			return OrderBudget(OrderBudget::currency,dbudget).adjust(*marketCfg);
+			return OrderBudget(context, OrderBudget::currency,dbudget).adjust(*marketCfg);
 		}
 
 		if (budget.defined()) {
-			return OrderBudget(OrderBudget::currency,budget.getNumber()).adjust(*marketCfg);
+			return OrderBudget(context, OrderBudget::currency,budget.getNumber()).adjust(*marketCfg);
 		}
 
-		return OrderBudget(OrderBudget::currency,marketCfg->pipToPrice(coreState.getLastPrice())*slippage);
+		return OrderBudget(context, OrderBudget::currency,marketCfg->pipToPrice(coreState.getLastPrice())*slippage);
 	} else {
 
-		return OrderBudget(OrderBudget::asset, size.getNumber());
+		return OrderBudget(context, OrderBudget::asset, size.getNumber());
+
+	}
+
+
+}
+
+OrderBudget QuarkApp::zeroBudget(const Document &order) {
+
+	OrderDir::Type dir = OrderDir::str[order[OrderFields::dir].getString()];
+	OrderContext::Type context = OrderContext::str[order[OrderFields::context].getString()];
+	if (dir == OrderDir::buy) {
+		return OrderBudget(context, OrderBudget::currency,0);
+	} else {
+		return OrderBudget(context, OrderBudget::asset, 0);
 
 	}
 
@@ -314,7 +351,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 				d.setBaseObject(r.doc);
 				auto budget = calculateBudget(d);
 				chset.update(d);
-				moneyService->allocBudget(d["user"],d.getIDValue(),budget,nullptr);
+				moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),budget,nullptr);
 			}
 			try {
 				chset.commit();
@@ -356,13 +393,13 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 					Document &sellOrder = o2u[t.getSellOrder()->getId()];
 					if (t.isFullBuy())
 						buyOrder("finished",true)
-								("status","executed");
+								(OrderFields::status,Status::strExecuted);
 					 else
 						buyOrder("size",marketCfg->sizeToAmount(t.getBuyOrder()->getSize()-t.getSize()));
 
 					if (t.isFullSell())
 						sellOrder("finished",true)
-								("status","executed");
+								(OrderFields::status,Status::strExecuted);
 					else
 						sellOrder("size",marketCfg->sizeToAmount(t.getSellOrder()->getSize()-t.getSize()));
 					Document trade;
@@ -380,7 +417,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 					const quark::TradeResultOderMove &t = dynamic_cast<const quark::TradeResultOderMove &>(r);
 					POrder o = t.getOrder();
 					Document &changes = o2u[o->getId()];
-					if (o->getLimitPrice()) changes("limitPrice",marketCfg->pipToPrice(o->getLimitPrice()));
+					if (o->getLimitPrice()) changes(OrderFields::limitPrice,marketCfg->pipToPrice(o->getLimitPrice()));
 					if (o->getTriggerPrice()) changes("stopPrice",marketCfg->pipToPrice(o->getTriggerPrice()));
 				}break;
 			case quark::trOrderOk: {
@@ -388,7 +425,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 			case quark::trOrderCancel: {
 					const quark::TradeResultOrderCancel &t = dynamic_cast<const quark::TradeResultOrderCancel &>(r);
 					Document &o = o2u[t.getOrder()->getId()];
-					o("status","canceled")
+					o(OrderFields::status,"canceled")
 					 ("finished",true)
 					 ("cancel_code",t.getCode());
 				}break;
@@ -405,14 +442,14 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u) {
 void QuarkApp::rejectOrderBudget(Document order, bool update) {
 	if (update) {
 		LOGDEBUG2("Order budget rejected (update)", order.getIDValue());
-		saveOrder(order,Object("updateReq",json::undefined)
-				("updateStatus","rejected")
+		saveOrder(order,Object(OrderFields::updateReq,json::undefined)
+				(OrderFields::updateStatus,Status::strRejected)
 				("updateError","budget"));
 	} else {
 		LOGDEBUG2("Order budget rejected (new order)", order.getIDValue());
-		saveOrder(order,Object("updateReq",json::undefined)
-				("status","rejected")
-				("error","budget")
+		saveOrder(order,Object(OrderFields::updateReq,json::undefined)
+				(OrderFields::status,Status::strRejected)
+				(OrderFields::error,"budget")
 				("finished",true));
 	}
 
@@ -436,7 +473,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 				marketCfg->maxSize);
 
 	odata.size = marketCfg->amountToSize(x);
-	if ((v = order["limitPrice"]).defined()) {
+	if ((v = order[OrderFields::limitPrice]).defined()) {
 		x = v.getNumber();
 		if (x < marketCfg->minPrice)
 			throw OrderRangeError(odata.id, OrderRangeError::minPrice,
@@ -475,7 +512,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 
 		odata.budget = marketCfg->budgetToPip(x);
 	} else {
-		v = order["limitPrice"];
+		v = order[OrderFields::limitPrice];
 		if (v.defined()) {
 			double expectedBudget = v.getNumber() * order["size"].getNumber();
 			if (expectedBudget > marketCfg->maxBudget)
@@ -486,9 +523,9 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 		odata.budget = 0;
 	}
 	odata.trailingDistance = marketCfg->priceToPip(
-			order["trailingDistance"].getNumber());
-	odata.domPriority = order["domPriority"].getInt();
-	odata.queuePriority = order["queuPriority"].getInt();
+			order[OrderFields::trailingDistance].getNumber());
+	odata.domPriority = order[OrderFields::domPriority].getInt();
+	odata.queuePriority = order[OrderFields::queuePriority].getInt();
 	po = new Order(odata);
 	return po;
 }
@@ -513,7 +550,7 @@ void QuarkApp::mainloop() {
 				chfeed.cancelWait();
 			};
 
-			Value errorDoc = ordersDb->get("error", CouchDB::flgNullIfMissing);
+			Value errorDoc = ordersDb->get(OrderFields::error, CouchDB::flgNullIfMissing);
 			if (!errorDoc.isNull()) {
 				logError("Error is signaled, engine stopped - please remove error file to continue");
 
@@ -577,7 +614,7 @@ void QuarkApp::mainloop() {
 		} catch (std::exception &e) {
 			logError( { "Unhandled exception in mainloop", e.what() });
 			Document errdoc;
-			errdoc.setID("error");
+			errdoc.setID(OrderFields::error);
 			errdoc.set("what", e.what());
 			errdoc.enableTimestamp();
 			ordersDb->put(errdoc);
@@ -627,6 +664,32 @@ void QuarkApp::start(couchit::Config cfg, PMoneyService moneyService) {
 	mainloop();
 
 
+}
+
+
+bool QuarkApp::PendingOrders::lock(Value id, const Value& doc) {
+	std::lock_guard<std::mutex> _(l);
+	auto f = orders.find(id);
+	if (f == orders.end()) {
+		orders.operator [](id);
+		return true;
+	} else {
+		orders[id].push(doc);
+		return false;
+	}
+}
+
+Value QuarkApp::PendingOrders::unlock(Value id) {
+	std::lock_guard<std::mutex> _(l);
+	auto f = orders.find(id);
+	if (f == orders.end()) return undefined;
+	if (f->second.empty()) {
+		orders.erase(f);
+		return undefined;
+	}
+	Value out = f->second.front();
+	f->second.pop();
+	return out;
 }
 
 

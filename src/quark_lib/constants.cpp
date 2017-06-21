@@ -51,6 +51,7 @@ STRCONST(context);
 STRCONST(user);
 STRCONST(status);
 STRCONST(error);
+STRCONST(cancelReq);
 STRCONST(finished);
 STRCONST(fees);
 STRCONST(updateReq);
@@ -66,6 +67,7 @@ namespace Status {
 StrViewA strValidating("validating");
 StrViewA strActive("active");
 StrViewA strFinished("finished");
+StrViewA strExecuted("executed");
 StrViewA strRejected("rejected");
 StrViewA strAccepted("accepted");
 StrViewA strCanceled("canceled");
@@ -75,6 +77,7 @@ json::NamedEnum<Type> str({
 	{validating, strValidating},
 	{active, strActive},
 	{finished, strFinished},
+	{executed, strExecuted},
 	{rejected, strRejected},
 	{canceled, strCanceled},
 	{accepted, strAccepted}}

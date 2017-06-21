@@ -18,7 +18,6 @@
 
 #include "marketConfig.h"
 #include "moneyService.h"
-#include "pendingOrders.h"
 
 namespace quark {
 
@@ -46,7 +45,6 @@ protected:
 	std::unique_ptr<CouchDB> tradesDb;
 	std::unique_ptr<CouchDB> positionsDb;
 	PMoneyService moneyService;
-	PendingOrders<json::Value> pendingOrders;
 
 	PMarketConfig marketCfg;
 	static const StrViewA marketConfigDocName;
@@ -56,12 +54,23 @@ protected:
 	typedef std::unordered_map<Value, Value> UsersToUpdate;
 
 
+	class PendingOrders {
+		typedef std::unordered_map<Value, std::queue<Value> > Map;
+
+		Map orders;
+		std::mutex l;
+	public:
+		bool lock(Value id, const Value &doc);
+		Value unlock(Value id);
+	};
+	PendingOrders pendingOrders;
 
 //	void createOrder(Document order);
-	void checkUpdate(Document order);
+	bool checkUpdate(Document order);
 	Document saveOrder(Document order, Object newItems);
 	void matchOrder(Document order);
 	OrderBudget calculateBudget(const Document &order);
+	OrderBudget zeroBudget(const Document &order);
 	void runTransaction(const TxItem &txitm);
 
 	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u);
@@ -70,6 +79,7 @@ protected:
 
 private:
 	POrder docOrder2POrder(const Document& order);
+	void processOrder2(Value cmd);
 
 
 
@@ -83,9 +93,9 @@ private:
 	std::mutex ordLock;
 	typedef std::unique_lock<std::mutex> Sync;
 
-	void runOrder(const Document &doc, bool update);
-	void runOrder2(const Document &doc, bool update);
-
+	bool runOrder(const Document &doc, bool update);
+	void runOrder2(Document doc, bool update);
+	void processPendingOrders(Value user);
 };
 
 

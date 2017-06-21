@@ -1,6 +1,7 @@
 #pragma once
 #include <imtjson/value.h>
 #include <imtjson/namedEnum.h>
+#include "../quark_lib/constants.h"
 
 namespace quark {
 
@@ -17,11 +18,12 @@ public:
 
 	static NamedEnum<Type> str;
 
+	OrderContext::Type context;
 	Type type;
 	double value;
 
 	OrderBudget();
-	OrderBudget(Type type, double value);
+	OrderBudget(OrderContext::Type context, Type type, double value);
 	Value toJson() const;
 
 	OrderBudget operator-(const OrderBudget &other) const;

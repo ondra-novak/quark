@@ -14,6 +14,7 @@
 
 
 #include "blockedBudget.h"
+#include "marketConfig.h"
 
 namespace quark {
 
@@ -43,14 +44,27 @@ public:
 
 	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback) = 0;
 
+	void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;}
+
 protected:
 
 	struct Key {
 		json::Value user;
 		json::Value command;
+		OrderContext::Type context;
+		OrderBudget::Type type;
 
 		Key () {}
-		Key (json::Value user,json::Value command):user(user),command(command) {}
+		Key (json::Value user,json::Value command, OrderContext::Type context, OrderBudget::Type type)
+			:user(user),command(command),context(context),type(type) {}
+
+		static Key lBound(json::Value user,OrderContext::Type context, OrderBudget::Type type) {
+			return Key(user, nullptr, context,type);
+		}
+		static Key uBound(json::Value user,OrderContext::Type context, OrderBudget::Type type) {
+			return Key(user, json::object, context,type);
+		}
+
 	};
 
 	struct CmpKey {
@@ -58,13 +72,15 @@ protected:
 			int r = json::Value::compare(a.user,b.user) ;
 			if (r < 0) return true;
 			if (r == 0) {
+				if (a.context != b.context) return a.context < b.context;
+				if (a.type != b.type) return a.type < b.type;
 				return  json::Value::compare(a.command,b.command)<0;
 			}
 			return false;
 		}
 	};
 
-	typedef std::map<Key, OrderBudget, CmpKey> BudgetUserMap;
+	typedef std::map<Key, double, CmpKey> BudgetUserMap;
 
 	BudgetUserMap budgetMap;
 	std::mutex requestLock;
@@ -83,6 +99,8 @@ protected:
 
 	AllocationResult updateBudget(json::Value user,json::Value order,
 			const OrderBudget &toBlock, OrderBudget &total);
+
+	PMarketConfig mcfg;
 };
 
 

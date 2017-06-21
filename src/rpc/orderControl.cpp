@@ -219,7 +219,7 @@ json::Value OrderControl::modify(json::Value orderId, json::Value reqOrder, json
 
 json::Value OrderControl::cancel(json::Value orderId) {
 	Document doc = loadOrder(orderId,Value());
-	doc.set(OrderFields::updateReq,Object(OrderFields::status, Status::str[Status::canceled]));
+	doc.set(OrderFields::cancelReq,true);
 	try {
 		db.put(doc);
 		return doc.getRevValue();
