@@ -109,7 +109,7 @@ protected:
 };
 
 
-typedef json::RefCntPtr<AbstractMoneyService> PMoneyService;
+
 
 
 class ErrorMoneyService: public AbstractMoneyService {

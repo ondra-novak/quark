@@ -5,7 +5,7 @@
  *      Author: ondra
  */
 
-#include "positionTracker.h"
+#include "marginPosition.h"
 
 #include <couchit/document.h>
 
@@ -13,15 +13,12 @@ namespace quark {
 
 
 
-PositionTracker::PositionTracker(CouchDB& posDB):posDB(posDB) {
-}
-
-static String getBlockID(Value user) {
-	String id = {"block-",user.toString()};
-	return id;
+PositionTracker::PositionTracker(CouchDB& posDB):posDB(posDB),target(target) {
 }
 
 bool PositionTracker::allocBudget(json::Value user, json::Value order, const OrderBudget& budget, Callback callback) {
+
+	if (budget.margin == 0) return target->allocBudget(user,order,budget,callback);
 
 	return false;
 }

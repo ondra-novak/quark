@@ -3,6 +3,7 @@
 #include <imtjson/value.h>
 
 #include "../quark_lib/constants.h"
+#include "marketConfig.h"
 
 
 namespace quark {
@@ -60,8 +61,11 @@ public:
 	 */
 	virtual bool reportBalanceChange(Value trade, Value user, OrderContext::Type context, double assetChange, double currencyChange, double fee) = 0;
 
+
+	virtual void setMarketConfig(PMarketConfig) = 0;
+
 };
 
-
+typedef json::RefCntPtr<IMoneyService> PMoneyService;
 
 }
