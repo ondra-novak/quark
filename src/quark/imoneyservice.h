@@ -1,8 +1,16 @@
 #pragma once
 #include <imtjson/refcnt.h>
+#include <imtjson/value.h>
+
+#include "../quark_lib/constants.h"
+
 
 namespace quark {
 
+using namespace json;
+
+
+class OrderBudget;
 
 class IMoneyService:public json::RefCntObj  {
 public:
