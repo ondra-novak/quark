@@ -62,6 +62,7 @@ protected:
 		Map orders;
 		std::mutex l;
 	public:
+		void clear();
 		bool lock(Value id, const Value &doc);
 		Value unlock(Value id);
 	};
@@ -88,6 +89,7 @@ private:
 	static const StrViewA FIELD_STATUS;
 	std::function<void()> exitFn;
 	std::size_t transactionCounter = 0;
+	std::size_t tradeCounter = 0;
 
 
 
@@ -99,6 +101,7 @@ private:
 	bool runOrder(const Document &doc, bool update);
 	void runOrder2(Document doc, bool update);
 	void processPendingOrders(Value user);
+	std::size_t fetchNextTradeId() const;
 };
 
 

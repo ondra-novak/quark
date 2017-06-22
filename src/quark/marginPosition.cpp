@@ -13,7 +13,7 @@ namespace quark {
 
 
 
-PositionTracker::PositionTracker(CouchDB& posDB):posDB(posDB),target(target) {
+PositionTracker::PositionTracker(CouchDB& posDB, PMoneyService target):posDB(posDB),target(target) {
 }
 
 bool PositionTracker::allocBudget(json::Value user, json::Value order, const OrderBudget& budget, Callback callback) {

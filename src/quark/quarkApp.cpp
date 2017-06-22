@@ -12,11 +12,14 @@
 #include <couchit/document.h>
 #include <couchit/query.h>
 #include <couchit/changeset.h>
+#include <couchit/couchDB.h>
+
 
 #include "init.h"
 #include "logfile.h"
 #include "mockupmoneyserver.h"
 #include "orderRangeError.h"
+#include "views.h"
 
 namespace quark {
 
@@ -416,7 +419,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, Change
 						 ("sellOrder",t.getSellOrder()->getId())
 						 (OrderFields::size,amount)
 						 ("dir",dir)
-						 ("time",(std::size_t)now);
+						 ("time",(std::size_t)now)
+						 ("index",tradeCounter++);
 					trades.update(trade);
 				}break;
 			case quark::trOrderMove: {
@@ -539,6 +543,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 
 void QuarkApp::mainloop() {
 
+	tradeCounter = fetchNextTradeId();
 
 
 	View queueView("_design/orders/_view/queue", View::includeDocs | View::update);
@@ -626,6 +631,7 @@ void QuarkApp::mainloop() {
 			errdoc.set("what", e.what());
 			errdoc.enableTimestamp();
 			ordersDb->put(errdoc);
+			pendingOrders.clear();
 		}
 
 		logInfo("==== Restart main loop ====");
@@ -712,6 +718,20 @@ String QuarkApp::createTradeId(const Document &orderA, const Document &orderB) {
 		return String({"t.",orderB.getID().substr(0,2)});
 	}
 	throw std::runtime_error("Reported partial matching for both orders, this should not happen");
+}
+
+std::size_t QuarkApp::fetchNextTradeId() const {
+
+	Query q = tradesDb->createQuery(tradesByCounter);
+	Result res = q.reversedOrder().limit(1).exec();
+	if (res.empty()) return 0;
+	else return Row(res[0]).key.getUInt()+1;
+
+}
+
+void QuarkApp::PendingOrders::clear() {
+	std::lock_guard<std::mutex> _(l);
+	orders.clear();
 }
 
 
