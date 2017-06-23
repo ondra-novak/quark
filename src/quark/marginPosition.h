@@ -1,6 +1,9 @@
 #pragma once
 
 #include <couchit/couchDB.h>
+#include <couchit/document.h>
+#include <unordered_map>
+
 
 #include "imoneyservice.h"
 #include "orderBudget.h"
@@ -18,11 +21,18 @@ public:
 	virtual Value reportTrade(Value prevTrade, Value id, double price, double size, OrderDir::Type dir, std::size_t timestamp);
 	virtual bool reportBalanceChange(Value trade, Value user, OrderContext::Type context, double assetChange, double currencyChange, double fee);
 
+	void syncPositions();
+	void updatePosition(Document doc);
+
 protected:
 	CouchDB &posDB;
 	PMoneyService target;
 	double lastPrice;
 	Value prevTrade;
+
+
+	typedef std::unordered_map<Value, Value> PositionMap;
+	PositionMap positionMap;
 
 
 };
