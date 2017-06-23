@@ -65,7 +65,7 @@ json::maxPrecisionDigits=9;
 	couchit::Config cfg;
 	Value cfgjson;
 
-	PMoneyService moneyService;
+	PMoneySrvClient moneyService;
 
 	{
 		std::ifstream inp(cfgpath, std::ios::in);
@@ -96,7 +96,8 @@ json::maxPrecisionDigits=9;
 			if (!mandatoryField(mscfg,"maxBudget")) return 5;
 			if (!mandatoryField(mscfg,"latency")) return 5;
 			Value budget = mscfg["maxBudget"];
-			OrderBudget b(budget["asset"].getNumber(),budget["currency"].getNumber() ,budget["margin"].getNumber(), 0 ,0);
+			OrderBudget b(budget["asset"].getNumber(),budget["currency"].getNumber()
+					,budget["marginLong"].getNumber(),budget["marginShort"].getNumber(), 0 ,0);
 			std::size_t latency =mscfg["latency"].getUInt();
 			moneyService = new MockupMoneyService(b,latency);
 		} else if (type == "error") {

@@ -15,15 +15,17 @@
 
 #include "orderBudget.h"
 #include "marketConfig.h"
-#include "imoneyservice.h"
+#include "imoneysrvclient.h"
 
 namespace quark {
 
 
 ///Connects to money server and allocates budget for users
 /** It executes requests in batches. It also tracks blocked budget for opened commands*/
-class AbstractMoneyService: public IMoneyService{
+class MoneyService: public RefCntObj {
 public:
+
+	MoneyService(PMoneySrvClient client):client(client) {}
 
 	typedef std::function<void(bool)> Callback;
 
@@ -49,13 +51,6 @@ public:
 protected:
 
 
-	///Request budget allocation directly on server
-	/**
-	 * @param user user ID
-	 * @param total absolute budget for given context
-	 * @param callback callback function
-	 */
-	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback) = 0;
 
 	struct Key {
 		json::Value user;
@@ -87,6 +82,7 @@ protected:
 
 	typedef std::map<Key, OrderBudget, CmpKey> BudgetUserMap;
 
+	PMoneySrvClient client;
 	BudgetUserMap budgetMap;
 	std::mutex requestLock;
 
@@ -106,19 +102,24 @@ protected:
 			const OrderBudget &toBlock, OrderBudget &total);
 
 	PMarketConfig mcfg;
+
+	OrderBudget calculateBudget(Value user) const;
 };
 
 
+typedef json::RefCntPtr<MoneyService> PMoneyService;
 
 
 
-class ErrorMoneyService: public AbstractMoneyService {
+
+class ErrorMoneyService: public IMoneySrvClient {
 public:
-	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback);
-	virtual Value reportTrade(Value , const TradeData &d) {return d.id;}
-	virtual bool reportBalanceChange(const BalanceChange &) {return true;}
+	virtual void adjustBudget(json::Value user, OrderBudget &total) override {}
+	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) override;
+	virtual Value reportTrade(Value , const TradeData &d) override {return d.id;}
+	virtual bool reportBalanceChange(const BalanceChange &)  override {return true;}
 	virtual void commitTrade(Value tradeId) {}
-
+	virtual void setMarketConfig(PMarketConfig) {}
 };
 }
 

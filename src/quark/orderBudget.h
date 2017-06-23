@@ -16,17 +16,19 @@ public:
 	///Blocked currency (sum of currencies for buy commands)
 	double currency;
 	///Blocked margin (leverage is not applied)
-	double margin;
-	///Total margin assets blocked for short positions
-	double posShort;
+	double marginLong;
+	///Blocked margin (leverage is not applied)
+	double marginShort;
 	///Total margin assets blocked for long positions
 	double posLong;
+	///Total margin assets blocked for short positions
+	double posShort;
 
 
 	OrderBudget();
 	OrderBudget(double asset,double currency);
-	OrderBudget(double margin,double posShort, double posLong);
-	OrderBudget(double asset,double currency,double margin,double posShort, double posLong);
+	OrderBudget(double marginLong, double marginShort,double posLong, double posShort );
+	OrderBudget(double asset,double currency,double marginLong, double marginShort,double posLong, double posShort);
 	Value toJson() const;
 
 	OrderBudget operator+(const OrderBudget &other) const;
@@ -34,7 +36,8 @@ public:
 	bool operator==(const OrderBudget &b) const {
 		return asset == b.asset
 				&& currency == b.currency
-				&& margin == b.margin;
+				&& marginLong == b.marginLong
+				&& marginShort == b.marginShort;
 	}
 	bool operator!=(const OrderBudget &b) const {
 		return !operator==(b);
@@ -43,7 +46,8 @@ public:
 	bool above(const OrderBudget &b) const {
 		return asset > b.asset
 				|| currency > b.currency
-				|| margin > b.margin;
+				|| marginLong > b.marginLong
+				|| marginShort > b.marginShort;
 
 	}
 

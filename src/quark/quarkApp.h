@@ -34,7 +34,7 @@ public:
 	void processOrder(Value cmd);
 	void receiveMarketConfig();
 
-	void start(couchit::Config cfg, PMoneyService moneyService);
+	void start(couchit::Config cfg, PMoneySrvClient moneyService);
 
 	void exitApp();
 
@@ -47,6 +47,7 @@ protected:
 	std::unique_ptr<CouchDB> tradesDb;
 	std::unique_ptr<CouchDB> positionsDb;
 	PMoneyService moneyService;
+	PMoneySrvClient moneySrvClient;
 
 	PMarketConfig marketCfg;
 	static const StrViewA marketConfigDocName;
@@ -83,13 +84,19 @@ protected:
 private:
 	POrder docOrder2POrder(const Document& order);
 	void processOrder2(Value cmd);
+	void syncWithDb();
 
 
 
-	static const StrViewA FIELD_STATUS;
 	std::function<void()> exitFn;
+
+
+	///each transaction must have unique id
 	std::size_t transactionCounter = 0;
+	///each trade has unique index
 	std::size_t tradeCounter = 0;
+	///id of last known trade
+	Value lastTradeId = null;
 
 
 

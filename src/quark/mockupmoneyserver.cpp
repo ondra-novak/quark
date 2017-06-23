@@ -9,14 +9,14 @@ void MockupMoneyService::start() {
 		workerThread = std::unique_ptr<std::thread>(new std::thread([=]{worker();}));
 }
 
-void MockupMoneyService::requestBudgetOnServer(json::Value user,
-						OrderBudget total, Callback callback) {
+bool MockupMoneyService::allocBudget(json::Value user, OrderBudget total, Callback callback) {
 	std::lock_guard<std::mutex> _(queueLock);
 	if (workerThread == nullptr) {
 		start();
 	}
 	queue.push(QueueItem(user,total,callback));
 	runBackend.notify_all();
+	return false;
 }
 
 void MockupMoneyService::stop() {
@@ -70,3 +70,5 @@ bool MockupMoneyService::reportBalanceChange(const BalanceChange &data) {
 }
 
 }
+
+void quark::MockupMoneyService::adjustBudget(json::Value , OrderBudget& ) {}

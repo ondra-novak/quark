@@ -1,10 +1,17 @@
 #pragma once
-#include "moneyService.h"
+
+#include <thread>
+#include <mutex>
+#include <queue>
+#include <condition_variable>
+#include "orderBudget.h"
+#include "imoneysrvclient.h"
+
 
 namespace quark {
 
 
-class MockupMoneyService: public AbstractMoneyService {
+class MockupMoneyService: public IMoneySrvClient {
 public:
 
 	MockupMoneyService(OrderBudget maxBudget, std::size_t serverLatency):maxBudget(maxBudget),serverLatency(serverLatency) {}
@@ -14,11 +21,12 @@ public:
 	void start();
 	void stop();
 
-	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback);
-	virtual Value reportTrade(Value prevTrade, const TradeData &data);
-	virtual bool reportBalanceChange(const BalanceChange &data);
-	virtual void commitTrade(Value tradeId);
-
+	virtual void adjustBudget(json::Value user, OrderBudget &budget) override ;
+	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) override ;
+	virtual Value reportTrade(Value prevTrade, const TradeData &data) override ;
+	virtual bool reportBalanceChange(const BalanceChange &data) override ;
+	virtual void commitTrade(Value tradeId) override ;
+	virtual void setMarketConfig(PMarketConfig) override {};
 
 protected:
 

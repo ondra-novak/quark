@@ -13,34 +13,35 @@ using namespace json;
 
 class OrderBudget;
 
-class IMoneyService:public json::RefCntObj  {
+class IMoneySrvClient:public json::RefCntObj  {
 public:
-	virtual ~IMoneyService() {}
-
+	virtual ~IMoneySrvClient() {}
 
 	typedef std::function<void(bool)> Callback;
 
-	///Allocate user's budget
-	/**
-	 * @param user user identification
-	 * @param order order identification
-	 * @param budget budget information
-	 * @param callback function called when allocation is complete.
-	 *
-	 * @note if function decides to access the money server, the response can be called
-	 * asynchronously anytime later. If the request can be processed immediatelly, or
-	 * without need to wait for the money server, the response is called also immediately.
-	 *
-	 * The argument of the response is true=budget allocated, false=allocation rejected
-	 */
 
-	virtual bool allocBudget(json::Value user, json::Value order, const OrderBudget &budget, Callback callback) = 0;
+	///Adjusts budget - mostly used during margin trading
+	virtual void adjustBudget(json::Value user, OrderBudget &budget) = 0;
+
+	///Request budget allocation directly on server
+	/**
+	 * @param user user ID
+	 * @param total absolute budget for given context
+	 * @param callback callback function. If set to nullptr, no callback is required
+	 * @retval true operation succesed without need to access the server
+	 * @retval false operation require access to the server and runs asynchronously, callback will be called if defined
+	 *
+	 */
+	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) = 0;
+
+
 
 
 	struct TradeData {
 		Value id;
 		double price;
 		double size;
+		std::size_t nonce;
 		OrderDir::Type dir;
 		std::size_t timestamp;
 	};
@@ -80,8 +81,10 @@ public:
 
 	virtual void setMarketConfig(PMarketConfig) = 0;
 
+
+
 };
 
-typedef json::RefCntPtr<IMoneyService> PMoneyService;
+typedef RefCntPtr<IMoneySrvClient> PMoneySrvClient;
 
 }

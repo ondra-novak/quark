@@ -19,7 +19,7 @@ TradeReplay::TradeReplay() {
 
 }
 
-void TradeReplay::addSvc(PMoneyService svc) {
+void TradeReplay::addSvc(PMoneySrvClient svc) {
 	svclist.push_back(svc);
 }
 
@@ -59,7 +59,7 @@ void TradeReplay::stop() {
 
 bool TradeReplay::worker(const couchit::ChangedDoc &chdoc) {
 
-	IMoneyService::TradeData trade;
+	IMoneySrvClient::TradeData trade;
 	extractTrade(chdoc.doc, trade);
 	for ( auto x : svclist) {
 
@@ -67,7 +67,7 @@ bool TradeReplay::worker(const couchit::ChangedDoc &chdoc) {
 		if (k != trade.id) {
 			resync(x, k, trade.id);
 		} else {
-			IMoneyService::BalanceChange bch;
+			IMoneySrvClient::BalanceChange bch;
 			extractBalanceChange(chdoc.doc, "buyOrder", bch, OrderDir::buy);
 			x->reportBalanceChange(bch);
 			extractBalanceChange(chdoc.doc, "sellOrder", bch, OrderDir::sell);
@@ -81,17 +81,18 @@ bool TradeReplay::worker(const couchit::ChangedDoc &chdoc) {
 
 }
 
-void TradeReplay::extractTrade(const couchit::Document& trade, IMoneyService::TradeData& tdata) {
+void TradeReplay::extractTrade(const couchit::Document& trade, IMoneySrvClient::TradeData& tdata) {
 
 	tdata.dir = OrderDir::str[trade["dir"].getString()];
 	tdata.id = trade.getIDValue();
 	tdata.price = trade["price"].getNumber();
 	tdata.size = trade["size"].getNumber();
 	tdata.timestamp = trade["time"].getUInt();
+	tdata.nonce = trade["index"].getUInt();
 
 }
 
-void TradeReplay::extractBalanceChange(const couchit::Document& trade,StrViewA orderKey, IMoneyService::BalanceChange& tdata, OrderDir::Type dir) {
+void TradeReplay::extractBalanceChange(const couchit::Document& trade,StrViewA orderKey, IMoneySrvClient::BalanceChange& tdata, OrderDir::Type dir) {
 	Value orderId = trade[orderKey];
 	Document order = orderDb->get(orderId.getString());
 	double size = trade["size"].getNumber();
@@ -105,7 +106,7 @@ void TradeReplay::extractBalanceChange(const couchit::Document& trade,StrViewA o
 	tdata.trade = trade.getIDValue();
 }
 
-void TradeReplay::resync(PMoneyService target, const Value fromTrade, const Value toTrade) {
+void TradeReplay::resync(PMoneySrvClient target, const Value fromTrade, const Value toTrade) {
 	couchit::Query q = tradeDb->createQuery(tradesByCounter);
 	q.includeDocs();
 	q.update();
@@ -115,9 +116,9 @@ void TradeReplay::resync(PMoneyService target, const Value fromTrade, const Valu
 	}
 	Result r = q.exec();
 	for (Row t : r) {
-		IMoneyService::TradeData trade;
+		IMoneySrvClient::TradeData trade;
 		extractTrade(t.doc, trade);
-		IMoneyService::BalanceChange bch;
+		IMoneySrvClient::BalanceChange bch;
 		extractBalanceChange(t.doc, "buyOrder", bch, OrderDir::buy);
 		extractBalanceChange(t.doc, "sellOrder", bch, OrderDir::sell);
 		if (t.id == toTrade) break;

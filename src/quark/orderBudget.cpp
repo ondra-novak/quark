@@ -17,7 +17,7 @@ namespace quark {
 
 
 OrderBudget::OrderBudget()
-	:asset(0),currency(0),margin(0),posShort(0),posLong(0)
+	:asset(0),currency(0),marginLong(0),marginShort(0),posLong(0),posShort(0)
 
 {
 
@@ -27,7 +27,8 @@ OrderBudget::OrderBudget()
 Value OrderBudget::toJson() const {
 	return Object("asset",asset)
 			("currency",currency)
-			("margin",margin)
+			("marginLong",marginLong)
+			("marginShort",marginShort)
 			("posShort",posShort)
 			("posLong", posLong);
 }
@@ -36,18 +37,19 @@ Value OrderBudget::toJson() const {
 OrderBudget OrderBudget::operator +(const OrderBudget& other) const {
 	return OrderBudget(asset+other.asset,
 			currency + other.currency,
-			margin + other.margin,
-			posShort + other.posShort,
-			posLong + other.posLong);
+			marginLong + other.marginLong,
+			marginShort + other.marginShort,
+			posLong + other.posLong,
+			posShort + other.posShort);
 }
-OrderBudget::OrderBudget(double asset,double currency,double margin,double posShort, double posLong)
-:asset(asset),currency(currency),margin(margin),posShort(posShort),posLong(posLong) {}
+OrderBudget::OrderBudget(double asset,double currency,double marginLong, double marginShort,double posLong, double posShort)
+:asset(asset),currency(currency),marginLong(marginLong),marginShort(marginShort),posLong(posLong),posShort(posShort) {}
 
 
-OrderBudget::OrderBudget(double margin,double posShort, double posLong)
-	:asset(0),currency(0),margin(margin),posShort(posShort),posLong(posLong) {}
+OrderBudget::OrderBudget(double marginLong, double marginShort,double posLong, double posShort)
+	:asset(0),currency(0),marginLong(marginLong),marginShort(marginShort),posLong(posLong),posShort(posShort) {}
 OrderBudget::OrderBudget(double asset,double currency)
-	:asset(asset),currency(currency),margin(0),posShort(0),posLong(0) {}
+	:asset(asset),currency(currency),marginLong(0),marginShort(0),posLong(0),posShort(0) {}
 
 static double adjustAssets(double asset, const MarketConfig& cfg)  {
 	return asset < 0 ? 0 : (floor(asset / cfg.granuality) * cfg.granuality);
@@ -60,9 +62,10 @@ static double adjustCurrency(double currency , const MarketConfig& cfg) {
 OrderBudget OrderBudget::adjust(const MarketConfig &cfg) const {
 	return OrderBudget(adjustAssets(asset, cfg),
 			adjustCurrency(currency,cfg),
-			adjustCurrency(margin,cfg),
-			adjustAssets(posShort,cfg),
-			adjustAssets(posLong,cfg));
+			adjustCurrency(marginLong,cfg),
+			adjustCurrency(marginShort,cfg),
+			adjustAssets(posLong,cfg),
+			adjustAssets(posShort,cfg));
 }
 
 

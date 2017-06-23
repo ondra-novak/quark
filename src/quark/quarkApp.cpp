@@ -14,11 +14,15 @@
 #include <couchit/changeset.h>
 #include <couchit/couchDB.h>
 
+#include "error.h"
+
 
 #include "init.h"
 #include "logfile.h"
+#include "marginTradingSvc.h"
 #include "mockupmoneyserver.h"
 #include "orderRangeError.h"
+#include "tradeHelpers.h"
 #include "views.h"
 
 namespace quark {
@@ -28,7 +32,8 @@ const StrViewA QuarkApp::marketConfigDocName("settings");
 QuarkApp::QuarkApp() {
 	// TODO Auto-generated constructor stub
 
-	moneyService = new ErrorMoneyService;
+	moneySrvClient = new ErrorMoneyService;
+	moneyService = new MoneyService(moneySrvClient);
 }
 
 void QuarkApp::processPendingOrders(Value user) {
@@ -290,9 +295,9 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
 		if (context == OrderContext::margin) {
 			if (dir == OrderDir::sell)
-				return OrderBudget(reqbudget,size,0);
+				return OrderBudget(0,reqbudget,0,size);
 			else
-				return OrderBudget(reqbudget,0,size);
+				return OrderBudget(reqbudget,0,size,0);
 		} else {
 			return OrderBudget(0, reqbudget);
 		}
@@ -334,8 +339,24 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		return;
 	}
 
-	if (o2u.empty()) return;
+	//commit all trades into DB
+	trades.commit();
 
+	//sends reports to money server(s)
+	for (auto && v : trades.getCommitedDocs()) {
+		IMoneySrvClient::TradeData td;
+		IMoneySrvClient::BalanceChange bch;
+		extractTrade(v.doc, td);
+		moneySrvClient->reportTrade(lastTradeId, td); //TODO: check return value!
+		extractBalanceChange(*ordersDb,v.doc,bch,OrderDir::buy);
+		moneySrvClient->reportBalanceChange(bch);
+		extractBalanceChange(*ordersDb,v.doc,bch,OrderDir::sell);
+		moneySrvClient->reportBalanceChange(bch);
+		moneySrvClient->commitTrade(td.id);
+		lastTradeId = td.id;
+	}
+
+	//update all orders
 	Array keys;
 	{
 		bool rep;
@@ -349,40 +370,49 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		}
 
 		do {
+			//query all changed orders
 			q.keys(keys);
 			Result res = q.exec();
 			for (Row r : res) {
 
+				//perform update
 				Document &d = o2u[r.key];
 				LOGDEBUG3("Updating order (mass)", r.key, d);
 				d.setBaseObject(r.doc);
 				auto budget = calculateBudget(d);
-				chset.update(d);
+
+				//TODO check result of allocatio for some commands (trailing-limit)
 				moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),budget,nullptr);
+				chset.update(d);
 			}
 			try {
+				//commont all order change
 				chset.commit();
 				rep = false;
 			} catch (UpdateException &e) {
+				//there can be conflicts
 				keys.clear();
 				for (auto err : e.getErrors()) {
 					if (err.isConflict()) {
+						//collect conflicts
 						Value id = err.document["_id"];
 						LOGDEBUG2("Update order conflict", id);
 						o2u_2[id] = o2u_1[id];
+						//create new query
 						keys.push_back(id);
 					} else {
-						logError({"Unexpected error while update!", err.document, err.errorType, err.errorDetails, err.reason});
+						//other exceptions are not allowed here
+						throw;
 					}
 				}
 				std::swap(o2u_1,o2u_2);
 				o2u_2.clear();
+				//repeat
 				rep = true;
 			}
 		}
 		while (rep);
 	}
-	trades.commit();
 
 }
 
@@ -541,13 +571,22 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 }
 
 
+void QuarkApp::syncWithDb() {
+
+	Value lastTrade = fetchLastTrade(*tradesDb);
+	if (lastTrade != nullptr) {
+		tradeCounter = lastTrade["index"].getUInt();
+	} else {
+		tradeCounter = 1;
+	}
+
+}
+
 void QuarkApp::mainloop() {
 
-	tradeCounter = fetchNextTradeId();
+	syncWithDb();
 
 
-	View queueView("_design/orders/_view/queue", View::includeDocs | View::update);
-	Filter errorWait("orders/removeError");
 
 
 	for (;;) {
@@ -624,14 +663,8 @@ void QuarkApp::mainloop() {
 
 			return;
 
-		} catch (std::exception &e) {
-			logError( { "Unhandled exception in mainloop", e.what() });
-			Document errdoc;
-			errdoc.setID(OrderFields::error);
-			errdoc.set("what", e.what());
-			errdoc.enableTimestamp();
-			ordersDb->put(errdoc);
-			pendingOrders.clear();
+		} catch (...) {
+			unhandledException();
 		}
 
 		logInfo("==== Restart main loop ====");
@@ -652,13 +685,47 @@ void QuarkApp::receiveMarketConfig() {
 }
 
 
-void QuarkApp::start(couchit::Config cfg, PMoneyService moneyService) {
-
-
-
+void QuarkApp::start(couchit::Config cfg, PMoneySrvClient moneyService) {
 
 
 	String dbprefix = cfg.databaseName;
+	cfg.databaseName = dbprefix + "orders";
+
+	setUnhandledExceptionHandler([cfg]{
+
+		//Puts error object to database to prevent engine restart
+		//and exits through abort()
+
+		String errdesc;
+
+
+		try {
+
+			try {
+				throw;
+			} catch(std::exception &e) {
+				errdesc = e.what();
+			} catch(...) {
+				errdesc = "Undetermined exception - catch (...)";
+			}
+
+			CouchDB db(cfg);
+			Document errdoc("error");
+			errdoc("what",errdesc);
+			time_t t;
+			time(&t);
+			errdoc("time",t);
+			db.put(errdoc);
+		} catch (std::exception &e) {
+			logError({"Fatal error (...and database is not available)",errdesc,e.what()});
+		}
+		abort();
+
+	});
+
+
+
+
 	cfg.databaseName = dbprefix + "orders";
 	ordersDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
 	initOrdersDB(*ordersDb);
@@ -671,7 +738,8 @@ void QuarkApp::start(couchit::Config cfg, PMoneyService moneyService) {
 	positionsDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
 	initPositionsDB(*positionsDb);
 
-	this->moneyService = moneyService;
+	this->moneySrvClient = new MarginTradingSvc(*positionsDb,moneyService);
+	this->moneyService = new MoneyService(this->moneySrvClient);
 
 
 	receiveMarketConfig();

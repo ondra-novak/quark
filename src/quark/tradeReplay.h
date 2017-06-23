@@ -7,7 +7,7 @@
 
 
 
-#include "imoneyservice.h"
+#include "imoneysrvclient.h"
 
 namespace quark {
 
@@ -17,7 +17,7 @@ public:
 	~TradeReplay();
 
 
-	void addSvc(PMoneyService svc);
+	void addSvc(PMoneySrvClient svc);
 
 
 	void start(couchit::CouchDB *tradeDb, couchit::CouchDB *orderDb);
@@ -28,7 +28,7 @@ protected:
 
 	bool worker(const couchit::ChangedDoc &chdoc);
 
-	std::vector<PMoneyService> svclist;
+	std::vector<PMoneySrvClient> svclist;
 
 	std::thread thr;
 	std::unique_ptr<couchit::ChangesFeed> chfeed;
@@ -37,9 +37,9 @@ protected:
 	couchit::CouchDB *orderDb = nullptr, *tradeDb = nullptr;
 
 
-	void extractTrade(const couchit::Document &tradeDoc, IMoneyService::TradeData &tdata);
-	void extractBalanceChange(const couchit::Document &tradeDoc, StrViewA orderKey, IMoneyService::BalanceChange &tdata, OrderDir::Type dir);
-	void resync(PMoneyService target, const Value fromTrade, const Value toTrade);
+	void extractTrade(const couchit::Document &tradeDoc, IMoneySrvClient::TradeData &tdata);
+	void extractBalanceChange(const couchit::Document &tradeDoc, StrViewA orderKey, IMoneySrvClient::BalanceChange &tdata, OrderDir::Type dir);
+	void resync(PMoneySrvClient target, const Value fromTrade, const Value toTrade);
 
 	Value findTradeCounter(Value trade);
 
