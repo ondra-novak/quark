@@ -36,18 +36,32 @@ public:
 
 	virtual bool allocBudget(json::Value user, json::Value order, const OrderBudget &budget, Callback callback) = 0;
 
+
+	struct TradeData {
+		Value id;
+		double price;
+		double size;
+		OrderDir::Type dir;
+		std::size_t timestamp;
+	};
+
+	struct BalanceChange {
+		Value trade;
+		Value user;
+		OrderContext::Type context;
+		double assetChange;
+		double currencyChange;
+		double fee;
+	};
+
 	///Report trade executed
 	/**
 	 * @param prevTrade ID of previous trade. If it doesn't match, function reports nothing and sends known last trade
-	 * @param id id of current trade
-	 * @param price price of the trade
-	 * @param size size of trade (amount)
-	 * @param dir taker's action (buy or sell)
-	 * @param timestamp unix timestamp of the trade (may duplicate)
+	 * @param data trade data
 	 * @return if trade is reported, function returns id. If not, function retuns last known trade. Function
 	 * can return null to start reporting from the beginning
 	 */
-	virtual Value reportTrade(Value prevTrade, Value id, double price, double size, OrderDir::Type dir, std::size_t timestamp) = 0;
+	virtual Value reportTrade(Value prevTrade, const TradeData &data) = 0;
 	///Reports balance change for the user
 	/**
 	 * @param trade ID of trade as reference
@@ -59,7 +73,9 @@ public:
 	 * @retval true reported
 	 * @retval false referenced trade was not last trade, please start over
 	 */
-	virtual bool reportBalanceChange(Value trade, Value user, OrderContext::Type context, double assetChange, double currencyChange, double fee) = 0;
+	virtual bool reportBalanceChange(const BalanceChange &data) = 0;
+
+	virtual void commitTrade(Value tradeId) = 0;
 
 
 	virtual void setMarketConfig(PMarketConfig) = 0;

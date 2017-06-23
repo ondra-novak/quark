@@ -115,8 +115,9 @@ protected:
 class ErrorMoneyService: public AbstractMoneyService {
 public:
 	virtual void requestBudgetOnServer(json::Value user, OrderBudget total, Callback callback);
-	virtual Value reportTrade(Value , Value id, double , double , OrderDir::Type , std::size_t ) {return id;}
-	virtual bool reportBalanceChange(Value, Value , OrderContext::Type , double , double , double ) {return true;}
+	virtual Value reportTrade(Value , const TradeData &d) {return d.id;}
+	virtual bool reportBalanceChange(const BalanceChange &) {return true;}
+	virtual void commitTrade(Value tradeId) {}
 
 };
 }

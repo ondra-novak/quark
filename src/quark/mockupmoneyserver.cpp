@@ -49,23 +49,24 @@ void MockupMoneyService::worker() {
 	}
 }
 
+void MockupMoneyService::commitTrade(Value tradeId) {
+	logInfo({"Commit trade", tradeId});
+}
+
 bool MockupMoneyService::allocBudget(json::Value user, const OrderBudget& b) {
 	return !(b.above(maxBudget));
 }
 
 
-Value MockupMoneyService::reportTrade(Value prevTrade, Value id,
-		double price, double size, OrderDir::Type dir, std::size_t timestamp) {
+Value MockupMoneyService::reportTrade(Value prevTrade, const TradeData &data) {
 
-	logInfo({"MoneyServer-Trade",id,price,size,OrderDir::str[dir],timestamp});
+	logInfo({"MoneyServer-Trade",data.id,data.price,data.size,OrderDir::str[data.dir],data.timestamp});
 
 }
 
-bool MockupMoneyService::reportBalanceChange(Value trade, Value user,
-		OrderContext::Type context, double assetChange, double currencyChange,
-		double fee) {
+bool MockupMoneyService::reportBalanceChange(const BalanceChange &data) {
 
-	logInfo({"MoneyServer-BalChange", trade, user, OrderContext::str[context], assetChange, currencyChange, fee});
+	logInfo({"MoneyServer-BalChange", data.trade, data.user, OrderContext::str[data.context], data.assetChange, data.currencyChange, data.fee});
 }
 
 }
