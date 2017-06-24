@@ -51,6 +51,10 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 			while (c != EOF && isspace(c)) {
 				c = input.get();
 			}
+			if (c == 'i') {
+				goInteractiveMode(input);
+				break;
+			}
 			if (c == EOF) break;
 			input.putback(c);
 			Value v = Value::fromStream(input);
@@ -81,8 +85,8 @@ void RpcApp::rpcInit(RpcRequest req) {
 	Value cfg = svctable[market];
 	if (cfg.defined()) {
 		mcontrol = new MarketControl(cfg);
-		mcontrol->initRpc(rpcServer);
-		req.setResult(true);
+		req.setResult(mcontrol->initRpc(rpcServer));
+
 	} else {
 		req.setError(404,"Market is not hosted at this node");
 	}
@@ -102,4 +106,44 @@ void RpcApp::writeQueue(Value v) {
 	queueTrig.notify_all();
 }
 
+void RpcApp::goInteractiveMode(std::istream& input) {
+	std::cerr << "# Interactive mode is enabled" << std::endl;
+	std::cerr << "# Write command in shorter form: <cmd> [args]" << std::endl;
+	std::cerr << "# Example: ping[1,2,3]" << std::endl;
+	std::cerr << "# methods[] - for list methods" << std::endl;
+
+	std::string method;
+	unsigned int cnt=1;
+	for(;;) {
+		method.clear();
+		int c = input.get();
+		while (c != EOF && isspace(c)) {
+			c = input.get();
+		}
+		while (c != EOF && !isspace(c) && c != '{' && c != '[') {
+			method.push_back(c);
+			c = input.get();
+		}
+		if (c == EOF) {
+			return;
+		}
+		input.putback(c);
+
+		Value args;
+		try {
+			args = Value::fromStream(input);
+		} catch (std::exception &e) {
+			std::cerr << e.what();
+			continue;
+		}
+		Value req = Object("method",method)
+				("params",args)
+				("id", cnt);
+		cnt++;
+		writeQueue(req);
+	}
+}
+
+
 } /* namespace quark */
+

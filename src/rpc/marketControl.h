@@ -17,7 +17,7 @@ class MarketControl: public RefCntObj {
 public:
 	MarketControl(Value cfg);
 
-	void initRpc(RpcServer &rpcServer);
+	Value initRpc(RpcServer &rpcServer);
 
 protected:
 
@@ -34,8 +34,11 @@ protected:
 	void rpcStreamOrders(RpcRequest rq);
 	void rpcStreamTrades(RpcRequest rq);
 	void rpcStreamLastId(RpcRequest rq);
+	void rpcStatusGet(RpcRequest rq);
+	void rpcStatusClear(RpcRequest rq);
 
 
+	Value getMarketStatus();
 
 
 	class FeedControl: public RefCntObj {
@@ -57,6 +60,7 @@ protected:
 
 	class BasicFeed;
 	class OrderFeed;
+	class TradesFeed;
 
 	typedef RefCntPtr<FeedControl> PFeedControl;
 

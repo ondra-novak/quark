@@ -15,5 +15,5 @@ install(TARGETS quark
 
 file(GLOB quark_CONFS "../../conf/*.conf" "../../conf/*.ini")
 install(FILES ${quark_CONFS} DESTINATION "share/quark/conf") 
-  
+ 
   

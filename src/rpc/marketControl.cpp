@@ -37,9 +37,20 @@ static void notImpl(RpcRequest req) {
 }
 
 
+Value MarketControl::getMarketStatus()  {
+
+	Value err = ordersDb.get("error",CouchDB::flgNullIfMissing);
+	if (err == nullptr) {
+		return Object("marketStatus","ok");
+	} else {
+		return Object("marketStatus","stopped")
+				("reason",err);
+	}
+
+}
 
 
-void MarketControl::initRpc(RpcServer& rpcServer) {
+Value MarketControl::initRpc(RpcServer& rpcServer) {
 
 	PMarketControl me = this;
 	rpcServer.add("Order.create", me, &MarketControl::rpcOrderCreate);
@@ -49,6 +60,10 @@ void MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Stream.orders",  me, &MarketControl::rpcStreamOrders);
 	rpcServer.add("Stream.trades", me, &MarketControl::rpcStreamTrades);
 	rpcServer.add("Stream.lastId", me, &MarketControl::rpcStreamLastId);
+	rpcServer.add("Status.get", me, &MarketControl::rpcStatusGet);
+	rpcServer.add("Status.clear", me, &MarketControl::rpcStatusClear);
+
+	return getMarketStatus();
 
 }
 
@@ -133,6 +148,15 @@ public:
 
 };
 
+class MarketControl::TradesFeed: public BasicFeed {
+public:
+	using BasicFeed::BasicFeed;
+	virtual void init() override {
+		feed.setFilter(couchit::Filter("trades/stream",couchit::Filter::includeDocs));
+	}
+
+};
+
 void MarketControl::rpcStreamOrders(RpcRequest rq) {
 	static Value turnOffArgs = Value(json::array,{false});
 	static Value turnOnArgs = {true,{"string","optional"} };
@@ -165,7 +189,7 @@ void MarketControl::rpcStreamTrades(RpcRequest rq) {
 
 	} else if (rq.checkArgs(turnOnArgs)) {
 		Value since = rq.getArgs()[1];
-		ordersFeed = new BasicFeed(tradesDb, since, rq, "trade");
+		ordersFeed = new TradesFeed(tradesDb, since, rq, "trade");
 		ordersFeed->start();
 		rq.setResult(true);
 
@@ -233,9 +257,19 @@ void MarketControl::rpcStreamLastId(RpcRequest rq) {
 
 }
 
+void quark::MarketControl::rpcStatusGet(RpcRequest rq) {
+	rq.setResult(getMarketStatus());
+}
+
+void quark::MarketControl::rpcStatusClear(RpcRequest rq) {
+	couchit::Document doc = ordersDb.get("error");
+	doc.setDeleted();
+	ordersDb.put(doc);
+	rq.setResult(getMarketStatus());
 }
 
 
+}
 
 /* namespace quark */
 

@@ -41,6 +41,7 @@ protected:
 private:
 	Value readQueue();
 	void writeQueue(Value v);
+	void goInteractiveMode(std::istream &input);
 };
 
 typedef RefCntPtr<RpcApp> PRpcApp;
