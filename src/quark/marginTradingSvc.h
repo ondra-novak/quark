@@ -35,7 +35,6 @@ protected:
 	CouchDB &posDB;
 	PMoneySrvClient target;
 	double lastPrice;
-	Document prevTrade;
 
 
 	typedef std::unordered_map<Value, Value> PositionMap;

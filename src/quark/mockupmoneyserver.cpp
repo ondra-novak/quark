@@ -1,12 +1,20 @@
 #include "mockupmoneyserver.h"
 
+#include "error.h"
+
 #include "logfile.h"
 
 namespace quark {
 
 void MockupMoneyService::start() {
 	if (workerThread == nullptr)
-		workerThread = std::unique_ptr<std::thread>(new std::thread([=]{worker();}));
+		workerThread = std::unique_ptr<std::thread>(new std::thread([=]{
+			try {
+				worker();
+			} catch (...) {
+				unhandledException();
+			}
+		}));
 }
 
 bool MockupMoneyService::allocBudget(json::Value user, OrderBudget total, Callback callback) {
@@ -54,19 +62,23 @@ void MockupMoneyService::commitTrade(Value tradeId) {
 }
 
 bool MockupMoneyService::allocBudget(json::Value user, const OrderBudget& b) {
-	return !(b.above(maxBudget));
+	bool allowed = !(b.above(maxBudget));
+	logInfo({"Moneyserver-AllocBudget", user, b.toJson(), allowed});
+	return allowed;
 }
 
 
 Value MockupMoneyService::reportTrade(Value prevTrade, const TradeData &data) {
 
 	logInfo({"MoneyServer-Trade",data.id,data.price,data.size,OrderDir::str[data.dir],data.timestamp});
+	return data.id;
 
 }
 
 bool MockupMoneyService::reportBalanceChange(const BalanceChange &data) {
 
 	logInfo({"MoneyServer-BalChange", data.trade, data.user, OrderContext::str[data.context], data.assetChange, data.currencyChange, data.fee});
+	return true;
 }
 
 }

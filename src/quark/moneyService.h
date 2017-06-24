@@ -20,8 +20,20 @@
 namespace quark {
 
 
-///Connects to money server and allocates budget for users
-/** It executes requests in batches. It also tracks blocked budget for opened commands*/
+///Contains in-memory map of all active orders and their budget
+/**
+ * Function allocBudget calculates total budget reserved for orders for given user.
+ * It calculates budget before update and after update of the budget and determines future
+ * action
+ *
+ * If the budget raising, function asks the money server for permission. Only when
+ * permission is granted the order is accepted and added to the in-memory map. Because
+ * the request to the moeny server is asynchronous, the function cannot return result
+ * immediatelly and expects that caller provides a callback function.
+ *
+ * If the budget is lowering, function only sends the state to the money server without
+ * waiting to reply. In this case, function updates map immediatelly
+ */
 class MoneyService: public RefCntObj {
 public:
 
@@ -34,11 +46,12 @@ public:
 	 * @param user user identification
 	 * @param order order identification
 	 * @param budget budget information
-	 * @param callback function called when allocation is complete.
+	 * @param callback function called when allocation is complete. Argument can
+	 * be nullptr in case, that caller doesn't expect negative reply.
 	 *
-	 * @note if function decides to access the money server, the response can be called
-	 * asynchronously anytime later. If the request can be processed immediatelly, or
-	 * without need to wait for the money server, the response is called also immediately.
+	 * @retval true operation successed without need to access money server. Callback
+	 * will not called
+	 * @retval false The result is undetermined, the callback function will be called.
 	 *
 	 * The argument of the response is true=budget allocated, false=allocation rejected
 	 */
@@ -84,26 +97,15 @@ protected:
 
 	PMoneySrvClient client;
 	BudgetUserMap budgetMap;
-	std::mutex requestLock;
-
-	enum AllocationResult {
-		///Budget increased - need synchronous acknowledge
-		allocNeedSync,
-		///Budget did not changed - no action needed
-		allocNoChange,
-		///Budget decreased - asynchronous call is enough
-		allocAsync,
-	};
-	bool sendServerRequest(AllocationResult r, json::Value user,
-			OrderBudget total, Callback callback);
+	mutable std::mutex requestLock;
 
 
-	AllocationResult updateBudget(json::Value user,json::Value order,
-			const OrderBudget &toBlock, OrderBudget &total);
+	void updateBudget(json::Value user, json::Value order, const OrderBudget& toBlock);
 
 	PMarketConfig mcfg;
 
 	OrderBudget calculateBudget(Value user) const;
+	std::pair<OrderBudget,OrderBudget> calculateBudgetAdv(Value user, Value order, const OrderBudget &b) const;
 };
 
 

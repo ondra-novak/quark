@@ -38,7 +38,7 @@ public:
 
 	void exitApp();
 
-	static String createTradeId(const Document &orderA, const Document &orderB);
+	static String createTradeId(const TradeResultTrade &tr);
 
 protected:
 	void mainloop();
@@ -70,11 +70,9 @@ protected:
 	PendingOrders pendingOrders;
 
 //	void createOrder(Document order);
-	bool checkUpdate(Document order);
 	Document saveOrder(Document order, Object newItems);
 	void matchOrder(Document order);
 	OrderBudget calculateBudget(const Document &order);
-	OrderBudget zeroBudget(const Document &order);
 	void runTransaction(const TxItem &txitm);
 
 	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u, Changeset &trades);
@@ -83,7 +81,23 @@ protected:
 
 private:
 	POrder docOrder2POrder(const Document& order);
-	void processOrder2(Value cmd);
+
+
+	/// Processes order (stage 2)
+	/**
+	 *
+	 * @param cmd order to process
+	 * @retval true order is executed
+	 * @retval false order is pending
+	 */
+
+	bool processOrder2(Value cmd);
+
+	static bool isUpdated(const Document &order);
+	static bool isCanceled(const Document &order);
+	void cancelOrder(Document order);
+	bool updateOrder(Document order);
+
 	void syncWithDb();
 
 
@@ -109,6 +123,7 @@ private:
 	void runOrder2(Document doc, bool update);
 	void processPendingOrders(Value user);
 	std::size_t fetchNextTradeId() const;
+	void freeBudget(const Document& order);
 };
 
 

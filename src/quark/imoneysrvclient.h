@@ -79,6 +79,7 @@ public:
 	virtual void commitTrade(Value tradeId) = 0;
 
 
+
 	virtual void setMarketConfig(PMarketConfig) = 0;
 
 

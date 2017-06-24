@@ -55,7 +55,7 @@ MarketConfig::MarketConfig(json::Value v)
 
 
 std::size_t quark::MarketConfig::priceToPip(double price) {
-	return (std::size_t)floor(price / pipSize);
+	return (std::size_t)floor(price / pipSize+0.5);
 }
 
 double quark::MarketConfig::pipToPrice(std::size_t pip) {

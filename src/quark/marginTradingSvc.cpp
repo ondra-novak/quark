@@ -21,13 +21,17 @@ MarginTradingSvc::MarginTradingSvc(CouchDB& posDB, PMoneySrvClient target)
 	,target(target)
 	,wrtx(posDB.createChangeset())
 {
-
+	syncPositions();
 }
 
+
+static inline String user2docid(Value user) {
+	return String ({"p.",user.toString()});
+}
 void MarginTradingSvc::adjustBudget(json::Value user, OrderBudget &budget) {
 	if (budget.marginLong != 0 || budget.marginShort != 0) {
 		Guard _(lock);
-		auto iter = positionMap.find(user);
+		auto iter = positionMap.find(user2docid(user));
 		if (iter != positionMap.end()) {
 			const Document &positionDoc = iter->second;
 			double curPos = positionDoc["position"].getNumber();
@@ -63,8 +67,6 @@ Value MarginTradingSvc::reportTrade(Value prevTrade, const TradeData &data) {
 	Value tpt =target->reportTrade(prevTrade, data);
 	if (tpt != data.id) return tpt;
 
-	Value pt = this->prevTrade["tradeId"];
-	if (pt.defined() && pt != prevTrade) return pt;
 	lastPrice = data.price;
 }
 
@@ -73,11 +75,13 @@ static double sign(double v) {
 	return v<0?-1.0:v>0?1.0:0.0;
 }
 
+
 bool MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
 	target->reportBalanceChange(data);
 	if (data.context == OrderContext::margin) {
-		Document doc = positionMap[data.user];
-		doc.setID(data.user);
+		String docUserId  = user2docid(data.user);
+		Document doc = positionMap[Value(docUserId)];
+		doc.setID(Value(docUserId));
 		double prevPos = doc["position"].getNumber();
 		double prevValue = doc["value"].getNumber();
 		double newPos = prevPos+data.assetChange;//TODO: adjust position decimal numbers
@@ -100,12 +104,9 @@ void MarginTradingSvc::syncPositions() {
 	for (Row rw : res) {
 		positionMap[rw.doc["_id"]] = rw.doc;
 	}
-	prevTrade = posDB.get("!prevTrade",CouchDB::flgCreateNew);
 }
 
 void MarginTradingSvc::commitTrade(Value tradeId) {
-	prevTrade("tradeId",tradeId);
-	wrtx.update(prevTrade);
 	wrtx.commit();
 	auto &commited = wrtx.getCommitedDocs();
 	for (auto &&c : commited) {
@@ -113,7 +114,7 @@ void MarginTradingSvc::commitTrade(Value tradeId) {
 		positionMap[newDoc["_id"]] = newDoc;
 	}
 
-	prevTrade = tradeId;
+	target->commitTrade(tradeId);
 }
 
 void MarginTradingSvc::setMarketConfig(PMarketConfig) {

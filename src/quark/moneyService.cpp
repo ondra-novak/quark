@@ -11,77 +11,52 @@
 
 namespace quark {
 
-bool MoneyService::sendServerRequest(AllocationResult r, json::Value user,
-		OrderBudget total, Callback callback) {
-	switch (r) {
-	case allocNeedSync:
-		return client->allocBudget(user, total, callback);
-	case allocNoChange:
-		return true;
-	case allocAsync:
-		client->allocBudget(user, total, nullptr);
-		return true;
-	}
-}
 
 bool MoneyService::allocBudget(json::Value user,
 		json::Value order, const OrderBudget& budget,
 		Callback callback) {
 
-	OrderBudget total;
-	AllocationResult  r  = updateBudget(user,order,budget, total);
-	return sendServerRequest(r, user, total, callback);
-
+	PMoneyService me(this);
+	auto badv = calculateBudgetAdv(user,order,budget);
+	client->adjustBudget(user,badv.first);
+	client->adjustBudget(user,badv.second);
+	if (badv.second.above(badv.first)) {
+		if (!client->allocBudget(user,badv.second,[=](bool b){
+			if (b) me->updateBudget(user,order,budget);
+			if (callback) callback(b);
+			})) return false;
+	} else if (badv.second != badv.first) {
+		client->allocBudget(user, badv.second,nullptr);
+	} else {
+		return true;
+	}
+	updateBudget(user, order, budget);
+	return true;
 }
 
 
-OrderBudget MoneyService::calculateBudget(Value user) const {
-	OrderBudget total;
+std::pair<OrderBudget,OrderBudget> MoneyService::calculateBudgetAdv(Value user, Value order, const OrderBudget &b) const {
+	std::lock_guard<std::mutex> _(requestLock);
+	OrderBudget pre;
+	OrderBudget post;
 	auto low = budgetMap.lower_bound(Key::lBound(user));
 	auto high = budgetMap.upper_bound(Key::uBound(user));
 	for (auto iter = low; iter!= high; ++iter) {
-			total = total + iter->second;
+			pre = pre + iter->second;
+			if (iter->first.command != order)
+				post = post+iter->second;
 
 	}
-	return total;
-
+	post = post + b;
+	return std::make_pair(pre,post);
 }
 
-MoneyService::AllocationResult MoneyService::updateBudget(json::Value user,
-		json::Value order, const OrderBudget& toBlock, OrderBudget& total) {
-
+void MoneyService::updateBudget(json::Value user, json::Value order, const OrderBudget& toBlock) {
 	std::lock_guard<std::mutex> _(requestLock);
-	AllocationResult r;
-	Key k(user,order);
-
-	OrderBudget prevBudget = calculateBudget(user);
-	client->adjustBudget(user,prevBudget);
-
-	auto p = budgetMap.find(k);
-
-	if (toBlock == OrderBudget()) {
-		if (p == budgetMap.end()) {
-			total = prevBudget;
-			return allocNoChange;
-		} else {
-			budgetMap.erase(p);
-		}
-	} else{
-		if (p == budgetMap.end()) {
-			budgetMap.insert(std::make_pair(k, toBlock));
-		} else{
-			p->second = toBlock;
-		}
-	}
-	total = calculateBudget(user);
-	client->adjustBudget(user,total);
-	if (total.above(prevBudget)) {
-		return allocNeedSync;
-	} else if (total == prevBudget) {
-		return allocNoChange;
-	} else {
-		return allocNeedSync;
-	}
+	if (toBlock == OrderBudget())
+		budgetMap.erase(Key(user,order));
+	else
+		budgetMap.insert(std::make_pair(Key(user,order), toBlock));
 }
 
 bool ErrorMoneyService::allocBudget(json::Value user, OrderBudget total, Callback callback) {

@@ -35,17 +35,17 @@ void extractBalanceChange(couchit::CouchDB& orderDB,
 		OrderDir::Type dir) {
 
 
-	Value orderId = trade[OrderDir::buy ? "buyOrder" : "sellOrder"];
+	Value orderId = trade[dir == OrderDir::buy ? "buyOrder" : "sellOrder"];
 	Document order = orderDB.get(orderId.getString());
 	double size = trade["size"].getNumber();
 	double price = trade["price"].getNumber();
 	double total = size*price;
 	tdata.assetChange = dir == OrderDir::buy ? size : -size;
 	tdata.currencyChange = dir == OrderDir::buy ? -total : total;
-	tdata.context = OrderContext::str[order["context"].getString()];
+	tdata.context = OrderContext::str[order[OrderFields::context].getString()];
 	tdata.fee = 0; //TODO calculate fee
-	tdata.user = trade["user"];
-	tdata.trade = trade["id"];
+	tdata.user = order[OrderFields::user];
+	tdata.trade = trade["_id"];
 
 }
 
