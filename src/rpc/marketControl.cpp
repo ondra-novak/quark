@@ -9,6 +9,7 @@
 
 #include <couchit/couchDB.h>
 #include <couchit/exception.h>
+#include <couchit/query.h>
 #include <imtjson/rpc.h>
 
 namespace quark {
@@ -64,6 +65,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Stream.lastId", me, &MarketControl::rpcStreamLastId);
 	rpcServer.add("Status.get", me, &MarketControl::rpcStatusGet);
 	rpcServer.add("Status.clear", me, &MarketControl::rpcStatusClear);
+	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
 
 	return getMarketStatus();
 
@@ -317,6 +319,23 @@ void quark::MarketControl::rpcStatusClear(RpcRequest rq) {
 	doc.setDeleted();
 	ordersDb.put(doc);
 	rq.setResult(getMarketStatus());
+}
+
+void quark::MarketControl::rpcOrderbookGet(RpcRequest rq) {
+	couchit::View orderbookView("_design/orderbook/_view/all",couchit::View::update);
+	couchit::Result res = ordersDb.createQuery(orderbookView).exec();
+	Array orders[2];
+	bool bid = false;
+	for (couchit::Row rw : res) {
+		Array resr;
+		unsigned int place = rw.key[0].getUInt();
+		resr.push_back(rw.key[1]);
+		resr.push_back(rw.value);
+		orders[place].push_back(resr);
+	}
+	rq.setResult(Object("bids",orders[0])
+					   ("asks",orders[1]));
+
 }
 
 

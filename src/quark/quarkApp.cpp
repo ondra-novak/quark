@@ -137,7 +137,26 @@ void QuarkApp::runOrder2(Document order, bool update) {
 
 		if (order[OrderFields::status].getString() != Status::strActive) {
 			try {
+				Value limPrice = order[OrderFields::limitPrice];
+				Value stopPrice = order[OrderFields::stopPrice];
+				Value distance = order[OrderFields::trailingDistance];
+				Value size = order[OrderFields::size];
+				Value orgSize = order[OrderFields::origSize];
+
+				//normalize values on order
+				if (limPrice.defined())
+					order.set(OrderFields::limitPrice, marketCfg->adjustPrice(limPrice.getNumber()));
+				if (stopPrice.defined())
+					order.set(OrderFields::stopPrice, marketCfg->adjustPrice(stopPrice.getNumber()));
+				if (distance.defined())
+					order.set(OrderFields::trailingDistance, marketCfg->adjustPrice(distance.getNumber()));
+				if (size.defined())
+					order.set(OrderFields::size, marketCfg->adjustSize(size.getNumber()));
+				if (orgSize.defined())
+					order.set(OrderFields::origSize, marketCfg->adjustSize(orgSize.getNumber()));
+
 				order.set(OrderFields::status, Status::strActive);
+
 				ordersDb->put(order);
 			} catch (const UpdateException &e) {
 				//in case of conflict...
@@ -305,7 +324,7 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 	if (order[OrderFields::finished].getBool()) return OrderBudget();
 
 	OrderDir::Type dir = OrderDir::str[order[OrderFields::dir].getString()];
-	double size = order[OrderFields::size].getNumber();
+	double size = marketCfg->adjustSize(order[OrderFields::size].getNumber());
 
 	double slippage = 1+ marketCfg->maxSlippagePtc/100.0;
 	OrderContext::Type context = OrderContext::str[order[OrderFields::context].getString()];
@@ -321,9 +340,9 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 			Value limPrice = order[OrderFields::limitPrice];
 			Value stopPrice = order[OrderFields::stopPrice];
 			if (limPrice.defined()) {
-				reqbudget = size*limPrice.getNumber();
+				reqbudget = size*marketCfg->adjustPrice(limPrice.getNumber());
 			} else if (stopPrice.defined()) {
-				reqbudget = size*stopPrice.getNumber()*slippage;
+				reqbudget = size*marketCfg->adjustPrice(stopPrice.getNumber()*slippage);
 			} else {
 				reqbudget = lastPrice * size * slippage;
 			}
@@ -332,11 +351,11 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
 		if (context == OrderContext::margin) {
 			if (dir == OrderDir::sell)
-				return OrderBudget(0,reqbudget,0,size);
+				return OrderBudget(0,reqbudget,0,size).adjust(*marketCfg);
 			else
-				return OrderBudget(reqbudget,0,size,0);
+				return OrderBudget(reqbudget,0,size,0).adjust(*marketCfg);
 		} else {
-			return OrderBudget(0, reqbudget);
+			return OrderBudget(0, reqbudget).adjust(*marketCfg);
 		}
 	}
 

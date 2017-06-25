@@ -43,6 +43,7 @@ namespace OrderFields {
 	extern StrViewA dir;
 	extern StrViewA type;
 	extern StrViewA size;
+	extern StrViewA origSize;
 	extern StrViewA limitPrice;
 	extern StrViewA stopPrice;
 	extern StrViewA trailingDistance;

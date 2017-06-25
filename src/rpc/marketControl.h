@@ -38,6 +38,7 @@ protected:
 	void rpcStreamLastId(RpcRequest rq);
 	void rpcStatusGet(RpcRequest rq);
 	void rpcStatusClear(RpcRequest rq);
+	void rpcOrderbookGet(RpcRequest rq);
 
 
 	Value getMarketStatus();

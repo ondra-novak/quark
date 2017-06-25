@@ -151,7 +151,8 @@ json::Value OrderControl::create(json::Value reqOrder) {
 	Document doc = db.newDocument("o.");
 	doc.setBaseObject(reqOrder);
 	doc.set( OrderFields::status,Status::str[Status::validating])
-		.set(OrderFields::timeCreated, ct);
+		.set(OrderFields::timeCreated, ct)
+		.set(OrderFields::origSize, reqOrder[OrderFields::size]);
 	doc.enableTimestamp();
 	db.put(doc);
 	return {doc.getIDValue(),doc.getRevValue()};

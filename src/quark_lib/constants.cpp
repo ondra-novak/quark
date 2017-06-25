@@ -41,6 +41,7 @@ StrViewA orderId("_id");
 STRCONST(dir);
 STRCONST(type);
 STRCONST(size);
+STRCONST(origSize);
 STRCONST(limitPrice);
 STRCONST(stopPrice);
 STRCONST(trailingDistance);
