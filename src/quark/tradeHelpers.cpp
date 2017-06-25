@@ -30,20 +30,37 @@ void extractTrade(const couchit::Value& trade,
 
 }
 
+
+static double calcFee(const Document &order, double total, bool taker) {
+
+	Value f = order[OrderFields::fees];
+	if (f.type() == number) {
+		return total * f.getNumber();
+	} else if (f.type() == array) {
+		int idx = taker?OrderFields::takerFee:OrderFields::makerFee;
+		return total * f[idx].getNumber();
+	} else {
+		return 0;
+	}
+
+}
+
 void extractBalanceChange(couchit::CouchDB& orderDB,
 		const couchit::Value& trade, IMoneySrvClient::BalanceChange& tdata,
-		OrderDir::Type dir) {
+		OrderDir::Type dir,const MarketConfig &mcfg) {
 
 
 	Value orderId = trade[dir == OrderDir::buy ? "buyOrder" : "sellOrder"];
 	Document order = orderDB.get(orderId.getString());
 	double size = trade["size"].getNumber();
 	double price = trade["price"].getNumber();
-	double total = size*price;
+	double total = mcfg.adjustTotal(size*price);
 	tdata.assetChange = dir == OrderDir::buy ? size : -size;
 	tdata.currencyChange = dir == OrderDir::buy ? -total : total;
 	tdata.context = OrderContext::str[order[OrderFields::context].getString()];
-	tdata.fee = 0; //TODO calculate fee
+	tdata.fee = mcfg.adjustTotal(
+					calcFee(order, total, OrderDir::str[trade["dir"].getString()] == dir)
+					);
 	tdata.user = order[OrderFields::user];
 	tdata.trade = trade["_id"];
 
@@ -57,7 +74,8 @@ Value findTradeCounter(couchit::CouchDB& tradeDB, Value trade) {
 
 
 void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
-		PMoneySrvClient moneySrvClient, const Value fromTrade, const Value toTrade) {
+		PMoneySrvClient moneySrvClient, const Value fromTrade, const Value toTrade,
+		const MarketConfig &mcfg) {
 
 	Query q = tradeDB.createQuery(tradesByCounter);
 	q.includeDocs();
@@ -79,11 +97,11 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 		if (clt != td.id) {
 			//We can lost connection during synchronization
 			//in this case, we need to repeat synchronization
-			return resync(ordersDB, tradeDB, moneySrvClient, clt, toTrade);
+			return resync(ordersDB, tradeDB, moneySrvClient, clt, toTrade,mcfg);
 		}
-		extractBalanceChange(ordersDB,v.doc,bch,OrderDir::buy);
+		extractBalanceChange(ordersDB,v.doc,bch,OrderDir::buy,mcfg);
 		moneySrvClient->reportBalanceChange(bch);
-		extractBalanceChange(ordersDB,v.doc,bch,OrderDir::sell);
+		extractBalanceChange(ordersDB,v.doc,bch,OrderDir::sell,mcfg);
 		moneySrvClient->reportBalanceChange(bch);
 		moneySrvClient->commitTrade(td.id);
 		lastTradeId = td.id;

@@ -48,6 +48,8 @@ std::pair<OrderBudget,OrderBudget> MoneyService::calculateBudgetAdv(Value user, 
 
 	}
 	post = post + b;
+	pre.adjust(*mcfg);
+	post.adjust(*mcfg);
 	return std::make_pair(pre,post);
 }
 

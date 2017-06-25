@@ -84,9 +84,9 @@ bool MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
 		doc.setID(Value(docUserId));
 		double prevPos = doc["position"].getNumber();
 		double prevValue = doc["value"].getNumber();
-		double newPos = prevPos+data.assetChange;//TODO: adjust position decimal numbers
-		double newValue = prevValue+data.currencyChange;
-		if (sign(newPos) != sign(prevPos)) newValue = -newPos * lastPrice;
+		double newPos = mcfg->adjustSize(prevPos+data.assetChange);//TODO: adjust position decimal numbers
+		double newValue = mcfg->adjustPrice(prevValue+data.currencyChange);
+		if (sign(newPos) != sign(prevPos)) newValue = mcfg->adjustPrice(-newPos * lastPrice);
 		doc("position", newPos);
 		doc("value", newValue);
 		doc("lastTrade",data.trade);
@@ -117,7 +117,10 @@ void MarginTradingSvc::commitTrade(Value tradeId) {
 	target->commitTrade(tradeId);
 }
 
-void MarginTradingSvc::setMarketConfig(PMarketConfig) {
+void MarginTradingSvc::setMarketConfig(PMarketConfig mcfg) {
+	target->setMarketConfig(mcfg);
+	this->mcfg = mcfg;
+
 }
 
 void MarginTradingSvc::updatePosition(Document doc) {

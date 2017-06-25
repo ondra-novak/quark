@@ -354,9 +354,9 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		IMoneySrvClient::BalanceChange bch;
 		extractTrade(v.doc, td);
 		moneySrvClient->reportTrade(lastTradeId, td); //TODO: check return value!
-		extractBalanceChange(*ordersDb,v.doc,bch,OrderDir::buy);
+		extractBalanceChange(*ordersDb,v.doc,bch,OrderDir::buy,*marketCfg);
 		moneySrvClient->reportBalanceChange(bch);
-		extractBalanceChange(*ordersDb,v.doc,bch,OrderDir::sell);
+		extractBalanceChange(*ordersDb,v.doc,bch,OrderDir::sell,*marketCfg);
 		moneySrvClient->reportBalanceChange(bch);
 		moneySrvClient->commitTrade(td.id);
 		lastTradeId = td.id;

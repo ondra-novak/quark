@@ -59,7 +59,7 @@ public:
 	bool allocBudget(json::Value user, json::Value order, const OrderBudget &budget, Callback callback);
 
 
-	void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;}
+	void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;client->setMarketConfig(cfg);}
 
 protected:
 

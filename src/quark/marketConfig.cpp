@@ -54,28 +54,42 @@ MarketConfig::MarketConfig(json::Value v)
 }
 
 
-std::size_t quark::MarketConfig::priceToPip(double price) {
+std::size_t quark::MarketConfig::priceToPip(double price) const {
 	return (std::size_t)floor(price / pipSize+0.5);
 }
 
-double quark::MarketConfig::pipToPrice(std::size_t pip) {
+double quark::MarketConfig::pipToPrice(std::size_t pip) const {
 	return pip * pipSize;
 }
 
-std::size_t quark::MarketConfig::amountToSize(double amount) {
+std::size_t quark::MarketConfig::amountToSize(double amount) const {
 	return (std::size_t)floor(amount / granuality+0.5);
 }
 
-double quark::MarketConfig::sizeToAmount(std::size_t size) {
+double quark::MarketConfig::sizeToAmount(std::size_t size) const {
 	return size * granuality;
 }
 
-std::size_t MarketConfig::budgetToPip(double budget) {
+std::size_t MarketConfig::budgetToPip(double budget) const {
 	return (std::size_t)floor(budget / pipSize / granuality+0.5);
 }
 
-double MarketConfig::pipToBudget(std::size_t pip) {
+double MarketConfig::pipToBudget(std::size_t pip) const {
 	return pip * pipSize * granuality;
 }
 
+double quark::MarketConfig::adjustSize(double size) const {
+	return floor(size/granuality+0.5)*granuality;
+}
+
+double quark::MarketConfig::adjustPrice(double price) const {
+	return floor(price/pipSize+0.5)*pipSize;
+}
+double quark::MarketConfig::adjustTotal(double price) const {
+	double comb = pipSize * granuality;
+	return floor(price/comb+0.5)*comb;
+}
+
+
 } /* namespace quark */
+

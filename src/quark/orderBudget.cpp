@@ -51,21 +51,14 @@ OrderBudget::OrderBudget(double marginLong, double marginShort,double posLong, d
 OrderBudget::OrderBudget(double asset,double currency)
 	:asset(asset),currency(currency),marginLong(0),marginShort(0),posLong(0),posShort(0) {}
 
-static double adjustAssets(double asset, const MarketConfig& cfg)  {
-	return asset < 0 ? 0 : (floor(asset / cfg.granuality) * cfg.granuality);
-}
-
-static double adjustCurrency(double currency , const MarketConfig& cfg) {
-	return currency<0?0:(floor(currency/cfg.granuality/cfg.pipSize)*cfg.granuality*cfg.pipSize);
-}
 
 OrderBudget OrderBudget::adjust(const MarketConfig &cfg) const {
-	return OrderBudget(adjustAssets(asset, cfg),
-			adjustCurrency(currency,cfg),
-			adjustCurrency(marginLong,cfg),
-			adjustCurrency(marginShort,cfg),
-			adjustAssets(posLong,cfg),
-			adjustAssets(posShort,cfg));
+	return OrderBudget(cfg.adjustSize(asset),
+			cfg.adjustPrice(currency),
+			cfg.adjustPrice(marginLong),
+			cfg.adjustPrice(marginShort),
+			cfg.adjustSize(posLong),
+			cfg.adjustSize(posShort));
 }
 
 

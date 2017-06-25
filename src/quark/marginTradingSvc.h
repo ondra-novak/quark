@@ -44,6 +44,8 @@ protected:
 	std::mutex lock;
 	typedef std::unique_lock<std::mutex> Guard;
 
+	PMarketConfig mcfg;
+
 
 
 };

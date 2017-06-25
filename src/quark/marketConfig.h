@@ -32,14 +32,20 @@ public:
 	double maxSlippagePtc;
 
 
-	std::size_t priceToPip(double price);
-	double pipToPrice(std::size_t pip);
+	std::size_t priceToPip(double price) const;
+	double pipToPrice(std::size_t pip) const;
 
-	std::size_t amountToSize(double amount);
-	double sizeToAmount(std::size_t size);
+	std::size_t amountToSize(double amount) const;
+	double sizeToAmount(std::size_t size) const;
 
-	std::size_t budgetToPip(double budget);
-	double pipToBudget(std::size_t pip);
+	std::size_t budgetToPip(double budget)const ;
+	double pipToBudget(std::size_t pip)const;
+
+
+	double adjustSize(double size)const;
+	double adjustPrice(double price)const;
+	double adjustTotal(double price)const;
+
 
 	json::String signature;
 	json::String currencySign;
