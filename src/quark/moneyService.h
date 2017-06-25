@@ -61,6 +61,8 @@ public:
 
 	void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;client->setMarketConfig(cfg);}
 
+	OrderBudget getOrderBudget(const json::Value &user, const json::Value &order) const;
+
 protected:
 
 

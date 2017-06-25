@@ -27,10 +27,8 @@ bool MoneyService::allocBudget(json::Value user,
 			})) return false;
 	} else if (badv.second != badv.first) {
 		client->allocBudget(user, badv.second,nullptr);
-	} else {
-		return true;
 	}
-	updateBudget(user, order, budget);
+	updateBudget(user, order, badv.second);
 	return true;
 }
 
@@ -65,6 +63,14 @@ bool ErrorMoneyService::allocBudget(json::Value user, OrderBudget total, Callbac
 	std::thread thr([=] {callback(false);});
 	thr.detach();
 	return false;
+}
+
+OrderBudget MoneyService::getOrderBudget(const json::Value& user, const json::Value& order) const {
+
+	std::lock_guard<std::mutex> _(requestLock);
+	auto f = budgetMap.find(Key(user,order));
+	if (f == budgetMap.end()) return OrderBudget();
+	else return  f->second;
 }
 
 

@@ -70,14 +70,14 @@ protected:
 	PendingOrders pendingOrders;
 
 //	void createOrder(Document order);
-	Document saveOrder(Document order, Object newItems);
+	//Document saveOrder(Document order, Object newItems);
 	void matchOrder(Document order);
 	OrderBudget calculateBudget(const Document &order);
 	void runTransaction(const TxItem &txitm);
 
 	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u, Changeset &trades);
 	void rejectOrderBudget(Document order, bool update);
-	void rejectOrder(const Document &order, const OrderErrorException &e, bool update);
+	void rejectOrder(Document order, const OrderErrorException &e, bool update);
 
 private:
 	POrder docOrder2POrder(const Document& order);
@@ -112,6 +112,8 @@ private:
 	///id of last known trade
 	Value lastTradeId = null;
 
+	double lastPrice;
+
 
 
 	OrdersToUpdate o2u_1, o2u_2;
@@ -122,7 +124,6 @@ private:
 	bool runOrder(const Document &doc, bool update);
 	void runOrder2(Document doc, bool update);
 	void processPendingOrders(Value user);
-	std::size_t fetchNextTradeId() const;
 	void freeBudget(const Document& order);
 };
 
