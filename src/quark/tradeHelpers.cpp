@@ -45,13 +45,11 @@ static double calcFee(const Document &order, double total, bool taker) {
 
 }
 
-void extractBalanceChange(couchit::CouchDB& orderDB,
+void extractBalanceChange(const couchit::Value& order,
 		const couchit::Value& trade, IMoneySrvClient::BalanceChange& tdata,
 		OrderDir::Type dir,const MarketConfig &mcfg) {
 
 
-	Value orderId = trade[dir == OrderDir::buy ? "buyOrder" : "sellOrder"];
-	Document order = orderDB.get(orderId.getString());
 	double size = trade["size"].getNumber();
 	double price = trade["price"].getNumber();
 	double total = mcfg.adjustTotal(size*price);
@@ -99,9 +97,9 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 			//in this case, we need to repeat synchronization
 			return resync(ordersDB, tradeDB, moneySrvClient, clt, toTrade,mcfg);
 		}
-		extractBalanceChange(ordersDB,v.doc,bch,OrderDir::buy,mcfg);
+		extractBalanceChange(ordersDB.get(v.doc["buyOrder"].getString()),v.doc,bch,OrderDir::buy,mcfg);
 		moneySrvClient->reportBalanceChange(bch);
-		extractBalanceChange(ordersDB,v.doc,bch,OrderDir::sell,mcfg);
+		extractBalanceChange(ordersDB.get(v.doc["sellOrder"].getString()),v.doc,bch,OrderDir::sell,mcfg);
 		moneySrvClient->reportBalanceChange(bch);
 		moneySrvClient->commitTrade(td.id);
 		lastTradeId = td.id;

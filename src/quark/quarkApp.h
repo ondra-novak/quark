@@ -55,6 +55,7 @@ protected:
 
 	typedef std::unordered_map<Value, Document> OrdersToUpdate;
 	typedef std::unordered_map<Value, Value> UsersToUpdate;
+	typedef std::unordered_map<Value, Value> OrderCache;
 
 
 	class PendingOrders {
@@ -75,7 +76,9 @@ protected:
 	OrderBudget calculateBudget(const Document &order);
 	void runTransaction(const TxItem &txitm);
 
-	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u, Changeset &trades);
+	typedef std::vector<Document> TradeList;
+
+	void receiveResults(const ITradeResult &res, OrdersToUpdate &o2u, TradeList &trades);
 	void rejectOrderBudget(Document order, bool update);
 	void rejectOrder(Document order, const OrderErrorException &e, bool update);
 
@@ -116,7 +119,10 @@ private:
 
 
 
-	OrdersToUpdate o2u_1, o2u_2;
+
+	OrdersToUpdate o2u_1, o2u_2, ocache; //prepared maps
+	TradeList tradeList; //buffer for trades
+
 
 	std::mutex ordLock;
 	typedef std::unique_lock<std::mutex> Sync;

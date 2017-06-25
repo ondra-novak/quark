@@ -117,7 +117,9 @@ void QuarkApp::rejectOrder(Document order, const OrderErrorException &e, bool up
 			}
 		throw;
 	}
-	freeBudget(order);
+	if (!update) {
+		freeBudget(order);
+	}
 }
 
 void QuarkApp::runOrder2(Document order, bool update) {
@@ -233,6 +235,7 @@ void QuarkApp::cancelOrder(Document order) {
 		}
 		return;
 	}
+
 
 	if (isKnown) {
 		//remove order from market
@@ -352,10 +355,12 @@ View budget("_design/users/_view/budget",View::groupLevel|View::update|View::red
 void QuarkApp::runTransaction(const TxItem& txitm) {
 	transactionCounter++;
 	OrdersToUpdate &o2u = o2u_1;
-	Changeset trades = tradesDb->createChangeset();
+	tradeList.clear();
+	o2u.clear();
+	Changeset chset = tradesDb->createChangeset();
 	try {
 		coreState.matching(transactionCounter,Transaction(&txitm,1), [&](const ITradeResult &res){
-			receiveResults(res,o2u,trades);
+			receiveResults(res,o2u,tradeList);
 		});
 	} catch (OrderErrorException &e) {
 		Value order = ordersDb->get(e.getOrderId().getString(), CouchDB::flgNullIfMissing);
@@ -369,32 +374,93 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 	}
 
 	//commit all trades into DB
-	trades.commit();
-
-	//sends reports to money server(s)
-	for (auto && v : trades.getCommitedDocs()) {
-		IMoneySrvClient::TradeData td;
-		IMoneySrvClient::BalanceChange bch;
-		extractTrade(v.doc, td);
-		moneySrvClient->reportTrade(lastTradeId, td); //TODO: check return value!
-		extractBalanceChange(*ordersDb,v.doc,bch,OrderDir::buy,*marketCfg);
-		moneySrvClient->reportBalanceChange(bch);
-		extractBalanceChange(*ordersDb,v.doc,bch,OrderDir::sell,*marketCfg);
-		moneySrvClient->reportBalanceChange(bch);
-		moneySrvClient->commitTrade(td.id);
-		lastTradeId = td.id;
-		lastPrice = td.price;
+	//build list of trades to commit
+	for (auto && v: tradeList) {
+		chset.update(v);
 	}
-
-	//update all orders
+	//commit in one call (any possible conflicts are thrown here before orders are
+	//sent to the money server
+	chset.commit();
 	Array keys;
+
+	if (!tradeList.empty())
+	{
+		//now we need to send changes to money server(s)
+		//first get all orders appears in all trades
+		//some orders can appear multiple times
+		//we can use not-yet updated version, because we only need some
+		//attibutes, such a context or user,
+
+		Query q = ordersDb->createQuery(View::includeDocs);
+
+		keys.reserve(o2u.size());
+		//prepare list of keys
+		for (auto && v : tradeList) {
+			//put orderIds as keys
+			keys.push_back(v["buyOrder"]);
+			keys.push_back(v["sellOrder"]);
+		}
+		//now create ordered list and remove duplicates, and setup the query
+		Value k = Value(keys).sort(&Value::compare).uniq();
+		q.keys(k);
+		//execute query
+		Result res = q.exec();
+		//result must have exact same values as keys
+		if (res.size() != k.size())
+			throw std::runtime_error("Some trades refer to no-existing order - sanity check");
+
+		//result is also ordered. We need to build ordering function
+		//cmpRes allows to ask with orderId even if orders are objects.
+		//orderId is eqaul to order with given id
+		auto cmpRes = [](const Value &a, const Value &b) {
+			if (a.type() == json::object) {
+				if (b.type() == json::object)
+					return Value::compare(a["id"],b["id"]) < 0;
+				else
+					return Value::compare(a["id"],b) < 0;
+			} else {
+				return Value::compare(a,b["id"]) < 0;
+			}
+		};
+
+		//sends reports to money server(s)
+		for (auto && v : tradeList) {
+			IMoneySrvClient::TradeData td;
+			IMoneySrvClient::BalanceChange bch;
+			//first report trade
+			extractTrade(v, td);
+			moneySrvClient->reportTrade(lastTradeId, td); //TODO: check return value!
+			//get order for buyOrder and sellOrder
+			Value buyOrderId = v["buyOrder"];
+			Value sellOrderId = v["sellOrder"];
+			//we don't need to check, whether order were found, above sanity check is enough
+			Value buyOrder = (*std::lower_bound(res.begin(), res.end(),buyOrderId, cmpRes))["doc"];
+			Value sellOrder = (*std::lower_bound(res.begin(), res.end(),sellOrderId, cmpRes))["doc"];
+			LOGDEBUG2("buyOrder", buyOrder);
+			LOGDEBUG2("sellOrder", sellOrder);
+			//extract balance change (and calculate fees)
+			extractBalanceChange(buyOrder,v,bch,OrderDir::buy,*marketCfg);
+			moneySrvClient->reportBalanceChange(bch);
+			extractBalanceChange(sellOrder,v,bch,OrderDir::sell,*marketCfg);
+			moneySrvClient->reportBalanceChange(bch);
+			//commit trade
+			moneySrvClient->commitTrade(td.id);
+			//update last tradeId
+			lastTradeId = td.id;
+			//update last price
+			lastPrice = td.price;
+		}
+
+	}
+	//update all affected orders
+	keys.clear();
+	if (!o2u.empty())
 	{
 		bool rep;
 
+		//prepare query
 		Query q = ordersDb->createQuery(View::includeDocs);
-		Changeset chset = ordersDb->createChangeset();
-
-		keys.reserve(o2u.size());
+		//load all keys to the query
 		for (auto && x: o2u) {
 					keys.push_back(x.first);
 		}
@@ -403,25 +469,37 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 			//query all changed orders
 			q.keys(keys);
 			Result res = q.exec();
+			if (res.size() != keys.size())
+				throw std::runtime_error("Matching engine refers some orders not found in the database - sanity check");
+			//process results
 			for (Row r : res) {
 
 				//perform update
-				Document &d = o2u[r.key];
+				Document d = o2u[r.key];
 				LOGDEBUG3("Updating order (mass)", r.key, d);
+				//the map contains only changes. Now set the base object onto the changes will be applied
 				d.setBaseObject(r.doc);
+
+				d.optimize();
+				//calculate budget of final object
 				auto budget = calculateBudget(d);
 
 				//TODO check result of allocatio for some commands (trailing-limit)
 				moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),budget,nullptr);
+
+				//put order for update
 				chset.update(d);
 			}
 			try {
-				//commont all order change
-				chset.commit();
+				//commit all order change
+				chset.commit(*ordersDb);
+				//in case of all success, we end here
 				rep = false;
 			} catch (UpdateException &e) {
 				//there can be conflicts
 				keys.clear();
+				//because changes fron trading has highest priority
+				//we have to reapply changes to new version of order
 				for (auto err : e.getErrors()) {
 					if (err.isConflict()) {
 						//collect conflicts
@@ -435,7 +513,9 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 						throw;
 					}
 				}
+				//swap maps
 				std::swap(o2u_1,o2u_2);
+				//clear other map
 				o2u_2.clear();
 				//repeat
 				rep = true;
@@ -443,11 +523,12 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		}
 		while (rep);
 	}
+	//everything done, let get next order
 
 }
 
 
-void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, Changeset &trades) {
+void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeList &trades) {
 	time_t now;
 	time(&now);
 	switch (r.getType()) {
@@ -481,7 +562,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, Change
 						 ("dir",dir)
 						 ("time",(std::size_t)now)
 						 ("index",tradeCounter++);
-					trades.update(trade);
+					trade.optimize();
+					trades.push_back(trade);
 				}break;
 			case quark::trOrderMove: {
 					const quark::TradeResultOderMove &t = dynamic_cast<const quark::TradeResultOderMove &>(r);
@@ -803,6 +885,8 @@ void QuarkApp::PendingOrders::clear() {
 	std::lock_guard<std::mutex> _(l);
 	orders.clear();
 }
+
+
 
 
 } /* namespace quark */
