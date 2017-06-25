@@ -16,6 +16,7 @@ namespace quark {
 MarketControl::MarketControl(Value cfg)
 	:ordersDb(initConfig(cfg,"orders"))
 	,tradesDb(initConfig(cfg,"trades"))
+	,posDb(initConfig(cfg,"positions"))
 	,orderControl(ordersDb)
 {
 
@@ -59,6 +60,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Order.get", me, &MarketControl::rpcOrderGet);
 	rpcServer.add("Stream.orders",  me, &MarketControl::rpcStreamOrders);
 	rpcServer.add("Stream.trades", me, &MarketControl::rpcStreamTrades);
+	rpcServer.add("Stream.positions", me, &MarketControl::rpcStreamPositions);
 	rpcServer.add("Stream.lastId", me, &MarketControl::rpcStreamLastId);
 	rpcServer.add("Status.get", me, &MarketControl::rpcStatusGet);
 	rpcServer.add("Status.clear", me, &MarketControl::rpcStatusClear);
@@ -127,9 +129,6 @@ public:
 	BasicFeed(couchit::CouchDB &db, Value since, RpcRequest rq, String streamName):FeedControl(db,since),rq(rq),streamName(streamName) {}
 	virtual void init() override {
 	}
-	virtual void onEvent(Value v) override {
-		rq.sendNotify(streamName,{v["seq"].toString(),v["doc"]});
-	}
 	~BasicFeed() {
 		stop();
 	}
@@ -145,6 +144,12 @@ public:
 	virtual void init() override {
 		feed.setFilter(couchit::Filter("orders/stream",couchit::Filter::includeDocs));
 	}
+	virtual void onEvent(Value v) override {
+		rq.sendNotify(streamName,{v["seq"].toString(),
+				Object(v["doc"])
+				("id",v["id"])
+				("_id",undefined)});
+	}
 
 };
 
@@ -154,7 +159,31 @@ public:
 	virtual void init() override {
 		feed.setFilter(couchit::Filter("trades/stream",couchit::Filter::includeDocs));
 	}
+	virtual void onEvent(Value v) override {
+		rq.sendNotify(streamName,{v["seq"].toString(),
+				Object(v["doc"])
+				("id",v["id"])
+				("_id",undefined)
+				("_rev",undefined)
+		});
+	}
 
+};
+
+class MarketControl::PosFeed: public BasicFeed {
+public:
+	using BasicFeed::BasicFeed;
+	virtual void init() override {
+		feed.setFilter(couchit::Filter("positions/stream",couchit::Filter::includeDocs));
+	}
+	virtual void onEvent(Value v) override {
+		rq.sendNotify(streamName,{v["seq"].toString(),
+				Object(v["doc"])
+				("user",v["id"].getString().substr(2))
+				("_id",undefined)
+				("_rev",undefined)
+		});
+	}
 };
 
 void MarketControl::rpcStreamOrders(RpcRequest rq) {
@@ -183,14 +212,35 @@ void MarketControl::rpcStreamTrades(RpcRequest rq) {
 	static Value turnOnArgs = {true,{"string","optional"} };
 	if (rq.checkArgs(turnOffArgs)) {
 
-		ordersFeed = nullptr;
+		tradesFeed = nullptr;
 		rq.setResult(true);
 
 
 	} else if (rq.checkArgs(turnOnArgs)) {
 		Value since = rq.getArgs()[1];
-		ordersFeed = new TradesFeed(tradesDb, since, rq, "trade");
-		ordersFeed->start();
+		tradesFeed = new TradesFeed(tradesDb, since, rq, "trade");
+		tradesFeed->start();
+		rq.setResult(true);
+
+
+	} else {
+		rq.setArgError();
+	}
+}
+
+void MarketControl::rpcStreamPositions(RpcRequest rq) {
+	static Value turnOffArgs = Value(json::array,{false});
+	static Value turnOnArgs = {true,{"string","optional"} };
+	if (rq.checkArgs(turnOffArgs)) {
+
+		posFeed = nullptr;
+		rq.setResult(true);
+
+
+	} else if (rq.checkArgs(turnOnArgs)) {
+		Value since = rq.getArgs()[1];
+		posFeed = new PosFeed(posDb, since, rq, "position");
+		posFeed->start();
 		rq.setResult(true);
 
 
@@ -253,6 +303,7 @@ void MarketControl::rpcStreamLastId(RpcRequest rq) {
 
 	rq.setResult(Object("orders",ordersDb.getLastSeqNumber())
 					   ("trades",tradesDb.getLastSeqNumber())
+					   ("positions",posDb.getLastSeqNumber())
 			);
 
 }

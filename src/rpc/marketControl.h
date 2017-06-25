@@ -23,6 +23,7 @@ protected:
 
 	CouchDB ordersDb;
 	CouchDB tradesDb;
+	CouchDB posDb;
 
 
 	static couchit::Config initConfig(Value cfg, StrViewA suffix);
@@ -33,6 +34,7 @@ protected:
 	void rpcOrderGet(RpcRequest rq);
 	void rpcStreamOrders(RpcRequest rq);
 	void rpcStreamTrades(RpcRequest rq);
+	void rpcStreamPositions(RpcRequest rq);
 	void rpcStreamLastId(RpcRequest rq);
 	void rpcStatusGet(RpcRequest rq);
 	void rpcStatusClear(RpcRequest rq);
@@ -61,11 +63,12 @@ protected:
 	class BasicFeed;
 	class OrderFeed;
 	class TradesFeed;
+	class PosFeed;
 
 	typedef RefCntPtr<FeedControl> PFeedControl;
 
 
-	PFeedControl ordersFeed, tradesFeed;
+	PFeedControl ordersFeed, tradesFeed, posFeed;
 	OrderControl orderControl;
 
 

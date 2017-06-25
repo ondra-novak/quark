@@ -3,6 +3,7 @@
 #include "designdocs/users.design.h"
 #include "designdocs/orderbook.design.h"
 #include "designdocs/trades.design.h"
+#include "designdocs/positions.design.h"
 namespace quark {
 
 using namespace couchit;
@@ -23,6 +24,7 @@ void initTradesDB(couchit::CouchDB& db) {
 }
 
 void initPositionsDB(couchit::CouchDB& db) {
+	db.putDesignDocument(designdoc_positions,designdoc_positions_length);
 }
 
 }

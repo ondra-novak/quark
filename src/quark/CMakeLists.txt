@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 add_compile_options(-std=c++11)
 file(GLOB quark_SRC "*.cpp")
-set(designs designdocs/orders.design.cpp designdocs/users.design.cpp designdocs/orderbook.design.cpp designdocs/trades.design.cpp)
+set(designs designdocs/orders.design.cpp designdocs/users.design.cpp designdocs/orderbook.design.cpp designdocs/trades.design.cpp designdocs/positions.design.cpp)
 add_custom_command(OUTPUT ${designs} COMMAND $(MAKE) -C designdocs all DEPENDS couchcpp) 
 add_custom_target(buildDesigns COMMAND $(MAKE) -C designdocs all  DEPENDS couchcpp)
 add_custom_target(cleanDesigns COMMAND $(MAKE) -C designdocs clean-designs)
