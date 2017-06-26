@@ -6,6 +6,7 @@
 #include <couchit/document.h>
 #include <couchit/query.h>
 #include "views.h"
+#include "logfile.h"
 
 
 
@@ -53,15 +54,25 @@ void extractBalanceChange(const couchit::Value& order,
 	double size = trade["size"].getNumber();
 	double price = trade["price"].getNumber();
 	double total = mcfg.adjustTotal(size*price);
-	tdata.assetChange = dir == OrderDir::buy ? size : -size;
-	tdata.currencyChange = dir == OrderDir::buy ? -total : total;
+	switch (dir) {
+	    case OrderDir::buy:
+		tdata.assetChange = size;
+		tdata.currencyChange = -total;
+		break;
+	    case OrderDir::sell:
+		tdata.assetChange = -size;
+		tdata.currencyChange = total;
+		break;
+	    default:
+		throw std::runtime_error("extractBalanceChange: invalid direction");
+		break;
+	};
 	tdata.context = OrderContext::str[order[OrderFields::context].getString()];
 	tdata.fee = mcfg.adjustTotal(
-					calcFee(order, total, OrderDir::str[trade["dir"].getString()] == dir)
+					calcFee(order, fabs(total), OrderDir::str[trade["dir"].getString()] == dir)
 					);
 	tdata.user = order[OrderFields::user];
 	tdata.trade = trade["_id"];
-
 }
 
 
