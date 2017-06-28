@@ -5,6 +5,7 @@
 #include <iosfwd>
 #include <mutex>
 #include <queue>
+#include "../common/msgqueue.h"
 
 
 #include "marketControl.h"
@@ -33,14 +34,11 @@ protected:
 	PMarketControl mcontrol;
 	std::mutex streamLock;
 
-	std::queue<Value> cmdQueue;
-	std::mutex queueLock;
-	std::condition_variable queueTrig;
 	std::thread executor;
 
+	MsgQueue<Value> msgQueue;
+
 private:
-	Value readQueue();
-	void writeQueue(Value v);
 	void goInteractiveMode(std::istream &input);
 };
 

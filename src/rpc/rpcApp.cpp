@@ -31,7 +31,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 
 	executor = std::thread([&]{
 
-		Value v = readQueue();
+		Value v = msgQueue.pop();
 		while (v.defined()) {
 			RpcRequest rq = RpcRequest::create(v, [&](Value response) {
 				std::lock_guard<std::mutex> _(streamLock);
@@ -39,7 +39,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 				output << std::endl;
 			},RpcFlags::notify);
 			rpcServer(rq);
-			v = readQueue();
+			v = msgQueue.pop();
 		}
 
 	});
@@ -58,15 +58,15 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 			if (c == EOF) break;
 			input.putback(c);
 			Value v = Value::fromStream(input);
-			writeQueue(v);
+			msgQueue.push(v);
 
 
 		} while (true);
-		writeQueue(json::undefined);
+		msgQueue.push(json::undefined);
 		executor.join();
 		mcontrol = nullptr;
 	} catch (std::exception &e) {
-		writeQueue(json::undefined);
+		msgQueue.push(json::undefined);
 		executor.join();
 		mcontrol = nullptr;
 		Value resp = Object("error",Object("code",-32700)("message","Parse error")("data",e.what()))
@@ -92,19 +92,6 @@ void RpcApp::rpcInit(RpcRequest req) {
 	}
 }
 
-Value RpcApp::readQueue() {
-	std::unique_lock<std::mutex> lock(queueLock);
-	queueTrig.wait(lock, [&]{return !cmdQueue.empty();});
-	Value v = cmdQueue.front();
-	cmdQueue.pop();
-	return v;
-}
-
-void RpcApp::writeQueue(Value v) {
-	std::unique_lock<std::mutex> lock(queueLock);
-	cmdQueue.push(v);
-	queueTrig.notify_all();
-}
 
 void RpcApp::goInteractiveMode(std::istream& input) {
 	std::cerr << "# Interactive mode is enabled" << std::endl;
@@ -140,7 +127,7 @@ void RpcApp::goInteractiveMode(std::istream& input) {
 				("params",args)
 				("id", cnt);
 		cnt++;
-		writeQueue(req);
+		msgQueue.push(req);
 	}
 }
 
