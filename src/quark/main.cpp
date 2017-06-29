@@ -21,7 +21,6 @@
 
 using quark::logInfo;
 
-quark::QuarkApp quarkApp;
 
 bool mandatoryField(const json::Value &v, json::StrViewA name) {
 
@@ -54,13 +53,14 @@ json::maxPrecisionDigits=9;
 	logInfo("==== START ====");
 
 
-	if (c != 2) {
+	if (c != 3) {
 
-		logError("failed to start. Required argument - path to configuration");
+		logError("failed to start. Required arguments: <signature>, <path to configuration>");
 		return 1;
 	}
 
-	const char *cfgpath = args[1];
+	const char *signature = args[1];
+	const char *cfgpath = args[2];
 
 	couchit::Config cfg;
 	Value cfgjson;
@@ -81,14 +81,13 @@ json::maxPrecisionDigits=9;
 		}
 
 		if (!mandatoryField(cfgjson,"server")) return 4;
-		if (!mandatoryField(cfgjson,"dbprefix")) return 4;
 		if (!mandatoryField(cfgjson,"moneyService")) return 4;
 
 
 		cfg.authInfo.username = json::String(cfgjson["username"]);
 		cfg.authInfo.password = json::String(cfgjson["password"]);
 		cfg.baseUrl = json::String(cfgjson["server"]);
-		cfg.databaseName = json::String(cfgjson["dbprefix"]);
+		cfg.databaseName = json::String({cfgjson["dbprefix"].getString(),StrViewA(signature)});
 
 		Value mscfg = cfgjson["moneyService"];
 		StrViewA type = mscfg["type"].getString();
@@ -114,20 +113,22 @@ json::maxPrecisionDigits=9;
 	//this is required as the CouchDB can be still in initialization phase
 	std::this_thread::sleep_for(std::chrono::seconds(2));
 
-
+	PQuarkApp app = new QuarkApp;
 	std::thread thr([=]{
 		try {
-			quarkApp.start(cfg, moneyService);
+
+			app->start(cfg, signature);
 		} catch (std::exception &e) {
 			logError({"Quark exited with unhandled exception",e.what()});
+			exit(1);
 		}
-		exit(1);
 	});
 	while (!std::cin.eof()) {
 		char c = std::cin.get();;
+		if (c == 'x') break;
 	}
-	quarkApp.exitApp();
-	logInfo("Exitting after stdin is closed");
+	app->exitApp();
+	thr.join();
 
 }
 

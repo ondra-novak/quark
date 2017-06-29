@@ -37,7 +37,7 @@ namespace quark {
 class MoneyService: public RefCntObj {
 public:
 
-	MoneyService(PMoneySrvClient client):client(client) {}
+	MoneyService(PMoneySrvClient client, PMarketConfig mcfg):client(client),mcfg(mcfg) {}
 
 	typedef std::function<void(bool)> Callback;
 
@@ -59,9 +59,12 @@ public:
 	bool allocBudget(json::Value user, json::Value order, const OrderBudget &budget, Callback callback);
 
 
-	void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;client->setMarketConfig(cfg);}
+	//void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;client->setMarketConfig(cfg);}*/
 
 	OrderBudget getOrderBudget(const json::Value &user, const json::Value &order) const;
+
+	void setClient(PMoneySrvClient client) {this->client = client;}
+	void setMarketConfig(PMarketConfig cfg) {this->mcfg = mcfg;}
 
 protected:
 

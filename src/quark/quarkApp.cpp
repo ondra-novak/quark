@@ -30,10 +30,7 @@ namespace quark {
 const StrViewA QuarkApp::marketConfigDocName("settings");
 
 QuarkApp::QuarkApp() {
-	// TODO Auto-generated constructor stub
 
-	moneySrvClient = new ErrorMoneyService;
-	moneyService = new MoneyService(moneySrvClient);
 }
 
 void QuarkApp::processPendingOrders(Value user) {
@@ -47,6 +44,7 @@ void QuarkApp::processPendingOrders(Value user) {
 bool QuarkApp::runOrder(const Document &order, bool update) {
 
 	try {
+		PQuarkApp me(this);
 		Value user = order[OrderFields::user];
 
 		//calculate budget
@@ -54,22 +52,21 @@ bool QuarkApp::runOrder(const Document &order, bool update) {
 
 		LOGDEBUG3("Budget calculated for the order", order.getIDValue(), b.toJson());
 
-		if (!moneyService->allocBudget(order[OrderFields::user], order.getIDValue(), b, [=](bool response) {
+		if (!moneyService->allocBudget(order[OrderFields::user], order.getIDValue(), b, [me,order,update,user](bool response) {
+				QuarkApp *mptr = me;
+				me->dispatcher.push([mptr,response,order,update,user]{
 					//in positive response
 					if (response) {
-						//lock this object
-						Sync _(ordLock);
 						//go to stage 2
-						runOrder2(order, update);
+						mptr->runOrder2(order, update);
 					} else {
 						//in negative response
-						//lock the object
-						Sync _(ordLock);
 						//reject the order
-						rejectOrderBudget(order, update);
+						mptr->rejectOrderBudget(order, update);
 					}
 
-					processPendingOrders(user);
+					mptr->processPendingOrders(user);
+				});
 				}
 			)) return false;
 		else {
@@ -182,7 +179,6 @@ void QuarkApp::runOrder2(Document order, bool update) {
 
 void QuarkApp::processOrder(Value cmd) {
 
-	Sync _(ordLock);
 
 	Value user = cmd[OrderFields::user];
 	if (!pendingOrders.lock(user, cmd)) {
@@ -364,8 +360,7 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
 
 void QuarkApp::exitApp() {
-	if (exitFn != nullptr)
-		exitFn();
+	dispatcher.push(nullptr);
 }
 
 View budget("_design/users/_view/budget",View::groupLevel|View::update|View::reduce);
@@ -694,95 +689,103 @@ void QuarkApp::syncWithDb() {
 
 void QuarkApp::mainloop() {
 
-	syncWithDb();
 
+	ChangesFeed chfeed = ordersDb->createChangesFeed();
+	exitFn = [&] {
+		chfeed.cancelWait();
+	};
 
-
-
-	for (;;) {
-
-
+	Value errorDoc = ordersDb->get(OrderFields::error, CouchDB::flgNullIfMissing);
+	if (!errorDoc.isNull()) {
+		logError("Error is signaled, engine stopped - please remove error file to continue");
 
 		try {
-
-			ChangesFeed chfeed = ordersDb->createChangesFeed();
-			exitFn = [&] {
-				chfeed.cancelWait();
-			};
-
-			Value errorDoc = ordersDb->get(OrderFields::error, CouchDB::flgNullIfMissing);
-			if (!errorDoc.isNull()) {
-				logError("Error is signaled, engine stopped - please remove error file to continue");
-
-				try {
-					chfeed.setFilter(errorWait).since(ordersDb->getLastKnownSeqNumber()).setTimeout(-1)
-							>> [](ChangedDoc chdoc) {
-						if (chdoc.deleted) return false;
-						return true;
-					};
-				} catch (CanceledException &e) {
-					return;
-				}
-				continue;
-
-			}
-
-
-			logInfo("==== Entering to main loop ====");
-
-
-
-			auto loopBody = [&](ChangedDoc chdoc) {
-
-				if (!chdoc.deleted) {
-					if (chdoc.id == marketConfigDocName) {
-						try {
-							marketCfg = new MarketConfig(chdoc.doc);
-							moneyService->setMarketConfig(marketCfg);
-							logInfo("Market configuration updated");
-
-						} catch (std::exception &e) {
-							logError( {	"MarketConfig update failed", e.what()});
-						}
-					} else if (chdoc.id.substr(0,8) != "_design/") {
-						processOrder(chdoc.doc);
-					}
-				}
+			chfeed.setFilter(errorWait).since(ordersDb->getLastKnownSeqNumber()).setTimeout(-1)
+					>> [](ChangedDoc chdoc) {
+				if (chdoc.deleted) return false;
 				return true;
 			};
-
-			logInfo("==== Preload commands ====");
-
-			Query q = ordersDb->createQuery(queueView);
-			Result res = q.exec();
-			for (Value v : res) {
-				loopBody(v);
-			}
-
-			logInfo("==== Inside of main loop ====");
-
-
-			try {
-				chfeed.setFilter(queueView).since(res.getUpdateSeq()).setTimeout(-1)
-						>> loopBody;
-			} catch (CanceledException &e) {
-
-			}
-
-			logInfo("==== Leaving main loop ====");
-
+		} catch (CanceledException &e) {
 			return;
-
-		} catch (...) {
-			unhandledException();
 		}
-
-		logInfo("==== Restart main loop ====");
-
 
 	}
 
+	logInfo("==== Entering to main loop ====");
 
+	auto loopBody = [&](ChangedDoc chdoc) {
+
+		if (!chdoc.deleted) {
+			dispatcher.push([=]{
+				if (chdoc.id == marketConfigDocName) {
+					try {
+						marketCfg = new MarketConfig(chdoc.doc);
+						initMoneyService();
+						logInfo("Market configuration updated");
+
+					} catch (std::exception &e) {
+						logError( {	"MarketConfig update failed", e.what()});
+					}
+				} else if (chdoc.id.substr(0,8) != "_design/") {
+					processOrder(chdoc.doc);
+				}
+			});
+		}
+		return true;
+	};
+
+	logInfo("==== Preload commands ====");
+
+	Query q = ordersDb->createQuery(queueView);
+	Result res = q.exec();
+	for (Value v : res) {
+		loopBody(v);
+	}
+
+	logInfo("==== Inside of main loop ====");
+
+
+	try {
+		chfeed.setFilter(queueView).since(res.getUpdateSeq()).setTimeout(-1)
+				>> 	loopBody;
+
+	} catch (CanceledException &e) {
+
+	}
+
+	logInfo("==== Leaving main loop ====");
+
+	return;
+
+
+
+
+}
+
+void QuarkApp::initMoneyService() {
+
+	Value cfg = marketCfg->moneyService;
+	StrViewA type = cfg["type"].getString();
+	PMoneySrvClient sv;
+	if (type == "mockup") {
+		Value maxBudget = cfg["maxBudget"];
+		Value jlatency = cfg["latency"];
+		if (!maxBudget.defined()) throw std::runtime_error("Missing 'maxBudget' in money service definition");
+		if (!jlatency.defined()) throw std::runtime_error("Missing 'latency' in money service definition");
+		OrderBudget b(maxBudget["asset"].getNumber(),maxBudget["currency"].getNumber()
+				,maxBudget["marginLong"].getNumber(),maxBudget["marginShort"].getNumber(), 0 ,0);
+		std::size_t latency =jlatency.getUInt();
+		sv = new MockupMoneyService(b,latency);
+	} else {
+		throw std::runtime_error("Unsupported money service");
+	}
+	moneySrvClient = new MarginTradingSvc(*positionsDb,marketCfg,sv);
+	if (moneyService == nullptr) {
+		moneyService = new MoneyService(moneySrvClient,marketCfg);
+	} else {
+		moneyService->setClient(moneySrvClient);
+		moneyService->setMarketConfig(marketCfg);
+	}
 }
 
 
@@ -790,16 +793,21 @@ void QuarkApp::receiveMarketConfig() {
 	Value doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
 	if (doc != nullptr) {
 		marketCfg = new MarketConfig(doc);
-		moneyService->setMarketConfig(marketCfg);
+		initMoneyService();
+	} else {
+		throw std::runtime_error("No money service available");
 	}
 }
 
 
-void QuarkApp::start(couchit::Config cfg, PMoneySrvClient moneyService) {
+void QuarkApp::start(couchit::Config cfg, String signature)
 
+{
+
+	this->signature = signature;
 
 	String dbprefix = cfg.databaseName;
-	cfg.databaseName = dbprefix + "orders";
+	cfg.databaseName = dbprefix + "-orders";
 
 	setUnhandledExceptionHandler([cfg]{
 
@@ -834,29 +842,43 @@ void QuarkApp::start(couchit::Config cfg, PMoneySrvClient moneyService) {
 
 	});
 
-
-
-
-	cfg.databaseName = dbprefix + "orders";
 	ordersDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
 	initOrdersDB(*ordersDb);
 
-	cfg.databaseName = dbprefix + "trades";
+	cfg.databaseName = dbprefix + "-trades";
 	tradesDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
 	initTradesDB(*tradesDb);
 
-	cfg.databaseName = dbprefix + "positions";
+	cfg.databaseName = dbprefix + "-positions";
 	positionsDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
 	initPositionsDB(*positionsDb);
 
-	this->moneySrvClient = new MarginTradingSvc(*positionsDb,moneyService);
+/*	this->moneySrvClient = new MarginTradingSvc(*positionsDb,moneyService);
 	this->moneyService = new MoneyService(this->moneySrvClient);
+	receiveMarketConfig();*/
+	syncWithDb();
+
+	changesReader = std::thread([=]{
+		try {
+			mainloop();
+		} catch (...) {
+			unhandledException();
+		}});
 
 
-	receiveMarketConfig();
-
-	mainloop();
-
+	try {
+		Action a = dispatcher.pop();
+		while (a != nullptr) {
+			a();
+			a = dispatcher.pop();
+		}
+		exitFn();
+		changesReader.join();
+		moneyService = nullptr;
+		moneySrvClient = nullptr;
+	} catch (...) {
+		unhandledException();
+	}
 
 }
 

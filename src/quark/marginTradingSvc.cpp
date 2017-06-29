@@ -16,10 +16,11 @@ namespace quark {
 
 
 
-MarginTradingSvc::MarginTradingSvc(CouchDB& posDB, PMoneySrvClient target)
+MarginTradingSvc::MarginTradingSvc(CouchDB& posDB, PMarketConfig mcfg, PMoneySrvClient target)
 	:posDB(posDB)
 	,target(target)
 	,wrtx(posDB.createChangeset())
+	,mcfg(mcfg)
 {
 	syncPositions();
 }
@@ -117,11 +118,6 @@ void MarginTradingSvc::commitTrade(Value tradeId) {
 	target->commitTrade(tradeId);
 }
 
-void MarginTradingSvc::setMarketConfig(PMarketConfig mcfg) {
-	target->setMarketConfig(mcfg);
-	this->mcfg = mcfg;
-
-}
 
 void MarginTradingSvc::updatePosition(Document doc) {
 	posDB.put(doc);

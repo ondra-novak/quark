@@ -42,9 +42,9 @@ MarketConfig::MarketConfig(json::Value v)
 ///maximum allowed spread in per cents, if spread is larger, market orders are paused
 ,maxSlippagePtc(mandatory(v,"maxSlippagePtc").getNumber())
 
-,signature(mandatory(v,"signature"))
 ,currencySign(mandatory(v,"currencySign"))
 ,assetSign(mandatory(v,"assetSign"))
+,moneyService(mandatory(v,"moneyService"))
 {
 
 	double maxSize = pow(2,sizeof(std::size_t)*8);

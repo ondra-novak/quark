@@ -47,9 +47,9 @@ public:
 	double adjustTotal(double price)const;
 
 
-	json::String signature;
 	json::String currencySign;
 	json::String assetSign;
+	json::Value moneyService;
 
 };
 

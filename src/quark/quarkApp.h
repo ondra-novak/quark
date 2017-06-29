@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "../common/msgqueue.h"
+
 
 #include "../quark_lib/core.h"
 #include "orderBudget.h"
@@ -27,14 +29,14 @@ using namespace json;
 
 class OrderErrorException;
 
-class QuarkApp {
+class QuarkApp: public RefCntObj {
 public:
 	QuarkApp();
 
 	void processOrder(Value cmd);
 	void receiveMarketConfig();
 
-	void start(couchit::Config cfg, PMoneySrvClient moneyService);
+	void start(couchit::Config cfg, String signature);
 
 	void exitApp();
 
@@ -43,6 +45,7 @@ public:
 protected:
 	void mainloop();
 
+	String signature;
 	std::unique_ptr<CouchDB> ordersDb;
 	std::unique_ptr<CouchDB> tradesDb;
 	std::unique_ptr<CouchDB> positionsDb;
@@ -82,6 +85,7 @@ protected:
 	void rejectOrderBudget(Document order, bool update);
 	void rejectOrder(Document order, const OrderErrorException &e, bool update);
 
+	void initMoneyService();
 private:
 	POrder docOrder2POrder(const Document& order);
 
@@ -103,9 +107,13 @@ private:
 
 	void syncWithDb();
 
+	typedef std::function<void()> Action;
 
 
-	std::function<void()> exitFn;
+	Action exitFn;
+	typedef MsgQueue<Action> Dispatcher;
+	Dispatcher dispatcher;
+	std::thread changesReader;
 
 
 	///each transaction must have unique id
@@ -120,12 +128,12 @@ private:
 
 
 
+
 	OrdersToUpdate o2u_1, o2u_2, ocache; //prepared maps
 	TradeList tradeList; //buffer for trades
 
 
-	std::mutex ordLock;
-	typedef std::unique_lock<std::mutex> Sync;
+
 
 	bool runOrder(const Document &doc, bool update);
 	void runOrder2(Document doc, bool update);
@@ -133,6 +141,7 @@ private:
 	void freeBudget(const Document& order);
 };
 
+typedef RefCntPtr<QuarkApp> PQuarkApp;
 
 } /* namespace quark */
 

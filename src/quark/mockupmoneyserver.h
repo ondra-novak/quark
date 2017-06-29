@@ -26,7 +26,6 @@ public:
 	virtual Value reportTrade(Value prevTrade, const TradeData &data) override ;
 	virtual bool reportBalanceChange(const BalanceChange &data) override ;
 	virtual void commitTrade(Value tradeId) override ;
-	virtual void setMarketConfig(PMarketConfig) override {};
 
 protected:
 

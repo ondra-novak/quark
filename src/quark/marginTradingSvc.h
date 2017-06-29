@@ -17,7 +17,7 @@ using namespace couchit;
 
 class MarginTradingSvc: public IMoneySrvClient {
 public:
-	MarginTradingSvc(CouchDB &posDB, PMoneySrvClient target);
+	MarginTradingSvc(CouchDB &posDB, PMarketConfig mcfg, PMoneySrvClient target);
 
 	virtual void adjustBudget(json::Value user, OrderBudget &budget) override;
 	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback);
@@ -25,7 +25,6 @@ public:
 	virtual Value reportTrade(Value prevTrade, const TradeData &data);
 	virtual bool reportBalanceChange(const BalanceChange &data);
 	virtual void commitTrade(Value tradeId) ;
-	virtual void setMarketConfig(PMarketConfig);
 
 
 	void syncPositions();

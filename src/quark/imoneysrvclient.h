@@ -80,8 +80,6 @@ public:
 
 
 
-	virtual void setMarketConfig(PMarketConfig) = 0;
-
 
 
 };
