@@ -20,6 +20,7 @@ public:
 struct OrderJsonData {
 
 	json::Value id;
+	json::Value user;
 	json::String dir;
 	json::String type;
 	std::size_t size;
@@ -51,6 +52,8 @@ public:
 		orderbook,
 		///Order is located in the stop queue
 		stopQueue,
+		///Order is oco and it is located in both queues
+		oco,
 	};
 
 	typedef json::Value Value;
@@ -99,6 +102,13 @@ public:
 		return state;
 	}
 
+	Value getUser() const {
+		return user;
+	}
+
+	bool isTrailing() const {
+		return trailingDistance != 0;
+	}
 
 	POrder changeState(State newState) const;
 	POrder changeType(OrderType::Type newType) const;
@@ -109,9 +119,11 @@ public:
 	bool isSimpleUpdate(const Order &other) const;
 	POrder doSimpleUpdate(const Order &other) const;
 	POrder updateTrailing(std::size_t newPrice) const;
+	std::intptr_t calcTrailingMove(std::size_t refPrice, std::size_t newPrice) const;
 protected:
 
 	Value id;
+	Value user;
 	std::size_t size;
 	std::size_t budget; //total buy/sell budget - applied only on unlimited market and stop trades
 	std::size_t limitPrice;

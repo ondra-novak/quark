@@ -105,10 +105,19 @@ void CurrentState::rebuildQueues() {
 		case Order::marketQueue:
 			market.insert(o.second);
 			break;
+		case Order::oco:
+			if (o.second->getDir() == OrderDir::buy) {
+				orderbook_bid.insert(o.second);
+				stop_above.insert(o.second);
+			} else {
+				orderbook_ask.insert(o.second);
+				stop_below.insert(o.second);
+			}
+			break;
+
 		}
 
-		OrderType::Type t = o.second->getType();
-		if (t == OrderType::trailingLimit || t == OrderType::trailingStop || t == OrderType::trailingStopLimit) {
+		if (o.second->isTrailing()) {
 			trailings.push_back(o.first);
 		}
 
@@ -339,13 +348,21 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 		POrder o = curQueue.top();
 
 		OrderQueue &orderbook = order->getDir() == OrderDir::buy?orderbook_ask:orderbook_bid;
+		OrderQueue &insorderbook = order->getDir() == OrderDir::buy?orderbook_bid:orderbook_ask;
 		OrderQueue &stopQueue = order->getDir() == OrderDir::buy?stop_above:stop_below;
 		curQueue.pop();
 		switch (o->getType()) {
+		case OrderType::oco_limitstop:
+			if (!pairInQueue(orderbook, o, out)) {
+				POrder newOrder = updateOrder(o->changeState(Order::oco));
+				insorderbook.insert(newOrder);
+				stopQueue.insert(newOrder);
+			}
+			break;
 		case OrderType::limit:
 			if (!pairInQueue(orderbook, o, out)) {
 				POrder newOrder = updateOrder(o->changeState(Order::orderbook));
-				getQueueByState(newOrder).insert(newOrder);
+				insorderbook.insert(newOrder);
 			}
 			break;
 		case OrderType::maker:
@@ -354,7 +371,7 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 				out(TradeResultOrderCancel(o,OrderErrorException::orderPostLimitConflict));
 			} else {
 				POrder newOrder = updateOrder(o->changeState(Order::orderbook));
-				getQueueByState(newOrder).insert(newOrder);
+				insorderbook.insert(newOrder);
 			}
 			break;
 		case OrderType::stop:
@@ -394,7 +411,7 @@ bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order) {
 }
 
 
-bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output out) {
+bool CurrentState::pairInQueue(OrderQueue &queue,  POrder &order, Output out) {
 	if (queue.empty()) return false;
 	auto b = queue.begin();
 	if (order->getType() == OrderType::market || queue.inOrder(*b, order) || (*b)->getLimitPrice() == order->getLimitPrice()) {
@@ -445,6 +462,7 @@ bool CurrentState::pairInQueue(OrderQueue &queue, const POrder &order, Output ou
 		runTriggers(stop_above,curPrice, std::greater<std::size_t>(),out);
 		runTriggers(stop_below,curPrice, std::less<std::size_t>(),out);
 
+		order = newTaker;
 
 		return true;
 	} else {
@@ -467,6 +485,7 @@ void CurrentState::runTriggers(OrderQueue& queue, std::size_t price, Cmp cmp, Ou
 
 			POrder f = *b;
 			switch (f->getType()) {
+			case OrderType::oco_limitstop:
 			case OrderType::stop:
 				newOrder = f->changeType(OrderType::market);
 				updateOrder(newOrder->getId(), newOrder);

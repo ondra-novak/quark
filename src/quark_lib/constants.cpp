@@ -29,9 +29,8 @@ json::NamedEnum<Type> str(
 		ENUMDEF(stoplimit),
 		ENUMDEF(fok),
 		ENUMDEF(ioc),
-		ENUMDEF(trailingStop),
-		ENUMDEF(trailingLimit),
-		ENUMDEF(trailingStopLimit)}
+		ENUMDEF(oco_limitstop)
+		}
 );
 }
 

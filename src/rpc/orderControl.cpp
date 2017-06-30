@@ -65,8 +65,7 @@ json::Value OrderControl::create(json::Value reqOrder) {
 				|| *t == OrderType::maker
 				|| *t == OrderType::ioc
 				|| *t == OrderType::fok
-				|| *t == OrderType::trailingLimit
-				|| *t == OrderType::trailingStopLimit) {
+				|| *t == OrderType::oco_limitstop) {
 				return validationError(OrderFields::limitPrice, "Must be defined");
 		}
 	}
@@ -81,23 +80,17 @@ json::Value OrderControl::create(json::Value reqOrder) {
 	} else {
 		if (
 				*t == OrderType::stop || *t == OrderType::stoplimit
-				|| *t == OrderType::trailingStop || *t == OrderType::trailingStopLimit) {
+				|| *t == OrderType::oco_limitstop) {
 				return validationError(OrderFields::stopPrice, "Must be defined");
 		}
 	}
 
-		x = reqOrder[OrderFields::trailingDistance];
+	x = reqOrder[OrderFields::trailingDistance];
 	if (x.defined() )
 	{
 		if ( x.getNumber() <= 0)
 				return validationError(OrderFields::trailingDistance,"Must not be negative or zeroed");
 
-	} else {
-			if (*t == OrderType::trailingStop || *t == OrderType::trailingStopLimit
-					|| *t == OrderType::trailingLimit) {
-				return validationError(OrderFields::trailingDistance,
-						"Must be defined");
-		}
 	}
 
 	x = reqOrder[OrderFields::user];

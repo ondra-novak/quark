@@ -84,7 +84,7 @@ public:
 
 
 	static bool willOrderPair(OrderQueue &queue, const POrder &order);
-	bool pairInQueue(OrderQueue &queue, const POrder &order, Output out);
+	bool pairInQueue(OrderQueue &queue,  POrder &order, Output out);
 
 	template<typename Cmp>
 	void runTriggers(OrderQueue &queue, std::size_t price, Cmp cmp, Output out);

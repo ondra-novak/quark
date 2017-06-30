@@ -59,26 +59,18 @@ Order::Order(const OrderJsonData &data) {
 			|| type == OrderType::fok
 			|| type == OrderType::ioc
 			|| type == OrderType::maker
-			|| type == OrderType::trailingLimit
-			|| type == OrderType::trailingStopLimit
+			|| type == OrderType::oco_limitstop
 		)) {
 		throw OrderErrorException(id, OrderErrorException::invalidOrMissingLimitPrice, "Invalid or missing 'limitPrice'");
 	}
 
 	if (triggerPrice == 0 && (type == OrderType::stop
 			|| type == OrderType::stoplimit
-			|| type == OrderType::trailingStopLimit
-			|| type == OrderType::trailingStop
+			|| type == OrderType::oco_limitstop
 		)) {
 		throw OrderErrorException(id, OrderErrorException::invalidOrMissingStopPrice, "Invalid or missing 'stopPrice'");
 	}
 
-	if (trailingDistance == 0 && (type == OrderType::trailingLimit
-			|| type == OrderType::trailingStop
-			|| type == OrderType::trailingStopLimit))
-	{
-			throw OrderErrorException(id, OrderErrorException::invalidOrMissingTrailingDistance, "Invalid or missing 'trailingDistance'");
-	}
 
 
 	domPriority = data.domPriority;
@@ -151,56 +143,50 @@ std::size_t Order::getSizeAtPrice(std::size_t price) const {
 	return std::min(maxsize,size);
 }
 
-POrder Order::updateTrailing(std::size_t newPrice) const {
-	switch (type) {
-	case OrderType::trailingStop:
-	case OrderType::trailingStopLimit:
-		if (dir == OrderDir::buy)
-			if (newPrice + trailingDistance < triggerPrice) {
-				Order *x = new Order(*this);
-				x->triggerPrice = newPrice + trailingDistance;
-				std::size_t diff = triggerPrice-x->triggerPrice;
-				if (diff > x->limitPrice) x->limitPrice = 0;
-				else x->limitPrice -= diff;
-				return x;
-			} else {
-				return const_cast<Order *>(this);
-			}
-		else {
-			if (triggerPrice + trailingDistance < newPrice) {
-				Order *x = new Order(*this);
-				x->triggerPrice = newPrice - trailingDistance;
-				std::size_t diff = x->triggerPrice-triggerPrice;
-				x->limitPrice += diff;
-				return x;
-			} else {
-				return const_cast<Order *>(this);
-			}
+std::intptr_t Order::calcTrailingMove(std::size_t refPrice, std::size_t newPrice) const {
+	std::uintptr_t calcPos;
+	switch (dir) {
+	case OrderDir::buy:
+		calcPos = newPrice+trailingDistance;
+		if (calcPos < refPrice) {
+			return calcPos - refPrice;
 		}
 		break;
-	case OrderType::trailingLimit:
-		if (dir == OrderDir::sell)
-			if (newPrice + trailingDistance < limitPrice) {
-				Order *x = new Order(*this);
-				x->limitPrice = newPrice + trailingDistance;
-				return x;
-			} else {
-				return const_cast<Order *>(this);
-			}
-		else {
-			if (limitPrice + trailingDistance < newPrice) {
-				Order *x = new Order(*this);
-				x->limitPrice = newPrice - trailingDistance;
-				return x;
-			} else {
-				return const_cast<Order *>(this);
-			}
+	case OrderDir::sell:
+		if (trailingDistance > newPrice+1) calcPos = 1;
+		else calcPos = newPrice-trailingDistance;
+		if (calcPos > refPrice) {
+			return calcPos - refPrice;
 		}
-		break;
-	default:
 		break;
 	}
-	return const_cast<Order *>(this);
+	return 0;
+}
+
+POrder Order::updateTrailing(std::size_t newPrice) const {
+	POrder newOrder;
+	std::intptr_t diff;
+	switch (type) {
+	case OrderType::stop:
+	case OrderType::oco_limitstop:
+		newOrder = new Order(*this);
+		newOrder->triggerPrice += calcTrailingMove(triggerPrice, newPrice);
+		break;
+	case OrderType::stoplimit:
+		newOrder = new Order(*this);
+		diff = calcTrailingMove(triggerPrice, newPrice);
+		newOrder->triggerPrice+= diff;
+		newOrder->limitPrice+=diff;
+	case OrderType::limit:
+		newOrder = new Order(*this);
+		diff = calcTrailingMove(triggerPrice, newPrice);
+		newOrder->limitPrice+=diff;
+		break;
+	default:
+		newOrder = const_cast<Order *>(this);
+	};
+	return newOrder;
+
 }
 
 } /* namespace quark */

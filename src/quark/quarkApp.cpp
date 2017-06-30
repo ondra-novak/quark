@@ -363,8 +363,6 @@ void QuarkApp::exitApp() {
 	dispatcher.push(nullptr);
 }
 
-View budget("_design/users/_view/budget",View::groupLevel|View::update|View::reduce);
-
 
 void QuarkApp::runTransaction(const TxItem& txitm) {
 	transactionCounter++;

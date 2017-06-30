@@ -27,9 +27,7 @@ enum Type {
 	stoplimit,
 	fok,
 	ioc,
-	trailingStop,
-	trailingStopLimit,
-	trailingLimit
+	oco_limitstop
 };
 
 extern json::NamedEnum<Type> str;
