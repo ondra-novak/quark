@@ -370,8 +370,9 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 				cancelOrder(o);
 				out(TradeResultOrderCancel(o,OrderErrorException::orderPostLimitConflict));
 			} else {
-				POrder newOrder = updateOrder(o->changeState(Order::orderbook));
+				POrder newOrder = updateOrder(o->changeState(Order::orderbook)->changeType(OrderType::limit));
 				insorderbook.insert(newOrder);
+				out(TradeResultOrderTrigger(newOrder));
 			}
 			break;
 		case OrderType::stop:

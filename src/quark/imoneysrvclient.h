@@ -53,6 +53,7 @@ public:
 		double assetChange;
 		double currencyChange;
 		double fee;
+		bool taker;
 	};
 
 	///Report trade executed
