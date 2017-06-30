@@ -143,9 +143,16 @@ std::size_t Order::getSizeAtPrice(std::size_t price) const {
 	return std::min(maxsize,size);
 }
 
-std::intptr_t Order::calcTrailingMove(std::size_t refPrice, std::size_t newPrice) const {
+std::intptr_t Order::calcTrailingMove(std::size_t refPrice, std::size_t newPrice, bool rev) const {
 	std::uintptr_t calcPos;
-	switch (dir) {
+	OrderDir::Type d = dir;
+	if (rev) {
+		switch (d) {
+		case OrderDir::buy: d = OrderDir::sell;break;
+		case OrderDir::sell: d = OrderDir::buy;break;
+		}
+	}
+	switch (d) {
 	case OrderDir::buy:
 		calcPos = newPrice+trailingDistance;
 		if (calcPos < refPrice) {
@@ -170,16 +177,16 @@ POrder Order::updateTrailing(std::size_t newPrice) const {
 	case OrderType::stop:
 	case OrderType::oco_limitstop:
 		newOrder = new Order(*this);
-		newOrder->triggerPrice += calcTrailingMove(triggerPrice, newPrice);
+		newOrder->triggerPrice += calcTrailingMove(triggerPrice, newPrice, false);
 		break;
 	case OrderType::stoplimit:
 		newOrder = new Order(*this);
-		diff = calcTrailingMove(triggerPrice, newPrice);
+		diff = calcTrailingMove(triggerPrice, newPrice, false);
 		newOrder->triggerPrice+= diff;
 		newOrder->limitPrice+=diff;
 	case OrderType::limit:
 		newOrder = new Order(*this);
-		diff = calcTrailingMove(triggerPrice, newPrice);
+		diff = calcTrailingMove(triggerPrice, newPrice, true);
 		newOrder->limitPrice+=diff;
 		break;
 	default:

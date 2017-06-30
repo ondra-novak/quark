@@ -119,7 +119,7 @@ public:
 	bool isSimpleUpdate(const Order &other) const;
 	POrder doSimpleUpdate(const Order &other) const;
 	POrder updateTrailing(std::size_t newPrice) const;
-	std::intptr_t calcTrailingMove(std::size_t refPrice, std::size_t newPrice) const;
+	std::intptr_t calcTrailingMove(std::size_t refPrice, std::size_t newPrice, bool rev) const;
 protected:
 
 	Value id;
