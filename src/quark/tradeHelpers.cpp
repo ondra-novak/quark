@@ -102,12 +102,7 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 		IMoneySrvClient::TradeData td;
 		IMoneySrvClient::BalanceChange bch;
 		extractTrade(v.doc, td);
-		Value clt = moneySrvClient->reportTrade(lastTradeId, td);
-		if (clt != td.id) {
-			//We can lost connection during synchronization
-			//in this case, we need to repeat synchronization
-			return resync(ordersDB, tradeDB, moneySrvClient, clt, toTrade,mcfg);
-		}
+		moneySrvClient->reportTrade(lastTradeId, td);
 		extractBalanceChange(ordersDB.get(v.doc["buyOrder"].getString()),v.doc,bch,OrderDir::buy,mcfg);
 		moneySrvClient->reportBalanceChange(bch);
 		extractBalanceChange(ordersDB.get(v.doc["sellOrder"].getString()),v.doc,bch,OrderDir::sell,mcfg);
@@ -125,3 +120,15 @@ Value fetchLastTrade(CouchDB& tradeDB) {
 }
 }
 
+quark::MoneySvcSupport::MoneySvcSupport(PCouchDB orderDB, PCouchDB tradeDB,PMarketConfig mcfg, Dispatcher dispatcher)
+	:orderDB(orderDB),tradeDB(tradeDB),mcfg(mcfg),dispatcher(dispatcher)
+{
+}
+
+void quark::MoneySvcSupport::resync(PMoneySrvClient target, const Value fromTrade, const Value toTrade) {
+	quark::resync(*orderDB, *tradeDB, target, fromTrade, toTrade, *mcfg);
+}
+
+void quark::MoneySvcSupport::dispatch(Action fn) {
+	dispatcher(fn);
+}

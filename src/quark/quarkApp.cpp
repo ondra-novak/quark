@@ -21,6 +21,7 @@
 #include "logfile.h"
 #include "marginTradingSvc.h"
 #include "mockupmoneyserver.h"
+#include "moneyServerClient.h"
 #include "orderRangeError.h"
 #include "tradeHelpers.h"
 #include "views.h"
@@ -774,6 +775,11 @@ void QuarkApp::initMoneyService() {
 				,maxBudget["marginLong"].getNumber(),maxBudget["marginShort"].getNumber(), 0 ,0);
 		std::size_t latency =jlatency.getUInt();
 		sv = new MockupMoneyService(b,latency);
+	} else if (type == "singleJsonRPCServer"){
+		Value addr = cfg["addr"];
+		sv = new MoneyServerClient(
+				new MoneySvcSupport(ordersDb, tradesDb,marketCfg,
+						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature);
 	} else {
 		throw std::runtime_error("Unsupported money service");
 	}
@@ -840,15 +846,15 @@ void QuarkApp::start(couchit::Config cfg, String signature)
 
 	});
 
-	ordersDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
+	ordersDb = std::make_shared<CouchDB>(cfg);
 	initOrdersDB(*ordersDb);
 
 	cfg.databaseName = dbprefix + "-trades";
-	tradesDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
+	tradesDb = std::make_shared<CouchDB>(cfg);
 	initTradesDB(*tradesDb);
 
 	cfg.databaseName = dbprefix + "-positions";
-	positionsDb = std::unique_ptr<CouchDB>(new CouchDB(cfg));
+	positionsDb = std::make_shared<CouchDB>(cfg);
 	initPositionsDB(*positionsDb);
 
 /*	this->moneySrvClient = new MarginTradingSvc(*positionsDb,moneyService);

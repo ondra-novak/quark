@@ -64,9 +64,8 @@ bool MarginTradingSvc::allocBudget(json::Value user, OrderBudget budget, Callbac
 	return target->allocBudget(user,budget,callback);
 }
 
-Value MarginTradingSvc::reportTrade(Value prevTrade, const TradeData &data) {
-	Value tpt =target->reportTrade(prevTrade, data);
-	if (tpt != data.id) return tpt;
+void MarginTradingSvc::reportTrade(Value prevTrade, const TradeData &data) {
+	target->reportTrade(prevTrade, data);
 
 	lastPrice = data.price;
 }
@@ -77,7 +76,7 @@ static double sign(double v) {
 }
 
 
-bool MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
+void MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
 	target->reportBalanceChange(data);
 	if (data.context == OrderContext::margin) {
 		String docUserId  = user2docid(data.user);
@@ -94,7 +93,6 @@ bool MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
 		doc.enableTimestamp();
 		wrtx.update(doc);
 	}
-	return true;
 }
 
 void MarginTradingSvc::syncPositions() {

@@ -123,8 +123,8 @@ class ErrorMoneyService: public IMoneySrvClient {
 public:
 	virtual void adjustBudget(json::Value user, OrderBudget &total) override {}
 	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) override;
-	virtual Value reportTrade(Value , const TradeData &d) override {return d.id;}
-	virtual bool reportBalanceChange(const BalanceChange &)  override {return true;}
+	virtual void reportTrade(Value , const TradeData &d) override {}
+	virtual void reportBalanceChange(const BalanceChange &)  override {}
 	virtual void commitTrade(Value tradeId) {}
 	virtual void setMarketConfig(PMarketConfig) {}
 };

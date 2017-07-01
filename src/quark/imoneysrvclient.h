@@ -58,12 +58,10 @@ public:
 
 	///Report trade executed
 	/**
-	 * @param prevTrade ID of previous trade. If it doesn't match, function reports nothing and sends known last trade
+	 * @param prevTrade ID of previous trade. If it doesn't match, function must perform resync or report an error
 	 * @param data trade data
-	 * @return if trade is reported, function returns id. If not, function retuns last known trade. Function
-	 * can return null to start reporting from the beginning
 	 */
-	virtual Value reportTrade(Value prevTrade, const TradeData &data) = 0;
+	virtual void reportTrade(Value prevTrade, const TradeData &data) = 0;
 	///Reports balance change for the user
 	/**
 	 * @param trade ID of trade as reference
@@ -75,7 +73,7 @@ public:
 	 * @retval true reported
 	 * @retval false referenced trade was not last trade, please start over
 	 */
-	virtual bool reportBalanceChange(const BalanceChange &data) = 0;
+	virtual void reportBalanceChange(const BalanceChange &data) = 0;
 
 	virtual void commitTrade(Value tradeId) = 0;
 
@@ -85,6 +83,34 @@ public:
 
 };
 
+
+
+
 typedef RefCntPtr<IMoneySrvClient> PMoneySrvClient;
+
+///Support interface for moneyserver clients
+/**
+ * Contains various function need by moneyserver clients
+ */
+class IMoneySvcSupport : public RefCntObj {
+public:
+	///Perform resync trades for the target from given trade to given trade
+	/**
+	 * @param target target money server
+	 * @param fromTrade from tradeId
+	 * @param toTrade to tradeId
+	 */
+	virtual void resync(PMoneySrvClient target, const Value fromTrade, const Value toTrade) = 0;
+	///Dispatch function to internal dispatcher
+	/**
+	 * Send function through the dispatcher. It should run in different thread or in the
+	 * same thread but after this code is finished
+	 * @param fn function to run
+	 */
+	virtual void dispatch(std::function<void()> fn) = 0;
+};
+
+typedef RefCntPtr<IMoneySvcSupport> PMoneySvcSupport;
+
 
 }

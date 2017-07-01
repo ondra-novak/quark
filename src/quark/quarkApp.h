@@ -20,6 +20,7 @@
 
 #include "marketConfig.h"
 #include "moneyService.h"
+#include "tradeHelpers.h"
 
 namespace quark {
 
@@ -46,9 +47,9 @@ protected:
 	void mainloop();
 
 	String signature;
-	std::unique_ptr<CouchDB> ordersDb;
-	std::unique_ptr<CouchDB> tradesDb;
-	std::unique_ptr<CouchDB> positionsDb;
+	PCouchDB ordersDb;
+	PCouchDB tradesDb;
+	PCouchDB positionsDb;
 	PMoneyService moneyService;
 	PMoneySrvClient moneySrvClient;
 
@@ -71,6 +72,7 @@ protected:
 		bool lock(Value id, const Value &doc);
 		Value unlock(Value id);
 	};
+
 	PendingOrders pendingOrders;
 
 //	void createOrder(Document order);
@@ -107,7 +109,6 @@ private:
 
 	void syncWithDb();
 
-	typedef std::function<void()> Action;
 
 
 	Action exitFn;
@@ -139,6 +140,7 @@ private:
 	void runOrder2(Document doc, bool update);
 	void processPendingOrders(Value user);
 	void freeBudget(const Document& order);
+
 };
 
 typedef RefCntPtr<QuarkApp> PQuarkApp;

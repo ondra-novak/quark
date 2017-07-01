@@ -68,17 +68,16 @@ bool MockupMoneyService::allocBudget(json::Value user, const OrderBudget& b) {
 }
 
 
-Value MockupMoneyService::reportTrade(Value prevTrade, const TradeData &data) {
+void MockupMoneyService::reportTrade(Value prevTrade, const TradeData &data) {
 
 	logInfo({"MoneyServer-Trade",data.id,data.price,data.size,OrderDir::str[data.dir],data.timestamp});
-	return data.id;
 
 }
 
-bool MockupMoneyService::reportBalanceChange(const BalanceChange &data) {
+void MockupMoneyService::reportBalanceChange(const BalanceChange &data) {
 
 	logInfo({"MoneyServer-BalChange", data.trade, data.user, OrderContext::str[data.context], data.assetChange, data.currencyChange, data.fee});
-	return true;
+
 }
 
 }
