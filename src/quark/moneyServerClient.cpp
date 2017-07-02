@@ -27,8 +27,42 @@ void MoneyServerClient::adjustBudget(json::Value , OrderBudget& ) {
 
 }
 
+class MoneyServerClient::BudgetAllocCallback: public RefCntObj {
+public:
+	BudgetAllocCallback(const IMoneySrvClient::Callback &cb, MoneyServerClient *owner):cb(cb),owner(owner) {}
+	BudgetAllocCallback(const BudgetAllocCallback &other)=delete;
+	BudgetAllocCallback(BudgetAllocCallback &&other):cb(std::move(other.cb)),owner(std::move(other.owner)) {}
+	~BudgetAllocCallback() {
+		if (cb != nullptr)
+			cb(IMoneySrvClient::allocTryAgain);
+	}
+	void operator()(MoneyServerClient::Response resp) {
+		Callback c = cb;
+		cb = nullptr;
+		if (!resp.error.isNull()) {
+			c(IMoneySrvClient::allocError);
+			owner->handleError(resp);
+		} else {
+			c(resp.result.getBool()?allocOk:allocReject);
+		}
+	}
+
+	static ResponseCb getAsCallback(const IMoneySrvClient::Callback &cb, RefCntPtr<MoneyServerClient> owner) {
+		RefCntPtr<BudgetAllocCallback>  cptr = new BudgetAllocCallback(cb,owner);
+		return [cptr](Response resp) {
+			cptr->operator ()(resp);
+		};
+	}
+
+protected:
+	MoneyServerClient *owner;
+	Callback cb;
+};
+
 bool MoneyServerClient::allocBudget(json::Value user, OrderBudget total, Callback callback) {
 
+
+	ResponseCb fnCb = BudgetAllocCallback::getAsCallback(callback, this);
 	sendRequest("allocBudget",
 			{user,Object("asset", total.asset)
 						("currency", total.currency)
@@ -36,13 +70,7 @@ bool MoneyServerClient::allocBudget(json::Value user, OrderBudget total, Callbac
 						("marginShort", total.marginShort)
 						("posLong", total.posLong)
 						("posShort", total.posShort)
-			}, [=](Response resp) {
-				if (resp.error.defined()) {
-					handleError(resp);
-				}else {
-					callback(resp.result.getBool());
-				}
-			},true);
+			},fnCb,true);
 
 	return false;
 
@@ -60,7 +88,7 @@ void MoneyServerClient::reportTrade(Value prevTrade, const TradeData& data) {
 							  ("size",data.size)
 							  ("timestamp",(std::size_t)data.timestamp)
 		, [=](Response resp) {
-			if (resp.error.defined()) handleError(resp);
+			if (!resp.error.isNull()) handleError(resp);
 
 	}, false);
 	//store trade id
@@ -89,7 +117,9 @@ void MoneyServerClient::stopWorker() {
 		Sync _(connlock);
 		if (cancelFn) cancelFn();
 	}
-	worker.join();
+	if (worker.joinable())
+		worker.join();
+
 }
 
 void MoneyServerClient::disconnect() {
@@ -130,23 +160,45 @@ void MoneyServerClient::login() {
 	}
 }
 
-bool MoneyServerClient::connect() {
+bool MoneyServerClient::connect(int trynum) {
 
-	RefCntPtr<MoneyServerClient> me(this);
-	if (curConn == nullptr) {
-		PNetworkConection c = NetworkConnection::connect(addr, 1024);
-		if (c == nullptr) {
-			int err;
-			logError({"Failed to connect moneyserver", addr, errno});
-			return false;
+	if (trynum == 0 && !pendingConnect.try_lock()) return false;
+	try {
+		if (curConn == nullptr) {
+			PNetworkConection c = NetworkConnection::connect(addr, 1024);
+			if (c == nullptr) {
+				int err;
+				logError({"Failed to connect moneyserver", addr, err});
+				if (trynum >= 10) {
+					throw std::runtime_error(String({"Failed to connect moneyserver after 10 tries: ", Value(addr).getString()," - errno: ", Value(err).getString()}).c_str());
+				}
+				RefCntPtr<MoneyServerClient> me(this);
+				std::thread thr([me,trynum] {
+					std::this_thread::sleep_for(std::chrono::seconds(1));
+					me->support->dispatch([me,trynum]{
+						if (me->isShared()) {
+							me->connect(trynum+1);
+						} else {
+							me->pendingConnect.unlock();
+						}
+					});
+				});
+				thr.detach();
+				return false;
+			}
+
+			needLogin = true;
+			curConn = c;
+			worker = std::thread([=]{workerProc(c);});
+			login();
+			pendingConnect.unlock();
+
 		}
-
-		needLogin = true;
-		curConn = c;
-		worker = std::thread([=]{workerProc(c);});
-		login();
+		return true;
+	} catch (...) {
+		pendingConnect.unlock();
+		throw;
 	}
-	return true;
 }
 
 Value MoneyServerClient::registerRequestLk(String method,Value args, ResponseCb callback, bool canRepeat) {

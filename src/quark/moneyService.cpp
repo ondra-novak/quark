@@ -21,8 +21,8 @@ bool MoneyService::allocBudget(json::Value user,
 	client->adjustBudget(user,badv.first);
 	client->adjustBudget(user,badv.second);
 	if (badv.second.above(badv.first)) {
-		if (!client->allocBudget(user,badv.second,[=](bool b){
-			if (b) me->updateBudget(user,order,budget);
+		if (!client->allocBudget(user,badv.second,[=](IMoneySrvClient::AllocResult b){
+			if (b == IMoneySrvClient::allocOk) me->updateBudget(user,order,budget);
 			if (callback) callback(b);
 			})) return false;
 	} else if (badv.second != badv.first) {
@@ -60,7 +60,7 @@ void MoneyService::updateBudget(json::Value user, json::Value order, const Order
 }
 
 bool ErrorMoneyService::allocBudget(json::Value user, OrderBudget total, Callback callback) {
-	std::thread thr([=] {callback(false);});
+	std::thread thr([=] {callback(IMoneySrvClient::allocReject);});
 	thr.detach();
 	return false;
 }

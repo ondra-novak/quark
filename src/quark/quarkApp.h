@@ -136,8 +136,8 @@ private:
 
 
 
-	bool runOrder(const Document &doc, bool update);
-	void runOrder2(Document doc, bool update);
+	bool runOrder(Document order, bool update);
+	void runOrder2(Document order, bool update);
 	void processPendingOrders(Value user);
 	void freeBudget(const Document& order);
 

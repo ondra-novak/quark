@@ -98,7 +98,6 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 	//sends reports to money server(s)
 	for (Row v : r) {
 		if (v.id == fromTrade) continue;
-		if (v.id == toTrade) break;
 		IMoneySrvClient::TradeData td;
 		IMoneySrvClient::BalanceChange bch;
 		extractTrade(v.doc, td);
@@ -108,6 +107,7 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 		extractBalanceChange(ordersDB.get(v.doc["sellOrder"].getString()),v.doc,bch,OrderDir::sell,mcfg);
 		moneySrvClient->reportBalanceChange(bch);
 		moneySrvClient->commitTrade(td.id);
+		if (v.id == toTrade) break;
 		lastTradeId = td.id;
 	}
 }

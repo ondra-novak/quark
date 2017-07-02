@@ -42,7 +42,7 @@ void QuarkApp::processPendingOrders(Value user) {
 	}
 }
 
-bool QuarkApp::runOrder(const Document &order, bool update) {
+bool QuarkApp::runOrder(Document order, bool update) {
 
 	try {
 		PQuarkApp me(this);
@@ -53,18 +53,27 @@ bool QuarkApp::runOrder(const Document &order, bool update) {
 
 		LOGDEBUG3("Budget calculated for the order", order.getIDValue(), b.toJson());
 
-		if (!moneyService->allocBudget(order[OrderFields::user], order.getIDValue(), b, [me,order,update,user](bool response) {
+		if (!moneyService->allocBudget(order[OrderFields::user], order.getIDValue(), b,
+							[me,order,update,user](IMoneySrvClient::AllocResult response) {
 				QuarkApp *mptr = me;
 				me->dispatcher.push([mptr,response,order,update,user]{
 					//in positive response
-					if (response) {
-						//go to stage 2
+					switch (response) {
+					case IMoneySrvClient::allocOk:
 						mptr->runOrder2(order, update);
-					} else {
-						//in negative response
-						//reject the order
+						break;
+					case IMoneySrvClient::allocReject:
 						mptr->rejectOrderBudget(order, update);
+						break;
+					case IMoneySrvClient::allocError:
+						mptr->rejectOrder(order,OrderErrorException(order.getIDValue(),
+								OrderErrorException::internalError,
+								"Failed to allocate budget (money server error)"),update);
+						break;
+					case IMoneySrvClient::allocTryAgain:
+						mptr->runOrder(order,update);
 					}
+
 
 					mptr->processPendingOrders(user);
 				});
@@ -874,6 +883,7 @@ void QuarkApp::start(couchit::Config cfg, String signature)
 		Action a = dispatcher.pop();
 		while (a != nullptr) {
 			a();
+			a = nullptr;
 			a = dispatcher.pop();
 		}
 		exitFn();

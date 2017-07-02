@@ -52,7 +52,7 @@ void MockupMoneyService::worker() {
 			cpyq.pop();
 
 			bool res = allocBudget(itm.user,itm.budget);
-			if (itm.callBack) itm.callBack(res);
+			if (itm.callBack) itm.callBack(res?allocOk:allocReject);
 		}
 	}
 }

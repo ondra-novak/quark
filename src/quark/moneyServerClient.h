@@ -88,13 +88,14 @@ protected:
 	Value lastTrade;
 	Value lastStoredTrade;
 	std::size_t idcounter;
+	std::mutex pendingConnect;
 
 
 
 protected:
 
 	void stopWorker();
-	bool connect();
+	bool connect(int trynum = 0);
 	void disconnect();
 	Value registerRequestLk(String method, Value args, ResponseCb callback, bool canRepeat);
 	void sendRequestLk(const Value &rq);
@@ -106,6 +107,7 @@ protected:
 	PNetworkConection getConnection();
 	void login();
 
+	class BudgetAllocCallback;
 };
 
 } /* namespace quark */

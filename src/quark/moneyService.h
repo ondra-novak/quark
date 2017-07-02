@@ -39,7 +39,8 @@ public:
 
 	MoneyService(PMoneySrvClient client, PMarketConfig mcfg):client(client),mcfg(mcfg) {}
 
-	typedef std::function<void(bool)> Callback;
+
+	typedef IMoneySrvClient::Callback Callback;
 
 	///Allocate user's budget
 	/**

@@ -17,7 +17,15 @@ class IMoneySrvClient:public json::RefCntObj  {
 public:
 	virtual ~IMoneySrvClient() {}
 
-	typedef std::function<void(bool)> Callback;
+	enum AllocResult {
+		allocOk,
+		allocReject,
+		allocError,
+		allocTryAgain
+	};
+
+
+	typedef std::function<void(AllocResult)> Callback;
 
 
 	///Adjusts budget - mostly used during margin trading
