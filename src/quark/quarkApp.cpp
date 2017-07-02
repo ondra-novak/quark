@@ -479,11 +479,20 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 				d.setBaseObject(r.doc);
 
 				d.optimize();
-				//calculate budget of final object
-				auto budget = calculateBudget(d);
 
-				//TODO check result of allocatio for some commands (trailing-limit)
-				moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),budget,nullptr);
+				//if order is still known for the core (so is still active)
+				if (coreState.isKnownOrder(r.key)) {
+					//calculate budget of final object
+					auto budget = calculateBudget(d);
+					//update order's current budget
+					//this can be perfomed without waiting, because order probably reduced its budget
+					moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),budget,nullptr);
+				} else {
+					//in case that order is no longe in matching
+					//remove order's budget from the money service
+					//in case that order will be requeued, it will ask for budget again later
+					moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),OrderBudget(),nullptr);
+				}
 
 				//put order for update
 				chset.update(d);
@@ -534,20 +543,26 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					const quark::TradeResultTrade &t = dynamic_cast<const quark::TradeResultTrade &>(r);
 					double price = marketCfg->pipToPrice(t.getPrice());
 					double amount = marketCfg->sizeToAmount(t.getSize());
+					std::size_t buyRemain;
+					std::size_t sellRemain;
 					Value dir = OrderDir::str[t.getDir()];
 					Document &buyOrder = o2u[t.getBuyOrder()->getId()];
 					Document &sellOrder = o2u[t.getSellOrder()->getId()];
-					if (t.isFullBuy())
-						buyOrder(OrderFields::finished,true)
-								(OrderFields::status,Status::strExecuted);
-					 else
-						buyOrder(OrderFields::size,marketCfg->sizeToAmount(t.getBuyOrder()->getSize()-t.getSize()));
+					buyOrder(OrderFields::size,marketCfg->sizeToAmount(buyRemain = t.getBuyOrder()->getSize()-t.getSize()));
+					sellOrder(OrderFields::size,marketCfg->sizeToAmount(sellRemain = t.getSellOrder()->getSize()-t.getSize()));
+					if (t.isFullBuy()) {
+						if (buyRemain == 0) {
+							buyOrder(OrderFields::finished,true)
+										(OrderFields::status,Status::strExecuted);
+						}
+					}
 
-					if (t.isFullSell())
-						sellOrder(OrderFields::finished,true)
-								(OrderFields::status,Status::strExecuted);
-					else
-						sellOrder(OrderFields::size,marketCfg->sizeToAmount(t.getSellOrder()->getSize()-t.getSize()));
+					if (t.isFullSell()) {
+						if (sellRemain == 0) {
+							sellOrder(OrderFields::finished,true)
+										(OrderFields::status,Status::strExecuted);
+						}
+					}
 					Document trade;
 
 					auto tradeId = createTradeId(t);
@@ -655,6 +670,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	odata.domPriority = order[OrderFields::domPriority].getInt();
 	odata.queuePriority = order[OrderFields::queuePriority].getInt();
 	odata.user = order[OrderFields::user];
+	odata.data = order.getRev();
 	po = new Order(odata);
 	return po;
 }
@@ -909,10 +925,12 @@ String QuarkApp::createTradeId(const TradeResultTrade &tr) {
 	//so we can use its ID to build unique trade ID
 
 	if (tr.isFullBuy()) {
-		return String({"t.",tr.getBuyOrder()->getId().getString().substr(2)});
+		StrViewA revId = tr.getBuyOrder()->getData().getString().split("-")();
+		return String({"t.",tr.getBuyOrder()->getId().getString().substr(2),"_",revId});
 	}
 	if (tr.isFullSell()) {
-		return String({"t.",tr.getSellOrder()->getId().getString().substr(2)});
+		StrViewA revId = tr.getSellOrder()->getData().getString().split("-")();
+		return String({"t.",tr.getSellOrder()->getId().getString().substr(2),"_",revId});
 	}
 	throw std::runtime_error("Reported partial matching for both orders, this should not happen");
 }

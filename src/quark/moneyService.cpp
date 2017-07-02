@@ -21,13 +21,23 @@ bool MoneyService::allocBudget(json::Value user,
 	client->adjustBudget(user,badv.first);
 	client->adjustBudget(user,badv.second);
 	if (badv.second.above(badv.first)) {
+		//call money service asynchronously
 		if (!client->allocBudget(user,badv.second,[=](IMoneySrvClient::AllocResult b){
-			if (b == IMoneySrvClient::allocOk) me->updateBudget(user,order,budget);
-			if (callback) callback(b);
-			})) return false;
+				if (b == IMoneySrvClient::allocOk) me->updateBudget(user,order,budget);
+				if (callback) callback(b);
+				}) && callback != nullptr)
+			return false;
+		else {
+			//in case that callback is null, caller doesn't expects a response,
+			//we must update local map now, because caller may generate new call sooner
+			//in situation when such blocking fails, overblock can happen, and order
+			//remains in the map rejecting other orders
+		}
 	} else if (badv.second != badv.first) {
+		//when budget is below previous, we can update budget without waiting
 		client->allocBudget(user, badv.second,nullptr);
 	}
+	//update local map
 	updateBudget(user, order, badv.second);
 	return true;
 }

@@ -157,13 +157,18 @@ POrder CurrentState::updateOrder(const OrderId &orderId, const POrder &newOrder)
 		EngineState::OrderUpdate &up = ch[orderId];
 		up.newOrder= newOrder;
 		up.oldOrder = ord;
-		ord = newOrder;
+		if (newOrder == nullptr)
+			orders.erase(orderId);
+		else
+			ord = newOrder;
 	} else {
 
 		EngineState::OrderUpdate &up = ch[orderId];
 		up.newOrder = newOrder;
-		POrder &ord = orders[orderId];
-		ord = newOrder;
+		if (newOrder == nullptr)
+			orders.erase(orderId);
+		else
+			orders[orderId] = newOrder;
 
 	}
 	return newOrder;
