@@ -27,9 +27,9 @@ public:
 	double maxBudget;
 
 	///maximum allowed spread in per cents, if spread is larger, market orders are paused
-	double maxSpreadPtc;
+	double maxSpreadPct;
 	///maximum slippage for stop commands in ptc
-	double maxSlippagePtc;
+	double maxSlippagePct;
 
 
 	std::size_t priceToPip(double price) const;

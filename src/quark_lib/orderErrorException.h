@@ -47,7 +47,8 @@ public:
 	static const int orderFOKFailed = 1101;
 	static const int orderIOCCanceled = 1102;
 	static const int emptyOrderbook = 1103;
-	static const int insufficientFunds = 1103;
+	static const int insufficientFunds = 1104;
+	static const int orderSelfTradingCanceled = 1105;
 	static const int internalError = 1500;
 
 

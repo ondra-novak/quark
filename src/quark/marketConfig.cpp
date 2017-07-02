@@ -38,9 +38,9 @@ MarketConfig::MarketConfig(json::Value v)
 ,maxBudget(mandatory(v,"maxBudget").getNumber())
 
 ///maximum allowed spread in per cents, if spread is larger, market orders are paused
-,maxSpreadPtc(mandatory(v,"maxSpreadPtc").getNumber())
+,maxSpreadPct(mandatory(v,"maxSpreadPct").getNumber())
 ///maximum allowed spread in per cents, if spread is larger, market orders are paused
-,maxSlippagePtc(mandatory(v,"maxSlippagePtc").getNumber())
+,maxSlippagePct(mandatory(v,"maxSlippagePct").getNumber())
 
 ,currencySign(mandatory(v,"currencySign"))
 ,assetSign(mandatory(v,"assetSign"))

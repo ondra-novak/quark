@@ -21,6 +21,7 @@ MoneyServerClient::MoneyServerClient(PMoneySvcSupport support, String addr, Stri
 
 MoneyServerClient::~MoneyServerClient() {
 	stopWorker();
+	logDebug({"Instance of MoneyServerClient release"});
 }
 
 void MoneyServerClient::adjustBudget(json::Value , OrderBudget& ) {
@@ -150,14 +151,14 @@ void MoneyServerClient::login() {
 		});
 	},false);
 
-	sendRequestLk(initreq);
+		me->sendRequestLk(initreq);
 
-	for (auto &&item: oldReq) {
-		if (item.second.canRepeat) {
-			Value r = registerRequestLk(item.second.method, item.second.args, item.second.callback, true);
-			sendRequestLk(r);
+		for (auto &&item: oldReq) {
+			if (item.second.canRepeat) {
+				Value r = me->registerRequestLk(item.second.method, item.second.args, item.second.callback, true);
+				me->sendRequestLk(r);
+			}
 		}
-	}
 }
 
 bool MoneyServerClient::connect(int trynum) {
@@ -188,10 +189,19 @@ bool MoneyServerClient::connect(int trynum) {
 			}
 
 			needLogin = true;
-			curConn = c;
-			worker = std::thread([=]{workerProc(c);});
-			login();
+			{
+				Sync _(connlock);
+				curConn = c;
+				lastTrade = nullptr;
+				cancelFn = curConn->createCancelFunction();
+				curConn->setCancelFunction(cancelFn);
+			}
+			if (worker.joinable()) worker.join();
 			pendingConnect.unlock();
+			login();
+			worker = std::thread([=]{
+				workerProc(c);
+			});
 
 		}
 		return true;
@@ -306,6 +316,9 @@ void MoneyServerClient::workerProc(PNetworkConection conn) {
 			Sync _(connlock);
 			curConn = nullptr;
 			cancelFn = nullptr;
+			support->dispatch([=]{
+				connect();
+			});
 			break;
 		}
 	}

@@ -46,6 +46,8 @@ public:
 	OrderQueue stop_above;
 
 	///market execution queue
+	/** It contains orders if queue is stopped.
+	 */
 	OrderQueue market;
 
 	///trailing orders updated everytime the price changes
@@ -60,6 +62,15 @@ public:
 
 	unsigned int maxHistory = 4;
 
+	///maximum spread in 0.01% (150 = 1.5%)
+	std::size_t maxSpread100Pct = 0;
+
+	///maximum spread in 0.01% (150 = 1.5%)
+	void setMaxSpread(std::size_t maxSpr) {
+		maxSpread100Pct = maxSpr;
+	}
+
+	bool checkMaxSpreadCond() const;
 
 
 	POrder updateOrder(const OrderId &orderId, const POrder &newOrder);
@@ -69,10 +80,9 @@ public:
 
 
 
+
 	void rebuildQueues();
-
 	void reset();
-
 	void matching(json::Value txid, const Transaction &tx, Output output);
 
 	OrderQueue &getQueueByState(const POrder &order);
@@ -83,8 +93,22 @@ public:
 	void matchNewOrder(POrder order, Output out);
 
 
-	static bool willOrderPair(OrderQueue &queue, const POrder &order);
-	bool pairInQueue(OrderQueue &queue,  POrder &order, Output out);
+	bool willOrderPair(OrderQueue &queue, const POrder &order, OrderQueue::iterator *outIter = nullptr);
+	static bool willOrderPairNoSpreadCheck(OrderQueue& queue, const POrder& order, OrderQueue::iterator *outIter = nullptr);
+	static bool willOrderPairNoSpreadCheck(OrderQueue& queue, const OrderQueue::iterator &b, const POrder& order, OrderQueue::iterator *outIter = nullptr);
+	///Core function - performs pairng the order agains to orderbook
+	/**
+	 *
+	 * @param queue orderbook (queue)
+	 * @param order order to pair
+	 * @param out output function (reports trades and order change)
+	 * @retval true pairing successful. Order has been spent, and it is no longer valid
+	 * 	(but after partial execution, new version of the order has been created and put to
+	 * 	market queue)
+	 * @retval false pairing was not executed, arguments are untocuhed
+	 *
+	 */
+	bool pairInQueue(OrderQueue &queue,  const POrder &order, Output out);
 
 	template<typename Cmp>
 	void runTriggers(OrderQueue &queue, std::size_t price, Cmp cmp, Output out);

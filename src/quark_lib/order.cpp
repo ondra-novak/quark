@@ -46,6 +46,8 @@ Order::Order(const OrderJsonData &data) {
 	type = OrderType::str[tp];
 
 	size = data.size;
+	this->data = data.data;
+	user = data.user;
 	limitPrice = data.limitPrice;
 	triggerPrice = data.stopPrice;
 	trailingDistance = data.trailingDistance;
@@ -122,7 +124,8 @@ bool quark::Order::isSimpleUpdate(const Order& other) const {
 	return id == other.id
 			&& limitPrice == other.limitPrice
 			&& type == other.type
-			&& dir == other.dir;
+			&& dir == other.dir
+			&& user == other.user;
 
 }
 
@@ -134,6 +137,8 @@ POrder Order::doSimpleUpdate(const Order& other) const {
 	x->domPriority = other.domPriority;
 	x->queuePriority = other.queuePriority;
 	x->budget = other.budget;
+	x->data = other.data;
+	x->trailingDistance = other.trailingDistance;
 	return x;
 }
 

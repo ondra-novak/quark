@@ -36,6 +36,7 @@ public:
 
 	void processOrder(Value cmd);
 	void receiveMarketConfig();
+	void applyMarketConfig(Value doc);
 
 	void start(couchit::Config cfg, String signature);
 

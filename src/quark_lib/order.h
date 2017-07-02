@@ -21,6 +21,7 @@ struct OrderJsonData {
 
 	json::Value id;
 	json::Value user;
+	json::Value data;
 	json::String dir;
 	json::String type;
 	std::size_t size;
@@ -120,10 +121,16 @@ public:
 	POrder doSimpleUpdate(const Order &other) const;
 	POrder updateTrailing(std::size_t newPrice) const;
 	std::intptr_t calcTrailingMove(std::size_t refPrice, std::size_t newPrice, bool rev) const;
+
+	const Value& getData() const {
+		return data;
+	}
+
 protected:
 
 	Value id;
 	Value user;
+	Value data;
 	std::size_t size;
 	std::size_t budget; //total buy/sell budget - applied only on unlimited market and stop trades
 	std::size_t limitPrice;

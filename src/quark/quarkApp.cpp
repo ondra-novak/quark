@@ -301,30 +301,6 @@ bool QuarkApp::updateOrder(Document order) {
 }
 
 
-/*Document QuarkApp::saveOrder(Document order, Object newItems) {
-
-		LOGDEBUG3("Save order state", order.getIDValue(), newItems);
-
-		newItems.setBaseObject(order);
-
-		try {
-			Value v(newItems);
-			logDebug(v);
-			Document d(v);
-			ordersDb->put(d);
-			return d;
-		} catch (UpdateException &e) {
-			if (e.getError(0).isConflict()) {
-				LOGDEBUG2("Save order conflict", order.getIDValue());
-				order = ordersDb->get(order.getID());
-				saveOrder(order,newItems);
-			}
-		}
-
-}
-
-*/
-
 OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
 	if (order[OrderFields::finished].getBool()) return OrderBudget();
@@ -332,7 +308,7 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 	OrderDir::Type dir = OrderDir::str[order[OrderFields::dir].getString()];
 	double size = marketCfg->adjustSize(order[OrderFields::size].getNumber());
 
-	double slippage = 1+ marketCfg->maxSlippagePtc/100.0;
+	double slippage = 1+ marketCfg->maxSlippagePct/100.0;
 	OrderContext::Type context = OrderContext::str[order[OrderFields::context].getString()];
 	if (dir == OrderDir::sell && context != OrderContext::margin) {
 		return OrderBudget(size,0);
@@ -559,7 +535,6 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					double price = marketCfg->pipToPrice(t.getPrice());
 					double amount = marketCfg->sizeToAmount(t.getSize());
 					Value dir = OrderDir::str[t.getDir()];
-					logInfo({"Trade",dir,price,amount});
 					Document &buyOrder = o2u[t.getBuyOrder()->getId()];
 					Document &sellOrder = o2u[t.getSellOrder()->getId()];
 					if (t.isFullBuy())
@@ -575,15 +550,17 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 						sellOrder(OrderFields::size,marketCfg->sizeToAmount(t.getSellOrder()->getSize()-t.getSize()));
 					Document trade;
 
+					auto tradeId = createTradeId(t);
+					logInfo({"Trade",dir,price,amount,tradeId});
 
-					trade("_id",createTradeId(t))
+					trade("_id",tradeId)
 						 ("price",price)
 						 ("buyOrder",t.getBuyOrder()->getId())
 						 ("sellOrder",t.getSellOrder()->getId())
 						 (OrderFields::size,amount)
 						 ("dir",dir)
 						 ("time",(std::size_t)now)
-						 ("index",tradeCounter++);
+						 ("index",++tradeCounter);
 					trade.optimize();
 					trades.push_back(trade);
 				}break;
@@ -677,6 +654,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 			order[OrderFields::trailingDistance].getNumber());
 	odata.domPriority = order[OrderFields::domPriority].getInt();
 	odata.queuePriority = order[OrderFields::queuePriority].getInt();
+	odata.user = order[OrderFields::user];
 	po = new Order(odata);
 	return po;
 }
@@ -727,8 +705,7 @@ void QuarkApp::mainloop() {
 			dispatcher.push([=]{
 				if (chdoc.id == marketConfigDocName) {
 					try {
-						marketCfg = new MarketConfig(chdoc.doc);
-						initMoneyService();
+						applyMarketConfig(chdoc.doc);
 						logInfo("Market configuration updated");
 
 					} catch (std::exception &e) {
@@ -801,12 +778,17 @@ void QuarkApp::initMoneyService() {
 	}
 }
 
+void QuarkApp::applyMarketConfig(Value doc) {
+	marketCfg = new MarketConfig(doc);
+	initMoneyService();
+	coreState.setMaxSpread(std::size_t(floor(marketCfg->maxSpreadPct*100)));
+}
+
 
 void QuarkApp::receiveMarketConfig() {
 	Value doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
 	if (doc != nullptr) {
-		marketCfg = new MarketConfig(doc);
-		initMoneyService();
+		applyMarketConfig(doc);
 	} else {
 		throw std::runtime_error("No money service available");
 	}

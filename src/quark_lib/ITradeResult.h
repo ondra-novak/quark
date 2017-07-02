@@ -32,6 +32,16 @@ protected:
 
 class TradeResultTrade: public AbstractTradeResult {
 public:
+
+	/**
+	 * @param buyOrder buy order (original, not updated)
+	 * @param sellOrder sell order (original, not updated)
+	 * @param fullBuy true if order has been fully executed
+	 * @param fullSell true if order has been fully executed
+	 * @param size size of the trade
+	 * @param price price of the trade
+	 * @param dir action of the taker (buy = taker is buy, sell = taker is sell)
+	 */
 	TradeResultTrade(
 				POrder buyOrder,
 				POrder sellOrder,
@@ -39,7 +49,8 @@ public:
 				bool fullSell,
 				std::size_t size,
 				std::size_t price,
-				OrderDir::Type dir):AbstractTradeResult(trTrade)
+				OrderDir::Type dir
+				):AbstractTradeResult(trTrade)
 		,buyOrder(buyOrder)
 		,sellOrder(sellOrder)
 		,fullBuy(fullBuy)
@@ -75,6 +86,7 @@ public:
 	bool isFullSell() const {
 		return fullSell;
 	}
+
 
 protected:
 	POrder buyOrder;
