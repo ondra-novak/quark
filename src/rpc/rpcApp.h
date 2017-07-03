@@ -17,7 +17,7 @@ using namespace couchit;
 
 class RpcApp: public RefCntObj {
 public:
-	RpcApp(Value svctable):svctable(svctable) {}
+	RpcApp(Value config):config(config) {}
 
 
 	void run(std::istream &input, std::ostream &out);
@@ -28,7 +28,7 @@ protected:
 
 	void rpcInit(RpcRequest req);
 
-	Value svctable;
+	Value config;
 
 	RpcServer rpcServer;
 	PMarketControl mcontrol;

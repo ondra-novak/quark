@@ -46,7 +46,7 @@ int main(int c, char **args) {
 
 	const char *cfgpath = args[1];
 
-	Value svctable;
+	Value config;
 
 
 	{
@@ -56,20 +56,17 @@ int main(int c, char **args) {
 			return 2;
 		}
 		try {
-			svctable = Value::fromStream(inp);
+			config = Value::fromStream(inp);
 		} catch (std::exception &e) {
 			std::cerr << "Config exception" << e.what() << std::endl;
 			return 3;
 		}
 
-		for (Value x: svctable) {
-			if (!mandatoryField(x,"server")) return 4;
-			if (!mandatoryField(x,"dbprefix")) return 4;
-		}
+		if (!mandatoryField(config,"server")) return 4;
 
 	}
 
-	RpcApp rpcApp(svctable);
+	RpcApp rpcApp(config);
 	rpcApp.run(std::cin, std::cout);
 
 }

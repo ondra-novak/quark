@@ -14,10 +14,10 @@
 
 namespace quark {
 
-MarketControl::MarketControl(Value cfg)
-	:ordersDb(initConfig(cfg,"orders"))
-	,tradesDb(initConfig(cfg,"trades"))
-	,posDb(initConfig(cfg,"positions"))
+MarketControl::MarketControl(Value cfg, StrViewA dbname)
+	:ordersDb(initConfig(cfg,dbname,"-orders"))
+	,tradesDb(initConfig(cfg,dbname,"-trades"))
+	,posDb(initConfig(cfg,dbname,"-positions"))
 	,orderControl(ordersDb)
 {
 
@@ -25,12 +25,12 @@ MarketControl::MarketControl(Value cfg)
 }
 
 
-couchit::Config quark::MarketControl::initConfig(Value cfgjson, StrViewA suffix) {
+couchit::Config quark::MarketControl::initConfig(Value cfgjson, StrViewA dbname, StrViewA suffix) {
 	couchit::Config cfg;
 	cfg.authInfo.username = json::String(cfgjson["username"]);
 	cfg.authInfo.password = json::String(cfgjson["password"]);
 	cfg.baseUrl = json::String(cfgjson["server"]);
-	cfg.databaseName = String({cfgjson["dbprefix"].getString(),suffix});
+	cfg.databaseName = String({cfgjson["dbprefix"].getString(),dbname,suffix});
 	return cfg;
 }
 
@@ -38,6 +38,17 @@ static void notImpl(RpcRequest req) {
 	req.setError(501,"Not implemented yet!");
 }
 
+
+bool MarketControl::testDatabase() {
+	CouchDB::PConnection conn = ordersDb.getConnection("");
+	try {
+		ordersDb.requestGET(conn,nullptr,0);
+		return true;
+	} catch (const couchit::RequestError &e) {
+		if (e.getCode() == 404) return false;
+		throw;
+	}
+}
 
 Value MarketControl::getMarketStatus()  {
 

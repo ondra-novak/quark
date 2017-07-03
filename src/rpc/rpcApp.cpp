@@ -82,14 +82,13 @@ void RpcApp::rpcInit(RpcRequest req) {
 	static Value args = Value(json::array,{Object("market","string")});
 	if (!req.checkArgs(args)) return req.setArgError();
 	StrViewA market = req.getArgs()[0]["market"].getString();
-	Value cfg = svctable[market];
-	if (cfg.defined()) {
-		mcontrol = new MarketControl(cfg);
-		req.setResult(mcontrol->initRpc(rpcServer));
-
-	} else {
+	mcontrol = new MarketControl(config,market);
+	if (!mcontrol->testDatabase()) {
 		req.setError(404,"Market is not hosted at this node");
+	} else {
+		req.setResult(mcontrol->initRpc(rpcServer));
 	}
+
 }
 
 

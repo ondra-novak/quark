@@ -15,9 +15,10 @@ using namespace json;
 
 class MarketControl: public RefCntObj {
 public:
-	MarketControl(Value cfg);
+	MarketControl(Value cfg, StrViewA dbname);
 
 	Value initRpc(RpcServer &rpcServer);
+	bool testDatabase();
 
 protected:
 
@@ -26,7 +27,7 @@ protected:
 	CouchDB posDb;
 
 
-	static couchit::Config initConfig(Value cfg, StrViewA suffix);
+	static couchit::Config initConfig(Value cfg, StrViewA dbname, StrViewA suffix);
 
 	void rpcOrderCreate(RpcRequest rq);
 	void rpcOrderUpdate(RpcRequest rq);
