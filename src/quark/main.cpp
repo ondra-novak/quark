@@ -81,30 +81,12 @@ json::maxPrecisionDigits=9;
 		}
 
 		if (!mandatoryField(cfgjson,"server")) return 4;
-		if (!mandatoryField(cfgjson,"moneyService")) return 4;
 
 
 		cfg.authInfo.username = json::String(cfgjson["username"]);
 		cfg.authInfo.password = json::String(cfgjson["password"]);
 		cfg.baseUrl = json::String(cfgjson["server"]);
 		cfg.databaseName = json::String({cfgjson["dbprefix"].getString(),StrViewA(signature)});
-
-		Value mscfg = cfgjson["moneyService"];
-		StrViewA type = mscfg["type"].getString();
-		if (type == "mockup") {
-			if (!mandatoryField(mscfg,"maxBudget")) return 5;
-			if (!mandatoryField(mscfg,"latency")) return 5;
-			Value budget = mscfg["maxBudget"];
-			OrderBudget b(budget["asset"].getNumber(),budget["currency"].getNumber()
-					,budget["marginLong"].getNumber(),budget["marginShort"].getNumber(), 0 ,0);
-			std::size_t latency =mscfg["latency"].getUInt();
-			moneyService = new MockupMoneyService(b,latency);
-		} else if (type == "error") {
-			moneyService = new ErrorMoneyService;
-		} else {
-			logError({"Unknown money service. Following are known",{"mockup","error"}});
-			return 6;
-		}
 
 
 	}
