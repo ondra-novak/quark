@@ -13,6 +13,7 @@
 #include <couchit/query.h>
 #include <couchit/changeset.h>
 #include <couchit/couchDB.h>
+#include "../common/config.h"
 
 #include "error.h"
 
@@ -811,16 +812,13 @@ void QuarkApp::receiveMarketConfig() {
 }
 
 
-void QuarkApp::start(couchit::Config cfg, String signature)
+void QuarkApp::start(Value cfg, String signature)
 
 {
 
 	this->signature = signature;
 
-	String dbprefix = cfg.databaseName;
-	cfg.databaseName = dbprefix + "-orders";
-
-	setUnhandledExceptionHandler([cfg]{
+	setUnhandledExceptionHandler([cfg,signature]{
 
 		//Puts error object to database to prevent engine restart
 		//and exits through abort()
@@ -838,7 +836,7 @@ void QuarkApp::start(couchit::Config cfg, String signature)
 				errdesc = "Undetermined exception - catch (...)";
 			}
 
-			CouchDB db(cfg);
+			CouchDB db(initCouchDBConfig(cfg,signature, "-orders"));
 			Document errdoc;
 			errdoc.setID("error");
 			errdoc("what",errdesc);
@@ -853,15 +851,13 @@ void QuarkApp::start(couchit::Config cfg, String signature)
 
 	});
 
-	ordersDb = std::make_shared<CouchDB>(cfg);
+	ordersDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg, signature,"-orders"));
 	initOrdersDB(*ordersDb);
 
-	cfg.databaseName = dbprefix + "-trades";
-	tradesDb = std::make_shared<CouchDB>(cfg);
+	tradesDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg, signature,"-trades"));
 	initTradesDB(*tradesDb);
 
-	cfg.databaseName = dbprefix + "-positions";
-	positionsDb = std::make_shared<CouchDB>(cfg);
+	positionsDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg,signature, "-positions"));
 	initPositionsDB(*positionsDb);
 
 /*	this->moneySrvClient = new MarginTradingSvc(*positionsDb,moneyService);

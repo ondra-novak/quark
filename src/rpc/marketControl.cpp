@@ -11,28 +11,20 @@
 #include <couchit/exception.h>
 #include <couchit/query.h>
 #include <imtjson/rpc.h>
+#include "../common/config.h"
 
 namespace quark {
 
 MarketControl::MarketControl(Value cfg, StrViewA dbname)
-	:ordersDb(initConfig(cfg,dbname,"-orders"))
-	,tradesDb(initConfig(cfg,dbname,"-trades"))
-	,posDb(initConfig(cfg,dbname,"-positions"))
+	:ordersDb(initCouchDBConfig(cfg,dbname,"-orders"))
+	,tradesDb(initCouchDBConfig(cfg,dbname,"-trades"))
+	,posDb(initCouchDBConfig(cfg,dbname,"-positions"))
 	,orderControl(ordersDb)
 {
 
 
 }
 
-
-couchit::Config quark::MarketControl::initConfig(Value cfgjson, StrViewA dbname, StrViewA suffix) {
-	couchit::Config cfg;
-	cfg.authInfo.username = json::String(cfgjson["username"]);
-	cfg.authInfo.password = json::String(cfgjson["password"]);
-	cfg.baseUrl = json::String(cfgjson["server"]);
-	cfg.databaseName = String({cfgjson["dbprefix"].getString(),dbname,suffix});
-	return cfg;
-}
 
 static void notImpl(RpcRequest req) {
 	req.setError(501,"Not implemented yet!");

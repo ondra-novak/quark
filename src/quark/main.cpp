@@ -83,12 +83,6 @@ json::maxPrecisionDigits=9;
 		if (!mandatoryField(cfgjson,"server")) return 4;
 
 
-		cfg.authInfo.username = json::String(cfgjson["username"]);
-		cfg.authInfo.password = json::String(cfgjson["password"]);
-		cfg.baseUrl = json::String(cfgjson["server"]);
-		cfg.databaseName = json::String({cfgjson["dbprefix"].getString(),StrViewA(signature)});
-
-
 	}
 
 	//sleep for two seconds at start-up
@@ -99,7 +93,7 @@ json::maxPrecisionDigits=9;
 	std::thread thr([=]{
 		try {
 
-			app->start(cfg, signature);
+			app->start(cfgjson, signature);
 		} catch (std::exception &e) {
 			logError({"Quark exited with unhandled exception",e.what()});
 			exit(1);

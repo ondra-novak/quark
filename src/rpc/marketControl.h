@@ -27,7 +27,6 @@ protected:
 	CouchDB posDb;
 
 
-	static couchit::Config initConfig(Value cfg, StrViewA dbname, StrViewA suffix);
 
 	void rpcOrderCreate(RpcRequest rq);
 	void rpcOrderUpdate(RpcRequest rq);

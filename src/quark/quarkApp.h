@@ -38,7 +38,7 @@ public:
 	void receiveMarketConfig();
 	void applyMarketConfig(Value doc);
 
-	void start(couchit::Config cfg, String signature);
+	void start(Value cfg, String signature);
 
 	void exitApp();
 

@@ -6,11 +6,11 @@ include_directories(BEFORE src/imtjson/src src/couchit/src src)
 add_compile_options(-std=c++11)
 
 
-add_subdirectory (src/couchcpp)
-add_subdirectory (src/imtjson/src/imtjson)
-add_subdirectory (src/couchit/src/couchit)
-add_subdirectory (src/quark_lib)
-add_subdirectory (src/quark_test)
+add_subdirectory (src/couchcpp EXCLUDE_FROM_ALL)
+add_subdirectory (src/imtjson/src/imtjson EXCLUDE_FROM_ALL)
+add_subdirectory (src/couchit/src/couchit EXCLUDE_FROM_ALL)
+add_subdirectory (src/quark_lib EXCLUDE_FROM_ALL)
+add_subdirectory (src/quark_test EXCLUDE_FROM_ALL)
 
 
 add_subdirectory (src/quark)
