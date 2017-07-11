@@ -1,0 +1,9 @@
+$ sudo apt install git cmake make g++ couchapp
+$ git clone https://github.com/ondra-novak/quark.git
+$ cd quark
+$ git submodules update --init
+$ ./release.sh
+$ make all
+$ make DESTDIR=inst install
+
+A vznikne složka inst obsahující všechny potřebné soubory
