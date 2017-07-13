@@ -15,5 +15,6 @@ add_subdirectory (src/quark_test EXCLUDE_FROM_ALL)
 
 add_subdirectory (src/quark)
 add_subdirectory (src/rpc)
+add_subdirectory (src/create)
 add_dependencies(quark couchcpp) 
  
