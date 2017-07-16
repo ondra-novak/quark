@@ -13,7 +13,6 @@ install(TARGETS quark
         DESTINATION "bin"
         ) 
 
-file(GLOB quark_CONFS "../../conf/*.conf" "../../conf/*.ini")
-install(FILES ${quark_CONFS} DESTINATION "etc/quark") 
+install(FILES "../../conf/quark.conf" DESTINATION "etc/quark") 
  
    

@@ -1,0 +1,13 @@
+service quark_rpc
+{
+        flags           = KEEPALIVE
+        socket_type     = stream
+        wait            = no
+        user            = couchdb
+        server          = /usr/local/bin/quark_rpc
+		server_args		= /usr/local/etc/quark/rpc.conf
+        log_on_failure  += USERID
+        disable         = no
+        port			= 18123
+        type = UNLISTED
+}

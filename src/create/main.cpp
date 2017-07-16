@@ -54,6 +54,8 @@ int main(int argc, char **argv) {
 
 }
 
+
+
 void createConfig(std::ostream &out) {
 
 	out << "{" << std::endl
@@ -94,6 +96,20 @@ void createUser(CouchDB &db, String username, String password, String role) {
 	}
 }
 
+void createDB(CouchDB& db, const StrViewA & prefix, const StrViewA & sign, const StrViewA &suffix) {
+	db.setCurrentDB( { prefix, sign, "-", suffix });
+	std::cerr << "Creatring database: " << db.getCurrentDB() << std::endl;
+	db.createDatabase();
+	std::cerr << "Updating security information for the database" << std::endl;
+	Value security = Object("admins",
+			Object("names", json::array)("roles", Value(json::array, {
+					"quark_daemon" })))("members",
+			Object("names", json::array)("roles", Value(json::array, {
+					"quark_rpc" })));
+	CouchDB::PConnection conn = db.getConnection("_security");
+	db.requestPUT(conn,security,nullptr,0);
+}
+
 void createMarket(Value jcfg) {
 	couchit::Config cfg;
 	cfg.authInfo.username = String(jcfg["admin_login"]);
@@ -102,21 +118,16 @@ void createMarket(Value jcfg) {
 	String sign (jcfg["marketName"]);
 	String prefix ( jcfg["prefix"]);
 
+
 	CouchDB db(cfg);
 	db.setCurrentDB("_users");
+	std::cerr << "Setting user for daemon: " << jcfg["daemon_login"] << std::endl;
 	createUser(db,String(jcfg["daemon_login"]),String(jcfg["daemon_password"]),"quark_daemon");
+	std::cerr << "Setting user for rpc: " << jcfg["rpc_login"] << std::endl;
 	createUser(db,String(jcfg["rpc_login"]),String(jcfg["rpc_password"]),"quark_rpc");
 
-	db.setCurrentDB({prefix,sign,"-orders"});
-	db.createDatabase();
-	Value security = Object("admins",
-				Object("names",json::array)
-					  ("roles",Value(json::array,{"quark_daemon"})))
-					("members",Object("names",json::array)
-							         ("roles",Value(json::array,{"quark_rpc"})));
+	createDB(db,prefix,sign,"orders");
 
-	CouchDB::PConnection conn = db.getConnection("_security");
-	db.requestPUT(conn,security,nullptr,0);
 	Document settings;
 	settings.setID("settings");
 	settings("granuality",jcfg["granuality"])
@@ -140,29 +151,33 @@ void createMarket(Value jcfg) {
 	  			  )
 	  			  ("latency", 1000)
 	  	 );
+	std::cerr << "Uploading market parameters."<< std::endl;
 	db.put(settings);
 
-	db.setCurrentDB({prefix,sign,"-trades"});
-	db.createDatabase();
-	conn = db.getConnection("_security");
-	db.requestPUT(conn,security,nullptr,0);
+	createDB(db,prefix,sign,"trades");
+	createDB(db,prefix,sign,"positions");
 
-	db.setCurrentDB({prefix,sign,"-positions"});
-	db.createDatabase();
-	conn = db.getConnection("_security");
-	db.requestPUT(conn,security,nullptr,0);
 
 	String iniFile= {jcfg["couchdb_etc" ].getString(),"/default.d/quark.ini"};
-	if (access(iniFile.c_str(),0) != 0) {
-		std::ofstream ini(iniFile.c_str(), std::ios::out);
+
+	std::cerr << "Registering daemon (" << iniFile << ") - root required" << std::endl;
+
+	try {
+		if (access(iniFile.c_str(),0) != 0) {
+			std::ofstream ini(iniFile.c_str(), std::ios::out);
+			if (!ini) throw std::runtime_error("Failed to write ini file");
+			ini << "[os_daemons]" << std::endl;
+		}
+		std::ofstream ini(iniFile.c_str(), std::ios::out|std::ios::app);
 		if (!ini) throw std::runtime_error("Failed to write ini file");
-		ini << "[os_daemons]" << std::endl;
+		ini << "quark_" << sign << " = "
+				<< jcfg["daemon_bin"].getString() << " "
+				<< sign << " " << jcfg["daemon_cfg"].getString() << std::endl;
+	} catch (std::exception &e) {
+		std::cerr << "Failed to register daemon, are you root? : " << e.what() << std::endl;
 	}
-	std::ofstream ini(iniFile.c_str(), std::ios::out|std::ios::app);
-	if (!ini) throw std::runtime_error("Failed to write ini file");
-	ini << "quark_" << sign << " = "
-			<< jcfg["daemon_bin"].getString() << " "
-			<< sign << " " << jcfg["daemon_cfg"].getString() << std::endl;
+
+	std::cerr << "To start matching, please restart couchdb: service couchdb restart" << std::endl;
 
 }
 
