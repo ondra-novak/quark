@@ -1,7 +1,7 @@
 $ sudo apt install git cmake make g++ couchapp
 $ git clone https://github.com/ondra-novak/quark.git
 $ cd quark
-$ git submodules update --init
+$ git submodule update --init
 $ ./release.sh
 $ make all
 $ make DESTDIR=inst install
