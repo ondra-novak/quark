@@ -91,4 +91,11 @@ Matching server hostí jeden až více marketů. Každý market je třeba nakonf
    * v databázích přibude několik _design dokumentů
    * v databází "-orders" nesmí být přítomen objekt "error"
    
-## hotovo
+### hotovo
+
+## Odstranění marketu
+
+  Pro odstranění marketu je potřeba zejména deaktivivat démona, který jej spravuje. To se provede v souboru /etc/couchdb/default.d/daemons.ini (jméno souboru se vypíše na závěr běhu programu quark_init) a v tomto souboru je třeba odstranit řádek, který nese jméno marketu. Poté se musí databáze restartovat a teprve pak lze odstranit jednotlivé databaze
+  
+  
+
