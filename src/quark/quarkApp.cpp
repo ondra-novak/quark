@@ -14,6 +14,7 @@
 #include <couchit/changeset.h>
 #include <couchit/couchDB.h>
 #include "../common/config.h"
+#include "../common/runtime_error.h"
 
 #include "error.h"
 
@@ -823,13 +824,15 @@ void QuarkApp::start(Value cfg, String signature)
 		//Puts error object to database to prevent engine restart
 		//and exits through abort()
 
-		String errdesc;
+		Value errdesc;
 
 
 		try {
 
 			try {
 				throw;
+			} catch(RuntimeError &e) {
+				errdesc = e.getData();
 			} catch(std::exception &e) {
 				errdesc = e.what();
 			} catch(...) {

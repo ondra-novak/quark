@@ -20,10 +20,19 @@ public:
 
 	virtual void sendRequest(Value request);
 
-	void stopWorker();
 
 	virtual void onInit() {}
 	virtual void onNotify(const Notify &ntf) {}
+
+	String getAddr() const {return addr;}
+
+	///causes disconnecting the client
+	/** useful when error found to reconnect later. Note that function is asynchronous, There
+	 * still can be request will be processed after the disconect is requested.
+	 */
+	void disconnect(bool sync = false);
+	///Connects stream if necesery. Operation may be asynchronous
+	void connect();
 
 protected:
 
@@ -39,6 +48,7 @@ protected:
 
 private:
 	void sendJSON(const Value& v);
+	void connect2();
 };
 
 

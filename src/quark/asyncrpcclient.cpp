@@ -25,29 +25,31 @@ namespace quark {
 using namespace couchit;
 
 
-RpcClient::RpcClient(String addr):addr(addr),running(false) {
+RpcClient::RpcClient(String addr):AbstractRpcClient(RpcVersion::ver2),addr(addr),running(false) {
 
 
 }
 
-void RpcClient::sendJSON(const Value& v) {
-	OutputStream out(conn);
-	BufferedWrite<OutputStream> wr(out);
-	v.serialize<BufferedWrite<OutputStream> &>(wr);
-	wr('\n');
-	wr.flush();
-	if (conn->getLastSendError()) {
-		logError(
-				{ "RpcClient", "Failed to send message", addr,
-						conn->getLastSendError() });
+void RpcClient::disconnect(bool sync) {
+	Sync _(lock);
+	if (cancelFn != nullptr) {
 		cancelFn();
-	} else if (conn->isTimeout()) {
-		logError( { "RpcClient", "Timeout while writting message", addr });
-		cancelFn();
+	}
+	if (sync) {
+		_.unlock();
+		if (workerThr.joinable()) {
+			workerThr.join();
+		}
 	}
 }
 
-void RpcClient::sendRequest(Value request) {
+void RpcClient::connect() {
+	Sync _(lock);
+	connect2();
+}
+
+void RpcClient::connect2() {
+
 	if (!running) {
 
 		try {
@@ -72,23 +74,36 @@ void RpcClient::sendRequest(Value request) {
 		onInit();
 	}
 
+
+}
+
+void RpcClient::sendJSON(const Value& v) {
+	OutputStream out(conn);
+	BufferedWrite<OutputStream> wr(out);
+	v.serialize<BufferedWrite<OutputStream> &>(wr);
+	wr('\n');
+	wr.flush();
+	if (conn->getLastSendError()) {
+		logError(
+				{ "RpcClient", "Failed to send message", addr,
+						conn->getLastSendError() });
+		cancelFn();
+	} else if (conn->isTimeout()) {
+		logError( { "RpcClient", "Timeout while writting message", addr });
+		cancelFn();
+	}
+}
+
+void RpcClient::sendRequest(Value request) {
+	connect2();
+
 	Value v = request;
 
 	sendJSON(v);
 }
 
 RpcClient::~RpcClient() {
-	stopWorker();
-}
-
-void RpcClient::stopWorker() {
-	{
-		Sync _(lock);
-		if (cancelFn != nullptr) cancelFn();
-		conn = nullptr;
-		cancelFn = nullptr;
-	}
-	workerThr.join();
+	disconnect(true);
 }
 
 void RpcClient::worker(PNetworkConection conn) {
@@ -122,8 +137,10 @@ void RpcClient::worker(PNetworkConection conn) {
 			break;
 		}
 	}
+	Sync _(lock);
 	running = false;
 	rejectAllPendingCalls();
+	this->conn = nullptr;
 }
 
 }
