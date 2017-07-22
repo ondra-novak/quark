@@ -22,7 +22,7 @@ public:
 	typedef std::function<void()> Action;
 	typedef std::function<void(Action)> Dispatch;
 
-	MoneyServerClient(PMoneySvcSupport support, String addr, String signature);
+	MoneyServerClient(PMoneySvcSupport support, String addr, String signature, String asset, String currency);
 	~MoneyServerClient();
 
 
@@ -43,6 +43,10 @@ protected:
 	const String addr;
 	///signature of the client
 	const String signature;
+
+	const String asset;
+
+	const String currency;
 	///current connection, if nullptr then no conection is active
 	PNetworkConection curConn;
 	///cancel function for reading  worker

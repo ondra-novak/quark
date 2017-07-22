@@ -782,7 +782,7 @@ void QuarkApp::initMoneyService() {
 		Value addr = cfg["addr"];
 		sv = new MoneyServerClient(
 				new MoneySvcSupport(ordersDb, tradesDb,marketCfg,
-						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature);
+						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature, marketCfg->assetSign, marketCfg->currencySign);
 	} else {
 		throw std::runtime_error("Unsupported money service");
 	}

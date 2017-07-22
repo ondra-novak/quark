@@ -16,8 +16,8 @@
 
 namespace quark {
 
-MoneyServerClient::MoneyServerClient(PMoneySvcSupport support, String addr, String signature)
-:support(support),addr(addr),idcounter(0),signature(signature),lastTrade(nullptr) {}
+MoneyServerClient::MoneyServerClient(PMoneySvcSupport support, String addr, String signature, String asset, String currency)
+:support(support),addr(addr),asset(asset),currency(currency),idcounter(0),signature(signature),lastTrade(nullptr) {}
 
 MoneyServerClient::~MoneyServerClient() {
 	stopWorker();
@@ -141,7 +141,7 @@ void MoneyServerClient::login() {
 		needLogin = false;
 	}
 
-	Value initreq = registerRequestLk("init", Object("market",signature), [me](Response resp) {
+	Value initreq = registerRequestLk("CurrencyBalance.init", Object("market",signature), [me](Response resp) {
 		if (!resp.error.isNull()) me->handleError(resp);
 		me->support->dispatch([me,resp] {
 			me->lastTrade = resp.result;

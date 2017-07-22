@@ -15,4 +15,4 @@ install(TARGETS quark
 
 install(FILES "../../conf/quark.conf" DESTINATION "etc/quark") 
  
-   
+ 
