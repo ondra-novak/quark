@@ -124,7 +124,8 @@ void RpcApp::goInteractiveMode(std::istream& input) {
 		}
 		Value req = Object("method",method)
 				("params",args)
-				("id", cnt);
+				("id", cnt)
+				("jsonrpc","2.0");
 		cnt++;
 		msgQueue.push(req);
 	}

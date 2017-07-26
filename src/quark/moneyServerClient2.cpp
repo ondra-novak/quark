@@ -28,7 +28,9 @@ namespace quark {
 
 MoneyServerClient2::MoneyServerClient2(PMoneySvcSupport support,
 		String addr, String signature, String asset, String currency)
-	:signature(signature)
+	:support(support)
+	,addr(addr)
+	,signature(signature)
 	,asset(asset)
 	,currency(currency)
 	,client(new MyClient(addr,*this))
@@ -69,6 +71,7 @@ void MoneyServerClient2::callWithRetry(RefCntPtr<MyClient> client,PMoneySvcSuppo
 bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 		Callback callback) {
 
+	connectIfNeed();
 	RefCntPtr<MyClient> c(client);
 	Value params = Object
 			("user_id",user)
@@ -80,12 +83,14 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 			("amountShort",total.posShort);
 
 
-	callWithRetry(client, support, "CurrencyBalance.block_money", params,
-			[callback](const RpcResult &res) {
+	(*client)("CurrencyBalance.block_money", params)
+			>> [c,callback](const RpcResult &res) {
 
 
 		if (res.isError()) {
-			callback(allocError);
+			if (res.defined())
+				handleError(c,"CurrencyBalance.block_money", res);
+			callback(allocTryAgain);
 		} else {
 			if (Value(res)["success"].getBool()) {
 				callback(allocOk);
@@ -95,13 +100,19 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 		}
 
 
-	});
+	};
 
 
 
 }
 
 void MoneyServerClient2::reportTrade(Value prevTrade, const TradeData& data) {
+
+	 connectIfNeed();
+	 reportTrade2(prevTrade, data);
+
+}
+void MoneyServerClient2::reportTrade2(Value prevTrade, const TradeData& data) {
 
 	RefCntPtr<MyClient> c(client);
 	(*c)("CurrencyBalance.trade", Object("trade_id",data.id)
@@ -116,31 +127,40 @@ void MoneyServerClient2::reportTrade(Value prevTrade, const TradeData& data) {
 			handleError(c, "trade", res);
 		}
 	};
-
+	lastReportedTrade = data.id;
 }
 
 void MoneyServerClient2::reportBalanceChange(const BalanceChange& data) {
 	RefCntPtr<MyClient> c(client);
-
+	//no connect here - if disconnected, request will be discarded
 	Value params = Object("trade_id",data.trade)
 												("user_id", data.user)
 												("context",OrderContext::str[data.context])
-												("amount",data.assetChange)
+												("asset",data.assetChange)
 												("currency",data.currencyChange)
 												("taker",data.taker);
 
 	(*c)("CurrencyBalance.change", params)
 
 	>> [c,params](const RpcResult &res){
-		if (res.isError() || Value(res)["success"].getBool()==false) {
-			try {
-				throw RuntimeError(Object("desc","Cannot change balance of user")
-										 ("request",params)
-										 ("response",res));
-			} catch (...) {
-				unhandledException();
-			}
+		if (res.isError()) {
+			//no response, it is ok - (disconnected)
+			if (!res.defined()) return;
+			else handleError(c,"CurrencyBalance.change", res);
 		}
+		else {
+			if (Value(res)["success"].getBool()==false) {
+				try {
+					throw RuntimeError(Object("desc","Cannot change balance of user")
+											 ("request",params)
+											 ("response",res));
+				} catch (...) {
+					unhandledException();
+				}
+			}
+			//everything is ok
+		}
+
 	};
 
 }
@@ -148,25 +168,35 @@ void MoneyServerClient2::reportBalanceChange(const BalanceChange& data) {
 
 void MoneyServerClient2::commitTrade(Value tradeId) {
 	RefCntPtr<MyClient> c(client);
+	//no connect here - if disconnected, request will be discarded
 
 	Value params = Object("sync_id",tradeId);
 	(*c)("CurrencyBalance.commit_trade", params)
 
 	>> [c,params](const RpcResult &res){
-		if (res.isError() || Value(res)["success"].getBool()==false) {
-			try {
-				throw RuntimeError(Object("desc","Commit trade failed")
-										 ("request",params)
-										 ("response",res));
-			} catch (...) {
-				unhandledException();
-			}
+		if (res.isError()) {
+			//no response, it is ok - (disconnected)
+			if (!res.defined()) return;
+			else handleError(c,"CurrencyBalance.commit_trade", res);
 		}
+		else {
+			if (Value(res)["success"].getBool()==false) {
+				try {
+					throw RuntimeError(Object("desc","Commit trade failed, this is fatal")
+											 ("request",params)
+											 ("response",res));
+				} catch (...) {
+					unhandledException();
+				}
+			}
+			//everything is ok
+		}
+
 	};
 }
 
 MoneyServerClient2::MyClient::MyClient(String addr,
-		MoneyServerClient2& owner):RpcClient(addr),owner(owner),closed(false) {
+		MoneyServerClient2& owner):owner(owner),closed(false) {
 }
 
 void MoneyServerClient2::MyClient::onInit() {
@@ -178,38 +208,64 @@ void MoneyServerClient2::MyClient::onNotify(const Notify& ntf) {
 }
 
 void MoneyServerClient2::onInit() {
-	RefCntPtr<MoneyServerClient2> me(this);
-	(*client)("CurrencyBalance.init",Object
-			("signature",signature)
-			("asset",asset)
-			("currency",currency))
-	>> [me](const RpcResult &res) {
-
-		if (res.isError()) {
-			if (res.defined()) {
-				handleError(me->client,"init", res);
-			}
-		} else {
-			Value r(res);
-			Value lastSyncId = r["last_sync_id"];
-			Value version = r["version"];
-
-			logInfo({"Initialized RPC client, version, lastId", version, lastSyncId});
-
-
-		}
-
-	};
+	//empty
 }
 
 void MoneyServerClient2::onNotify(const Notify& ntf) {
+	//empty
+}
+
+class MoneyServerClient2::ResyncStream: public ITradeStream {
+public:
+	MoneyServerClient2 &owner;
+	ResyncStream(MoneyServerClient2 &owner):owner(owner) {}
+	virtual void reportTrade(Value prevTrade, const TradeData &data) {
+		owner.reportTrade2(prevTrade, data);
+	}
+	virtual void reportBalanceChange(const BalanceChange &data) {
+		owner.reportBalanceChange(data);
+	}
+	virtual void commitTrade(Value tradeId) {
+		owner.commitTrade(tradeId);
+	}
+};
+
+
+
+void MoneyServerClient2::connectIfNeed() {
+	if (!client->isConnected()) {
+		if (client->connect(addr)) {
+
+			RpcResult initres = (*client)("CurrencyBalance.init", Object
+					("signature",signature)
+					("asset",asset)
+					("currency",currency));
+			if (initres.isError()) {
+				if (initres.defined()) {
+					handleError(client,"CurrencyBalance.init", initres);
+				}
+			} else {
+				Value r(initres);
+				Value lastSyncId = r["last_sync_id"];
+				Value version = r["version"];
+
+				logInfo({"Initialized RPC client, version, lastId", version, lastSyncId});
+
+				ResyncStream resyncStream(*this);
+				support->resync(resyncStream, lastSyncId, lastReportedTrade);
+			}
+
+		} else {
+			//failed connect
+			//nothing here - commands send to disconnected client are rejected through callback
+		}
+	}
 }
 
 void MoneyServerClient2::handleError(MyClient *c, StrViewA method, const RpcResult& res)
 {
 	logError({method, "Money server error, dropping connection", c->getAddr(), Value(res)});
 	c->disconnect(false);
-
 }
 
 }

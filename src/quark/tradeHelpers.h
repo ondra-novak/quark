@@ -28,7 +28,7 @@ class MoneySvcSupport: public IMoneySvcSupport {
 public:
 	MoneySvcSupport(PCouchDB orderDB, PCouchDB tradeDB,PMarketConfig mcfg, Dispatcher dispatcher);
 
-	virtual void resync(PMoneySrvClient target, const Value fromTrade, const Value toTrade);
+	virtual void resync(ITradeStream &target, const Value fromTrade, const Value toTrade);
 	virtual void dispatch(Action fn);
 protected:
 	PCouchDB orderDB;

@@ -66,15 +66,22 @@ protected:
 
 	bool inited;
 
+	Value lastReportedTrade;
 
 
 public:
 
 protected:
 
+	void connectIfNeed();
+
 	static void handleError(MyClient *c, StrViewA method, const RpcResult &res);
 	template<typename Fn>
 	static void callWithRetry(RefCntPtr<MyClient> client, PMoneySvcSupport supp, String methodName, Value params, Fn callback);
+
+	class ResyncStream;
+	void reportTrade2(Value prevTrade, const TradeData &data) ;
+
 };
 
 } /* namespace quark */

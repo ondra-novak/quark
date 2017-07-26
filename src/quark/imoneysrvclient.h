@@ -13,38 +13,9 @@ using namespace json;
 
 class OrderBudget;
 
-class IMoneySrvClient:public json::RefCntObj  {
+
+class ITradeStream {
 public:
-	virtual ~IMoneySrvClient() {}
-
-	enum AllocResult {
-		allocOk,
-		allocReject,
-		allocError,
-		allocTryAgain
-	};
-
-
-	typedef std::function<void(AllocResult)> Callback;
-
-
-	///Adjusts budget - mostly used during margin trading
-	virtual void adjustBudget(json::Value user, OrderBudget &budget) = 0;
-
-	///Request budget allocation directly on server
-	/**
-	 * @param user user ID
-	 * @param total absolute budget for given context
-	 * @param callback callback function. If set to nullptr, no callback is required
-	 * @retval true operation succesed without need to access the server
-	 * @retval false operation require access to the server and runs asynchronously, callback will be called if defined
-	 *
-	 */
-	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) = 0;
-
-
-
-
 	struct TradeData {
 		Value id;
 		double price;
@@ -86,6 +57,36 @@ public:
 	virtual void commitTrade(Value tradeId) = 0;
 
 
+	virtual ~ITradeStream() {}
+};
+
+class IMoneySrvClient: public ITradeStream, public json::RefCntObj  {
+public:
+
+	enum AllocResult {
+		allocOk,
+		allocReject,
+		allocError,
+		allocTryAgain
+	};
+
+
+	typedef std::function<void(AllocResult)> Callback;
+
+
+	///Adjusts budget - mostly used during margin trading
+	virtual void adjustBudget(json::Value user, OrderBudget &budget) = 0;
+
+	///Request budget allocation directly on server
+	/**
+	 * @param user user ID
+	 * @param total absolute budget for given context
+	 * @param callback callback function. If set to nullptr, no callback is required
+	 * @retval true operation succesed without need to access the server
+	 * @retval false operation require access to the server and runs asynchronously, callback will be called if defined
+	 *
+	 */
+	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) = 0;
 
 };
 
@@ -106,7 +107,7 @@ public:
 	 * @param fromTrade from tradeId
 	 * @param toTrade to tradeId
 	 */
-	virtual void resync(PMoneySrvClient target, const Value fromTrade, const Value toTrade) = 0;
+	virtual void resync(ITradeStream &target, const Value fromTrade, const Value toTrade) = 0;
 	///Dispatch function to internal dispatcher
 	/**
 	 * Send function through the dispatcher. It should run in different thread or in the

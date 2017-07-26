@@ -146,7 +146,7 @@ void MoneyServerClient::login() {
 		me->support->dispatch([me,resp] {
 			me->lastTrade = resp.result;
 			if (me->lastTrade != me->lastStoredTrade) {
-				me->support->resync(PMoneySrvClient::staticCast(me), me->lastTrade, me->lastStoredTrade);
+				me->support->resync(*me, me->lastTrade, me->lastStoredTrade);
 			}
 		});
 	},false);

@@ -15,6 +15,8 @@
 #include <couchit/minihttp/netio.h>
 #include <imtjson/parser.h>
 #include <imtjson/serializer.h>
+#include <cerrno>
+
 
 
 #include "logfile.h"
@@ -25,7 +27,7 @@ namespace quark {
 using namespace couchit;
 
 
-RpcClient::RpcClient(String addr):AbstractRpcClient(RpcVersion::ver2),addr(addr),running(false) {
+RpcClient::RpcClient():AbstractRpcClient(RpcVersion::ver2),connected(false) {
 
 
 }
@@ -43,17 +45,20 @@ void RpcClient::disconnect(bool sync) {
 	}
 }
 
-void RpcClient::connect() {
+bool RpcClient::connect(StrViewA addr) {
 	Sync _(lock);
-	connect2();
+	connectLk( addr);
+	return connected;
 }
 
-void RpcClient::connect2() {
+void RpcClient::connectLk(StrViewA addr) {
 
-	if (!running) {
+	if (!connected) {
 
-		try {
-			PNetworkConection nconn = NetworkConnection::connect(addr,1024);
+		this->addr = addr;
+
+		PNetworkConection nconn = NetworkConnection::connect(addr,1024);
+		if (nconn != nullptr) {
 
 			cancelFn = NetworkConnection::createCancelFunction();
 			nconn->setCancelFunction(cancelFn);
@@ -63,11 +68,13 @@ void RpcClient::connect2() {
 				worker(nconn);
 			});
 			conn = nconn;
+			connected = true;
 
-		} catch (std::exception &e) {
-			logError({"Failed to connect", addr, e.what()});
-			rejectAllPendingCalls();
+		} else {
+			int err = errno;
+			logError({"Failed to connect", addr, err});
 			conn = nullptr;
+			rejectAllPendingCalls();
 			return;
 		}
 
@@ -95,11 +102,14 @@ void RpcClient::sendJSON(const Value& v) {
 }
 
 void RpcClient::sendRequest(Value request) {
-	connect2();
+	if (!connected) {
+		rejectAllPendingCalls();
+	} else  {
 
-	Value v = request;
+		Value v = request;
 
-	sendJSON(v);
+		sendJSON(v);
+	}
 }
 
 RpcClient::~RpcClient() {
@@ -138,7 +148,7 @@ void RpcClient::worker(PNetworkConection conn) {
 		}
 	}
 	Sync _(lock);
-	running = false;
+	connected = false;
 	rejectAllPendingCalls();
 	this->conn = nullptr;
 }

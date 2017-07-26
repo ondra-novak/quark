@@ -83,7 +83,7 @@ Value findTradeCounter(couchit::CouchDB& tradeDB, Value trade) {
 
 
 void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
-		PMoneySrvClient moneySrvClient, const Value fromTrade, const Value toTrade,
+		ITradeStream &moneySrvClient, const Value fromTrade, const Value toTrade,
 		const MarketConfig &mcfg) {
 
 	Query q = tradeDB.createQuery(tradesByCounter);
@@ -101,12 +101,12 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 		IMoneySrvClient::TradeData td;
 		IMoneySrvClient::BalanceChange bch;
 		extractTrade(v.doc, td);
-		moneySrvClient->reportTrade(lastTradeId, td);
+		moneySrvClient.reportTrade(lastTradeId, td);
 		extractBalanceChange(ordersDB.get(v.doc["buyOrder"].getString()),v.doc,bch,OrderDir::buy,mcfg);
-		moneySrvClient->reportBalanceChange(bch);
+		moneySrvClient.reportBalanceChange(bch);
 		extractBalanceChange(ordersDB.get(v.doc["sellOrder"].getString()),v.doc,bch,OrderDir::sell,mcfg);
-		moneySrvClient->reportBalanceChange(bch);
-		moneySrvClient->commitTrade(td.id);
+		moneySrvClient.reportBalanceChange(bch);
+		moneySrvClient.commitTrade(td.id);
 		if (v.id == toTrade) break;
 		lastTradeId = td.id;
 	}
@@ -125,7 +125,7 @@ quark::MoneySvcSupport::MoneySvcSupport(PCouchDB orderDB, PCouchDB tradeDB,PMark
 {
 }
 
-void quark::MoneySvcSupport::resync(PMoneySrvClient target, const Value fromTrade, const Value toTrade) {
+void quark::MoneySvcSupport::resync(ITradeStream &target, const Value fromTrade, const Value toTrade) {
 	quark::resync(*orderDB, *tradeDB, target, fromTrade, toTrade, *mcfg);
 }
 

@@ -23,7 +23,7 @@
 #include "logfile.h"
 #include "marginTradingSvc.h"
 #include "mockupmoneyserver.h"
-#include "moneyServerClient.h"
+#include "moneyServerClient2.h"
 #include "orderRangeError.h"
 #include "tradeHelpers.h"
 #include "views.h"
@@ -781,7 +781,7 @@ void QuarkApp::initMoneyService() {
 		sv = new MockupMoneyService(b,latency);
 	} else if (type == "singleJsonRPCServer"){
 		Value addr = cfg["addr"];
-		sv = new MoneyServerClient(
+		sv = new MoneyServerClient2(
 				new MoneySvcSupport(ordersDb, tradesDb,marketCfg,
 						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature, marketCfg->assetSign, marketCfg->currencySign);
 	} else {

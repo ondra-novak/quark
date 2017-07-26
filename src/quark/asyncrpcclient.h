@@ -14,7 +14,7 @@ public:
 
 	typedef json::AbstractRpcClient Super;
 
-	RpcClient(String addr);
+	RpcClient();
 	~RpcClient();
 
 
@@ -32,11 +32,14 @@ public:
 	 */
 	void disconnect(bool sync = false);
 	///Connects stream if necesery. Operation may be asynchronous
-	void connect();
+	bool  connect(StrViewA addr);
+
+	bool isConnected() const {return connected;}
 
 protected:
 
 	void worker(couchit::PNetworkConection conn);
+
 
 	String addr;
 
@@ -44,12 +47,13 @@ protected:
 	couchit::CancelFunction cancelFn;
 
 	std::thread workerThr;
-	bool running;
+	bool connected;
 
 private:
 	void sendJSON(const Value& v);
-	void connect2();
+	void connectLk(StrViewA addr);
 };
+
 
 
 }
