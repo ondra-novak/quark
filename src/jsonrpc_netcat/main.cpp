@@ -10,6 +10,7 @@
 #include <iostream>
 #include <couchit/minihttp/netio.h>
 #include <imtjson/string.h>
+#include <imtjson/parser.h>
 #include "../quark/asyncrpcclient.h"
 
 using namespace json;
@@ -22,6 +23,91 @@ public:
 	}
 };
 
+
+template<typename Fn>
+class JsonParser: public json::Parser<Fn> {
+public:
+	JsonParser(const Fn &source) :json::Parser<Fn>(source) {}
+
+	virtual Value parse() {
+		char c = this->rd.nextWs();
+		if (c == '{') {
+			this->rd.commit(); return parseObject();
+		} else {
+			return json::Parser<Fn>::parse();
+		}
+	}
+
+	inline typename Parser<Fn>::StrIdx readField()
+	{
+		std::size_t start = this->tmpstr.length();
+		int c = this->rd.next();
+		while (isalnum(c)) {
+			this->rd.commit();
+			this->tmpstr.push_back((char)c);
+			c = this->rd.next();
+		}
+		return typename Parser<Fn>::StrIdx(start, this->tmpstr.size()-start);
+
+	}
+
+
+	inline Value parseObject()
+	{
+		std::size_t tmpArrPos = this->tmpArr.size();
+		char c = this->rd.nextWs();
+		if (c == '}') {
+			this->rd.commit();
+			return Value(object);
+		}
+		typename Parser<Fn>::StrIdx name(0,0);
+		bool cont;
+		do {
+			if (c == '"') {
+				this->rd.commit();
+				try {
+					name = this->readString();
+				}
+				catch (ParseError &e) {
+					e.addContext(Parser<Fn>::getString(name));
+					throw;
+				}
+			} else {
+				name = readField();
+			}
+			try {
+				if (this->rd.nextWs() != ':')
+					throw ParseError("Expected ':'");
+				this->rd.commit();
+				Value v = parse();
+				this->tmpArr.push_back(Value(Parser<Fn>::getString(name),v));
+				Parser<Fn>::freeString(name);
+			}
+			catch (ParseError &e) {
+				e.addContext(Parser<Fn>::getString(name));
+				Parser<Fn>::freeString(name);
+				throw;
+			}
+			c = this->rd.nextWs();
+			this->rd.commit();
+			if (c == '}') {
+				cont = false;
+			}
+			else if (c == ',') {
+				cont = true;
+				c = this->rd.nextWs();
+			}
+			else {
+				throw ParseError("Expected ',' or '}'");
+			}
+		} while (cont);
+		StringView<Value> data = this->tmpArr;
+		Value res(object, data.substr(tmpArrPos));
+		this->tmpArr.resize(tmpArrPos);
+		return res;
+	}
+
+};
 
 int main(int argc, char **argv) {
 
@@ -73,7 +159,8 @@ int main(int argc, char **argv) {
 			} else {
 
 				try {
-					Value args = Value::fromStream(std::cin);
+					JsonParser<json::StreamFromStdStream> parser((json::StreamFromStdStream(std::cin)));
+					Value args = parser.parse();
 					String name((StrViewA(methodName)));
 
 					RpcResult res = client(name, args);
@@ -95,6 +182,7 @@ int main(int argc, char **argv) {
 		c = std::cin.get();
 		if (!client.isConnected()) {
 			std::cerr << "Lost connection" << std::endl;
+			return 3;
 		}
 	}
 

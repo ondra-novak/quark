@@ -175,10 +175,11 @@ void QuarkApp::runOrder2(Document order, bool update) {
 				}
 				throw;
 			}
-		}
+		} else {
 
-		//run transaction
-		runTransaction(txi);
+			//run transaction
+			runTransaction(txi);
+		}
 
 
 		//handle various exceptions
@@ -636,6 +637,9 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 				marketCfg->maxSize);
 
 	odata.size = marketCfg->amountToSize(x);
+	if (odata.size == 0) {
+		throw OrderRangeError(odata.id, OrderRangeError::minOrderSize,0);
+	}
 	if ((v = order[OrderFields::limitPrice]).defined()) {
 		x = v.getNumber();
 		if (x < marketCfg->minPrice)

@@ -85,6 +85,7 @@ void RpcClient::connectLk(StrViewA addr) {
 }
 
 void RpcClient::sendJSON(const Value& v) {
+	if (logTrafic) logInfo({"RPC_send",addr,v});
 	OutputStream out(conn);
 	BufferedWrite<OutputStream> wr(out);
 	v.serialize<BufferedWrite<OutputStream> &>(wr);
@@ -132,6 +133,7 @@ void RpcClient::worker(PNetworkConection conn) {
 			}
 			BufferedRead<InputStream> rd(in);
 			Value resp = Value::parse<BufferedRead<InputStream> &>(rd);
+			if (logTrafic) logInfo({"RPC_receive",addr,resp});
 			ReceiveStatus st = processResponse(resp);
 			if (st == notification) {
 				onNotify(json::Notify(resp));

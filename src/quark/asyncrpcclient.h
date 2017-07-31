@@ -20,6 +20,7 @@ public:
 
 	virtual void sendRequest(Value request);
 
+	void enableLogTrafic(bool lt) {logTrafic = true;}
 
 	virtual void onInit() {}
 	virtual void onNotify(const Notify &ntf) {}
@@ -48,6 +49,7 @@ protected:
 
 	std::thread workerThr;
 	bool connected;
+	bool logTrafic = false;
 
 private:
 	void sendJSON(const Value& v);

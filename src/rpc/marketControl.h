@@ -33,6 +33,7 @@ protected:
 	void rpcOrderCancel(RpcRequest rq);
 	void rpcOrderGet(RpcRequest rq);
 	void rpcStreamOrders(RpcRequest rq);
+	void rpcStreamOrderbook(RpcRequest rq);
 	void rpcStreamTrades(RpcRequest rq);
 	void rpcStreamPositions(RpcRequest rq);
 	void rpcStreamLastId(RpcRequest rq);
@@ -65,11 +66,12 @@ protected:
 	class OrderFeed;
 	class TradesFeed;
 	class PosFeed;
+	class OrderbookFeed;
 
 	typedef RefCntPtr<FeedControl> PFeedControl;
 
 
-	PFeedControl ordersFeed, tradesFeed, posFeed;
+	PFeedControl ordersFeed, tradesFeed, posFeed, orderbookFeed;
 	OrderControl orderControl;
 
 

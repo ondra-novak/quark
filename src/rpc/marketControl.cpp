@@ -64,11 +64,12 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Order.get", me, &MarketControl::rpcOrderGet);
 	rpcServer.add("Stream.orders",  me, &MarketControl::rpcStreamOrders);
 	rpcServer.add("Stream.trades", me, &MarketControl::rpcStreamTrades);
+	rpcServer.add("Stream.orderbook", me, &MarketControl::rpcStreamOrderbook);
 	rpcServer.add("Stream.positions", me, &MarketControl::rpcStreamPositions);
 	rpcServer.add("Stream.lastId", me, &MarketControl::rpcStreamLastId);
 	rpcServer.add("Status.get", me, &MarketControl::rpcStatusGet);
 	rpcServer.add("Status.clear", me, &MarketControl::rpcStatusClear);
-	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
+//	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
 
 	return getMarketStatus();
 
@@ -191,6 +192,33 @@ public:
 	}
 };
 
+class MarketControl::OrderbookFeed: public BasicFeed {
+public:
+	using BasicFeed::BasicFeed;
+	virtual void init() override {
+		feed.setFilter(couchit::Filter("orderbook/orders",couchit::Filter::includeDocs));
+	}
+	virtual void onEvent(Value v) override {
+		sendNotify(rq, streamName, v, v["seq"].toString());
+	}
+	static void sendNotify(RpcRequest &rq, StrViewA streamName, Value v, Value seq) {
+		Object ntf;
+		Value doc = v["doc"];
+		if (doc["finished"].getBool()) {
+			ntf("removed",true)
+			   ("id", v["id"]);
+		} else {
+			ntf("removed",false)
+			   ("id",v["id"])
+			   ("dir",doc["dir"])
+			   ("price",doc["limitPrice"])
+			   ("size",doc["size"]);
+		}
+		rq.sendNotify(streamName,{seq,ntf});
+	}
+
+};
+
 void MarketControl::rpcStreamOrders(RpcRequest rq) {
 	static Value turnOffArgs = Value(json::array,{false});
 	static Value turnOnArgs = {true,{"string","optional"} };
@@ -248,6 +276,37 @@ void MarketControl::rpcStreamPositions(RpcRequest rq) {
 		posFeed->start();
 		rq.setResult(true);
 
+
+	} else {
+		rq.setArgError();
+	}
+}
+
+void MarketControl::rpcStreamOrderbook(RpcRequest rq) {
+	static Value turnOffArgs = Value(json::array,{false});
+	static Value turnOnArgs = {true,{"string","optional"} };
+	if (rq.checkArgs(turnOffArgs)) {
+
+		orderbookFeed = nullptr;
+		rq.setResult(true);
+
+
+	} else if (rq.checkArgs(turnOnArgs)) {
+		Value since = rq.getArgs()[1];
+		StrViewA streamName = "orderbook";
+		rq.setResult(true);
+		if (!since.defined()) {
+
+			couchit::View view("_design/orderbook/_view/orders", couchit::View::includeDocs|couchit::View::update);
+			couchit::Query q = ordersDb.createQuery(view);
+			couchit::Result res = q.exec();
+			for (couchit::Row rw : res) {
+				OrderbookFeed::sendNotify(rq,streamName, rw, nullptr);
+			}
+			since = res.getUpdateSeq();
+		}
+		orderbookFeed = new OrderbookFeed(ordersDb, since, rq, streamName);
+		orderbookFeed->start();
 
 	} else {
 		rq.setArgError();
