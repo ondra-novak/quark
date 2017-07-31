@@ -589,6 +589,11 @@ void CurrentState::runTriggers(OrderQueue& queue, std::size_t price, Cmp cmp, Ou
 			case OrderType::oco_limitstop:
 				orderbook_ask.erase(f);
 				orderbook_bid.erase(f);
+				newOrder = f->changeType(OrderType::market);
+				updateOrder(newOrder->getId(), newOrder);
+				curQueue.push(newOrder);
+				out(TradeResultOrderTrigger(newOrder));
+				break;
 			case OrderType::stop:
 				newOrder = f->changeType(OrderType::market);
 				updateOrder(newOrder->getId(), newOrder);

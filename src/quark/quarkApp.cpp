@@ -93,6 +93,7 @@ bool QuarkApp::runOrder(Document order, bool update) {
 
 }
 
+
 void QuarkApp::freeBudget(const Document& order) {
 	moneyService->allocBudget(order[OrderFields::user],
 			order[OrderFields::orderId], OrderBudget(), nullptr);
@@ -119,6 +120,7 @@ void QuarkApp::rejectOrder(Document order, const OrderErrorException &e, bool up
 								("message",e.getMessage())
 								("rangeValue",rangeValue));
 		ordersDb->put(order);
+		recordRevision(order.getIDValue(),order.getRevValue());
 	} catch (UpdateException &e) {
 		if (e.getErrors()[0].isConflict()) {
 			logInfo({"Order was not rejected because has been changed", e.getErrors()[0].document});
@@ -167,6 +169,7 @@ void QuarkApp::runOrder2(Document order, bool update) {
 				order.set(OrderFields::status, Status::strActive);
 
 				ordersDb->put(order);
+				recordRevision(order.getIDValue(),order.getRevValue());
 			} catch (const UpdateException &e) {
 				//in case of conflict...
 				if (e.getErrors()[0].isConflict()) {
@@ -175,11 +178,11 @@ void QuarkApp::runOrder2(Document order, bool update) {
 				}
 				throw;
 			}
-		} else {
-
-			//run transaction
-			runTransaction(txi);
 		}
+
+		//run transaction
+		runTransaction(txi);
+
 
 
 		//handle various exceptions
@@ -216,6 +219,12 @@ bool QuarkApp::isCanceled(const Document &order) {
 bool QuarkApp::processOrder2(Value cmd) {
 	Document order(cmd);
 
+	if (!checkOrderRev(order.getIDValue(), order.getRevValue())) {
+		LOGDEBUG3("Discard order (old version)", order.getIDValue(), order.getRevValue());
+		return true;
+	}
+
+
 	LOGDEBUG2("Pop order", order.getIDValue());
 
 	if (marketCfg == nullptr) {
@@ -224,6 +233,7 @@ bool QuarkApp::processOrder2(Value cmd) {
 		   (OrderFields::error,Object("message","market is not opened yet"))
 		   (OrderFields::finished,true);
 		ordersDb->put(order);
+		recordRevision(order.getIDValue(),order.getRevValue());
 		return true;
 	}
 
@@ -257,6 +267,7 @@ void QuarkApp::cancelOrder(Document order) {
 
 	try {
 		ordersDb->put(order);
+		recordRevision(order.getIDValue(),order.getRevValue());
 	} catch (UpdateException &e) {
 		if (e.getErrors()[0].isConflict()) {
 			logInfo({"Order was not canceled because it changed",e.getErrors()[0].document});
@@ -292,6 +303,7 @@ bool QuarkApp::updateOrder(Document order) {
 
 	try {
 		ordersDb->put(order);
+		recordRevision(order.getIDValue(),order.getRevValue());
 	} catch (const UpdateException &e) {
 		if (e.getErrors()[0].isConflict()) {
 			logWarn({"Order update conflict, waiting for fresh data", order.getIDValue()});
@@ -352,6 +364,11 @@ void QuarkApp::exitApp() {
 	dispatcher.push(nullptr);
 }
 
+void QuarkApp::recordRevisions(const Changeset& chset) {
+	for (auto x : chset.getCommitedDocs()) {
+		recordRevision(x.doc["_id"], Value(x.newRev));
+	}
+}
 
 void QuarkApp::runTransaction(const TxItem& txitm) {
 	transactionCounter++;
@@ -505,7 +522,12 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 				chset.commit(*ordersDb);
 				//in case of all success, we end here
 				rep = false;
+
+				recordRevisions(chset);
+
 			} catch (UpdateException &e) {
+				//record stored documents
+				recordRevisions(chset);
 				//there can be conflicts
 				keys.clear();
 				//because changes fron trading has highest priority
@@ -944,6 +966,29 @@ void QuarkApp::PendingOrders::clear() {
 	orders.clear();
 }
 
+
+void QuarkApp::recordRevision(Value docId, Value revId) {
+	LOGDEBUG3("Order updated ", docId, revId);
+	Revision rev(revId);
+	orderRevisions[docId] = rev.getRevId();
+}
+
+bool QuarkApp::checkOrderRev(Value docId, Value revId) {
+	Revision rev(revId);
+	auto it = orderRevisions.find(docId);
+	if (it == orderRevisions.end()) {
+		return true;
+	}
+	if (it->second > rev.getRevId()) {
+		return false;
+	}else if (it->second == rev.getRevId()) {
+		orderRevisions.erase(it);
+		return false;
+	} else {
+		orderRevisions.erase(it);
+		return true;
+	}
+}
 
 
 

@@ -89,6 +89,7 @@ protected:
 	void rejectOrder(Document order, const OrderErrorException &e, bool update);
 
 	void initMoneyService();
+
 private:
 	POrder docOrder2POrder(const Document& order);
 
@@ -134,9 +135,21 @@ private:
 	OrdersToUpdate o2u_1, o2u_2, ocache; //prepared maps
 	TradeList tradeList; //buffer for trades
 
+	typedef std::unordered_map<Value, std::size_t> OrderRevisions;
+
+	///Stores revisions of updated orders.
+	/** This prevents to picking an old data up from the queue. Everytime the order is updated in the
+	 * database, its revision is recorded here. Once the order is picked from the queue, if could be
+	 * accepted only if its revision is above. Once the revision is above or equal, the record is
+	 * removed from the map as well
+	 */
+	OrderRevisions orderRevisions;
 
 
 
+	void recordRevision(Value docId, Value revId);
+	void recordRevisions(const Changeset& chset);
+	bool checkOrderRev(Value docId, Value revId);
 	bool runOrder(Document order, bool update);
 	void runOrder2(Document order, bool update);
 	void processPendingOrders(Value user);
