@@ -382,8 +382,12 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 			break;
 		case OrderType::limit:
 			if (!pairInQueue(orderbook, o, out)) {
-				POrder newOrder = updateOrder(o->changeState(Order::orderbook));
-				insorderbook.insert(newOrder);
+				if (willOrderPairNoSpreadCheck(orderbook,o)) {
+					market.insert(updateOrder(o->changeState(Order::marketQueue)));
+				} else {
+					POrder newOrder = updateOrder(o->changeState(Order::orderbook));
+					insorderbook.insert(newOrder);
+				}
 			}
 			break;
 		case OrderType::maker:

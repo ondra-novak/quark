@@ -135,9 +135,8 @@ public:
 	BasicFeed(couchit::CouchDB &db,
 			  Value since,
 			  RpcRequest rq,
-			  String streamName,
-			  View initialView)
-				:FeedControl(db,since,initialView),rq(rq),streamName(streamName) {
+			  String streamName)
+				:FeedControl(db,since),rq(rq),streamName(streamName) {
 
 	}
 	virtual void init() override {
@@ -155,7 +154,9 @@ class MarketControl::OrderFeed: public BasicFeed {
 public:
 	using BasicFeed::BasicFeed;
 	virtual void init() override {
-		feed.setFilter(couchit::Filter("orders/stream",couchit::Filter::includeDocs));
+		static couchit::View initView("_design/index/_view/queue",couchit::View::includeDocs|couchit::View::update);
+		initialView = &initView;
+		feed.setFilter(couchit::Filter("index/stream",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
 		rq.sendNotify(streamName,{seqNum.toString(),
@@ -203,6 +204,8 @@ class MarketControl::OrderbookFeed: public BasicFeed {
 public:
 	using BasicFeed::BasicFeed;
 	virtual void init() override {
+		static couchit::View initView("_design/index/_view/orderbook",couchit::View::includeDocs|couchit::View::update);
+		this->initialView = &initView;
 		feed.setFilter(couchit::Filter("orderbook/orders",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
@@ -236,7 +239,7 @@ void MarketControl::rpcStreamOrders(RpcRequest rq) {
 
 	} else if (rq.checkArgs(turnOnArgs)) {
 		Value since = rq.getArgs()[1];
-		ordersFeed = new OrderFeed(ordersDb, since, rq, "order",View("_design/index/_view/orders"));
+		ordersFeed = new OrderFeed(ordersDb, since, rq, "order");
 		ordersFeed->start();
 		rq.setResult(true);
 
@@ -299,21 +302,9 @@ void MarketControl::rpcStreamOrderbook(RpcRequest rq) {
 
 	} else if (rq.checkArgs(turnOnArgs)) {
 		Value since = rq.getArgs()[1];
-		StrViewA streamName = "orderbook";
-		rq.setResult(true);
-		if (!since.defined()) {
-
-			couchit::View view("_design/orderbook/_view/orders", couchit::View::includeDocs|couchit::View::update);
-			couchit::Query q = ordersDb.createQuery(view);
-			couchit::Result res = q.exec();
-			for (couchit::Row rw : res) {
-				OrderbookFeed::sendNotify(rq,streamName, rw, nullptr);
-			}
-			since = res.getUpdateSeq();
-		}
-		orderbookFeed = new OrderbookFeed(ordersDb, since, rq, streamName);
+		orderbookFeed = new OrderbookFeed(ordersDb, since, rq, "orderbook");
 		orderbookFeed->start();
-
+		rq.setResult(true);
 	} else {
 		rq.setArgError();
 	}
@@ -346,9 +337,9 @@ void MarketControl::FeedControl::start() {
 		}
 
 		Value lastDoc;
-		if (!since.defined())
+		if (!since.defined() && initialView != nullptr)
 		{
-			Query q = db.createQuery(initialView);
+			Query q = db.createQuery(*initialView);
 			Result r = q.exec();
 			for (Row rw : r) {
 				onEvent(r.getUpdateSeq(),rw.doc);
@@ -357,6 +348,8 @@ void MarketControl::FeedControl::start() {
 			since = r.getUpdateSeq();
 		}
 
+		if (since.defined())
+			feed.since(since);
 		try {
 			feed >> [&](ChangedDoc x) {
 				if (x.doc == lastDoc) return true;
@@ -374,8 +367,8 @@ void MarketControl::FeedControl::start() {
 	stopped = false;
 }
 
-MarketControl::FeedControl::FeedControl(CouchDB& db, Value since, View initialView)
-	:feed(db.createChangesFeed()), initialView(initialView), since(since), db(db), stopped(true)
+MarketControl::FeedControl::FeedControl(CouchDB& db, Value since)
+	:feed(db.createChangesFeed()),  since(since), db(db), stopped(true)
 {
 	feed.setTimeout(-1);
 	feed.includeDocs(true);

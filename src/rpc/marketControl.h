@@ -49,12 +49,12 @@ protected:
 	public:
 		couchit::ChangesFeed feed;
 		std::thread thr;
-		View initialView;
+		const View *initialView = nullptr;
 		Value since;
 		CouchDB &db;
 		bool stopped;
 
-		FeedControl(CouchDB &db, Value since, View initialView);
+		FeedControl(CouchDB &db, Value since);
 		virtual ~FeedControl() {stop();}
 
 		virtual void init() = 0;
