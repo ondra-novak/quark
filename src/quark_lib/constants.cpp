@@ -58,6 +58,7 @@ STRCONST(updateReq);
 STRCONST(updateStatus);
 STRCONST(timeCreated);
 STRCONST(timeModified);
+STRCONST(queue);
 
 
 }

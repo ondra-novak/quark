@@ -8,8 +8,9 @@
 
 #include "orderControl.h"
 
-using couchit::CouchDB;
 namespace quark {
+using couchit::CouchDB;
+using couchit::View;
 
 using namespace json;
 
@@ -44,18 +45,20 @@ protected:
 
 	Value getMarketStatus();
 
-
 	class FeedControl: public RefCntObj {
 	public:
 		couchit::ChangesFeed feed;
 		std::thread thr;
+		View initialView;
+		Value since;
+		CouchDB &db;
 		bool stopped;
 
-		FeedControl(CouchDB &db, Value since);
+		FeedControl(CouchDB &db, Value since, View initialView);
 		virtual ~FeedControl() {stop();}
 
 		virtual void init() = 0;
-		virtual void onEvent(Value v) = 0;
+		virtual void onEvent(Value seqNum, Value doc) = 0;
 		void stop();
 		void start();
 

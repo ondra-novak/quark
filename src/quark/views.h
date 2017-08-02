@@ -8,6 +8,7 @@ using namespace couchit;
 
 extern View tradesByCounter;
 extern View queueView;
-extern Filter errorWait;
+extern Filter waitfordoc;
+extern Filter queueFilter;
 
 }

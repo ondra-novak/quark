@@ -132,7 +132,14 @@ void MarketControl::rpcOrderGet(RpcRequest rq) {
 
 class MarketControl::BasicFeed: public FeedControl {
 public:
-	BasicFeed(couchit::CouchDB &db, Value since, RpcRequest rq, String streamName):FeedControl(db,since),rq(rq),streamName(streamName) {}
+	BasicFeed(couchit::CouchDB &db,
+			  Value since,
+			  RpcRequest rq,
+			  String streamName,
+			  View initialView)
+				:FeedControl(db,since,initialView),rq(rq),streamName(streamName) {
+
+	}
 	virtual void init() override {
 	}
 	~BasicFeed() {
@@ -150,10 +157,10 @@ public:
 	virtual void init() override {
 		feed.setFilter(couchit::Filter("orders/stream",couchit::Filter::includeDocs));
 	}
-	virtual void onEvent(Value v) override {
-		rq.sendNotify(streamName,{v["seq"].toString(),
-				Object(v["doc"])
-				("id",v["id"])
+	virtual void onEvent(Value seqNum, Value doc) override {
+		rq.sendNotify(streamName,{seqNum.toString(),
+				Object(doc)
+				("id",doc["_id"])
 				("_id",undefined)});
 	}
 
@@ -165,10 +172,10 @@ public:
 	virtual void init() override {
 		feed.setFilter(couchit::Filter("trades/stream",couchit::Filter::includeDocs));
 	}
-	virtual void onEvent(Value v) override {
-		rq.sendNotify(streamName,{v["seq"].toString(),
-				Object(v["doc"])
-				("id",v["id"])
+	virtual void onEvent(Value seqNum, Value doc) override {
+		rq.sendNotify(streamName,{seqNum.toString(),
+				Object(doc)
+				("id",doc["_id"])
 				("_id",undefined)
 				("_rev",undefined)
 		});
@@ -182,10 +189,10 @@ public:
 	virtual void init() override {
 		feed.setFilter(couchit::Filter("positions/stream",couchit::Filter::includeDocs));
 	}
-	virtual void onEvent(Value v) override {
-		rq.sendNotify(streamName,{v["seq"].toString(),
-				Object(v["doc"])
-				("user",v["id"].getString().substr(2))
+	virtual void onEvent(Value seqNum, Value doc) override {
+		rq.sendNotify(streamName,{seqNum.toString(),
+				Object(doc)
+				("user",doc["_id"].getString().substr(2))
 				("_id",undefined)
 				("_rev",undefined)
 		});
@@ -198,18 +205,17 @@ public:
 	virtual void init() override {
 		feed.setFilter(couchit::Filter("orderbook/orders",couchit::Filter::includeDocs));
 	}
-	virtual void onEvent(Value v) override {
-		sendNotify(rq, streamName, v, v["seq"].toString());
+	virtual void onEvent(Value seqNum, Value doc) override {
+		sendNotify(rq, streamName, doc, seqNum.toString());
 	}
-	static void sendNotify(RpcRequest &rq, StrViewA streamName, Value v, Value seq) {
+	static void sendNotify(RpcRequest &rq, StrViewA streamName, Value doc, Value seq) {
 		Object ntf;
-		Value doc = v["doc"];
 		if (doc["finished"].getBool()) {
 			ntf("removed",true)
-			   ("id", v["id"]);
+			   ("id", doc["_id"]);
 		} else {
 			ntf("removed",false)
-			   ("id",v["id"])
+			   ("id",doc["_id"])
 			   ("dir",doc["dir"])
 			   ("price",doc["limitPrice"])
 			   ("size",doc["size"]);
@@ -230,7 +236,7 @@ void MarketControl::rpcStreamOrders(RpcRequest rq) {
 
 	} else if (rq.checkArgs(turnOnArgs)) {
 		Value since = rq.getArgs()[1];
-		ordersFeed = new OrderFeed(ordersDb, since, rq, "order");
+		ordersFeed = new OrderFeed(ordersDb, since, rq, "order",View("_design/index/_view/orders"));
 		ordersFeed->start();
 		rq.setResult(true);
 
@@ -325,6 +331,7 @@ void MarketControl::FeedControl::stop() {
 
 void MarketControl::FeedControl::start() {
 	bool initWait = false;
+	using namespace couchit;
 	std::condition_variable initWaitCond;
 	std::mutex lock;
 
@@ -338,9 +345,23 @@ void MarketControl::FeedControl::start() {
 		initWaitCond.notify_all();
 		}
 
+		Value lastDoc;
+		if (!since.defined())
+		{
+			Query q = db.createQuery(initialView);
+			Result r = q.exec();
+			for (Row rw : r) {
+				onEvent(r.getUpdateSeq(),rw.doc);
+				lastDoc = rw.doc;
+			}
+			since = r.getUpdateSeq();
+		}
+
 		try {
-			feed >> [&](Value x) {
-				onEvent(x);
+			feed >> [&](ChangedDoc x) {
+				if (x.doc == lastDoc) return true;
+				lastDoc = json::undefined;
+				onEvent(x.seqId, x.doc);
 				return true;
 			};
 		} catch (couchit::CanceledException &) {
@@ -353,11 +374,9 @@ void MarketControl::FeedControl::start() {
 	stopped = false;
 }
 
-MarketControl::FeedControl::FeedControl(CouchDB& db, Value since)
-	:feed(db.createChangesFeed()), stopped(true)
+MarketControl::FeedControl::FeedControl(CouchDB& db, Value since, View initialView)
+	:feed(db.createChangesFeed()), initialView(initialView), since(since), db(db), stopped(true)
 {
-	if (since.defined())
-		feed.since(since);
 	feed.setTimeout(-1);
 	feed.includeDocs(true);
 }

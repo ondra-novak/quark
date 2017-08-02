@@ -717,6 +717,7 @@ void QuarkApp::syncWithDb() {
 
 }
 
+
 void QuarkApp::mainloop() {
 
 
@@ -725,27 +726,41 @@ void QuarkApp::mainloop() {
 		chfeed.cancelWait();
 	};
 
-	Value errorDoc = ordersDb->get(OrderFields::error, CouchDB::flgNullIfMissing);
-	if (!errorDoc.isNull()) {
-		logError("Error is signaled, engine stopped - please remove error file to continue");
+	try {
 
-		try {
-			chfeed.setFilter(errorWait).since(ordersDb->getLastKnownSeqNumber()).setTimeout(-1)
-					>> [](ChangedDoc chdoc) {
-				if (chdoc.deleted) return false;
-				return true;
+		//hakt processing, if there is error object
+		Value errorDoc = ordersDb->get("error", CouchDB::flgNullIfMissing);
+		if (!errorDoc.isNull()) {
+			logError("Error is signaled, engine stopped - please remove error file to continue");
+			chfeed.setFilter(waitfordoc).arg("doc","error")
+				 .since(ordersDb->getLastKnownSeqNumber())
+				  .setTimeout(-1) >> [](ChangedDoc chdoc) {
+					if (chdoc.deleted) return false;
+					return true;
 			};
-		} catch (CanceledException &e) {
-			return;
 		}
 
-	}
+		//receive market config - halt processing, if no market config defined
+		Value marketDoc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
+		while (marketDoc == nullptr) {
+			logError("Waiting for market configuration");
+			chfeed.setFilter(waitfordoc).arg("doc",marketConfigDocName)
+				  .includeDocs(true)
+				 .since(ordersDb->getLastKnownSeqNumber())
+				  .setTimeout(-1) >> [&](ChangedDoc chdoc) {
+					if (!chdoc.deleted) {
+						marketDoc = chdoc.doc;
+						return false;
+					}
+					return true;
+			};
+		}
+		applyMarketConfig(marketDoc);
 
-	logInfo("==== Entering to main loop ====");
+		logInfo("==== Entering to main loop ====");
 
-	auto loopBody = [&](ChangedDoc chdoc) {
+		auto loopBody = [&](ChangedDoc chdoc) {
 
-		if (!chdoc.deleted) {
 			dispatcher.push([=]{
 				if (chdoc.id == marketConfigDocName) {
 					try {
@@ -759,29 +774,27 @@ void QuarkApp::mainloop() {
 					processOrder(chdoc.doc);
 				}
 			});
+
+			return true;
+		};
+
+		logInfo("==== Preload commands ====");
+
+		Query q = ordersDb->createQuery(queueView);
+		Result res = q.exec();
+		for (Value v : res) {
+			loopBody(v);
 		}
-		return true;
-	};
 
-	logInfo("==== Preload commands ====");
-
-	Query q = ordersDb->createQuery(queueView);
-	Result res = q.exec();
-	for (Value v : res) {
-		loopBody(v);
-	}
-
-	logInfo("==== Inside of main loop ====");
+		logInfo("==== Inside of main loop ====");
 
 
-	try {
-		chfeed.setFilter(queueView).since(res.getUpdateSeq()).setTimeout(-1)
-				>> 	loopBody;
+		chfeed.setFilter(queueFilter).since(res.getUpdateSeq()).setTimeout(-1)
+					>> 	loopBody;
 
 	} catch (CanceledException &e) {
 
 	}
-
 	logInfo("==== Leaving main loop ====");
 
 	return;
