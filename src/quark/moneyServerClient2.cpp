@@ -79,8 +79,8 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 			("amount",total.asset)
 			("marginLong",total.marginLong)
 			("marginShort",total.marginShort)
-			("amountLong",total.posLong)
-			("amountShort",total.posShort);
+			("posLong",total.posLong)
+			("posShort",total.posShort);
 
 
 	(*client)("CurrencyBalance.block_money", params)
@@ -92,7 +92,7 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 				handleError(c,"CurrencyBalance.block_money", res);
 			callback(allocTryAgain);
 		} else {
-			if (Value(res)["success"].getBool()) {
+			if (Value(res).getBool()) {
 				callback(allocOk);
 			} else {
 				callback(allocReject);
@@ -118,83 +118,22 @@ void MoneyServerClient2::reportTrade2(Value prevTrade, const TradeData& data) {
 	(*c)("CurrencyBalance.trade", Object("trade_id",data.id)
 										("prev_trade_id", prevTrade)
 										("timestamp",data.timestamp)
-										("price",data.price)
-										("amount",data.size)
-										("type",OrderDir::str[data.dir]))
+										("asset",data.size)
+										("currency",data.price)
+										("buyer",Object("user_id",data.buyer.userId)
+													   ("context",data.buyer.context))
+										("seller",Object("user_id",data.seller.userId)
+													   ("context",data.seller.context))
+										("taker",data.dir == OrderDir::buy?"buyer":"seller"))
 
 	>> [c](const RpcResult &res){
-		if (res.isError() || Value(res)["success"].getBool()==false) {
-			handleError(c, "trade", res);
+		if (res.isError()) {
+			handleError(c, "CurrencyBalance.trade", res);
 		}
 	};
 	lastReportedTrade = data.id;
 }
 
-/*
-void MoneyServerClient2::reportBalanceChange(const BalanceChange& data) {
-	RefCntPtr<MyClient> c(client);
-	//no connect here - if disconnected, request will be discarded
-	Value params = Object("trade_id",data.trade)
-												("user_id", data.user)
-												("context",OrderContext::str[data.context])
-												("asset",data.assetChange)
-												("currency",data.currencyChange)
-												("taker",data.taker);
-
-	(*c)("CurrencyBalance.change", params)
-
-	>> [c,params](const RpcResult &res){
-		if (res.isError()) {
-			//no response, it is ok - (disconnected)
-			if (!res.defined()) return;
-			else handleError(c,"CurrencyBalance.change", res);
-		}
-		else {
-			if (Value(res)["success"].getBool()==false) {
-				try {
-					throw RuntimeError(Object("desc","Cannot change balance of user")
-											 ("request",params)
-											 ("response",res));
-				} catch (...) {
-					unhandledException();
-				}
-			}
-			//everything is ok
-		}
-
-	};
-
-}
-
-*/
-/*void MoneyServerClient2::commitTrade(Value tradeId) {
-	RefCntPtr<MyClient> c(client);
-	//no connect here - if disconnected, request will be discarded
-
-	Value params = Object("sync_id",tradeId);
-	(*c)("CurrencyBalance.commit_trade", params)
-
-	>> [c,params](const RpcResult &res){
-		if (res.isError()) {
-			//no response, it is ok - (disconnected)
-			if (!res.defined()) return;
-			else handleError(c,"CurrencyBalance.commit_trade", res);
-		}
-		else {
-			if (Value(res)["success"].getBool()==false) {
-				try {
-					throw RuntimeError(Object("desc","Commit trade failed, this is fatal")
-											 ("request",params)
-											 ("response",res));
-				} catch (...) {
-					unhandledException();
-				}
-			}
-			//everything is ok
-		}
-
-	};
-}*/
 
 MoneyServerClient2::MyClient::MyClient(String addr,
 		MoneyServerClient2& owner):owner(owner),closed(false) {
