@@ -19,7 +19,7 @@ public:
 
 	struct UserInfo {
 		Value userId;
-		OrderContext::Type context;
+		Value context;
 	};
 
 	struct TradeData {

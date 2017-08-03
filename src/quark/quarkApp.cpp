@@ -444,10 +444,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		//sends reports to money server(s)
 		for (auto && v : tradeList) {
 			IMoneySrvClient::TradeData td;
-			IMoneySrvClient::BalanceChange bch;
 			//first report trade
-			extractTrade(v, td);
-			moneySrvClient->reportTrade(lastTradeId, td); //TODO: check return value!
 			//get order for buyOrder and sellOrder
 			Value buyOrderId = v["buyOrder"];
 			Value sellOrderId = v["sellOrder"];
@@ -456,13 +453,10 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 			Value sellOrder = (*std::lower_bound(res.begin(), res.end(),sellOrderId, cmpRes))["doc"];
 			LOGDEBUG2("buyOrder", buyOrder);
 			LOGDEBUG2("sellOrder", sellOrder);
-			//extract balance change (and calculate fees)
-			extractBalanceChange(buyOrder,v,bch,OrderDir::buy,*marketCfg);
-			moneySrvClient->reportBalanceChange(bch);
-			extractBalanceChange(sellOrder,v,bch,OrderDir::sell,*marketCfg);
-			moneySrvClient->reportBalanceChange(bch);
-			//commit trade
-			moneySrvClient->commitTrade(td.id);
+
+			extractTrade(v, buyOrder, sellOrder,  td);
+			moneySrvClient->reportTrade(lastTradeId, td); //TODO: check return value!
+
 			//update last tradeId
 			lastTradeId = td.id;
 			//update last price
@@ -725,7 +719,6 @@ void QuarkApp::mainloop() {
 	ChangesFeed chfeed = ordersDb->createChangesFeed();
 	exitFn = [&] {
 		chfeed.cancelWait();
-		finish = true;
 	};
 
 	try {

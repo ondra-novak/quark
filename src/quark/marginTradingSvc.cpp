@@ -19,7 +19,6 @@ namespace quark {
 MarginTradingSvc::MarginTradingSvc(CouchDB& posDB, PMarketConfig mcfg, PMoneySrvClient target)
 	:posDB(posDB)
 	,target(target)
-	,wrtx(posDB.createChangeset())
 	,mcfg(mcfg)
 {
 	syncPositions();
@@ -64,36 +63,52 @@ bool MarginTradingSvc::allocBudget(json::Value user, OrderBudget budget, Callbac
 	return target->allocBudget(user,budget,callback);
 }
 
-void MarginTradingSvc::reportTrade(Value prevTrade, const TradeData &data) {
-	target->reportTrade(prevTrade, data);
-
-	lastPrice = data.price;
-}
-
 
 static double sign(double v) {
 	return v<0?-1.0:v>0?1.0:0.0;
 }
 
 
-/*void MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
-	target->reportBalanceChange(data);
-	if (data.context == OrderContext::margin) {
-		String docUserId  = user2docid(data.user);
-		Document doc = positionMap[Value(docUserId)];
-		doc.setID(Value(docUserId));
-		double prevPos = doc["position"].getNumber();
-		double prevValue = doc["value"].getNumber();
-		double newPos = mcfg->adjustSize(prevPos+data.assetChange);//TODO: adjust position decimal numbers
-		double newValue = mcfg->adjustPrice(prevValue+data.currencyChange);
-		if (sign(newPos) != sign(prevPos)) newValue = mcfg->adjustPrice(-newPos * lastPrice);
-		doc("position", newPos);
-		doc("value", newValue);
-		doc("lastTrade",data.trade);
-		doc.enableTimestamp();
-		wrtx.update(doc);
+void MarginTradingSvc::reportTrade(Value prevTrade, const TradeData &data) {
+
+	Changeset wrtx = posDB.createChangeset();
+	target->reportTrade(prevTrade, data);
+
+	lastPrice = data.price;
+
+	auto balanceChange = [&](const UserInfo &user, double multp){
+		if (OrderContext::str[user.context.getString()] == OrderContext::margin) {
+			String docUserId  = user2docid(user.userId);
+			Document doc = positionMap[Value(docUserId)];
+			doc.setID(Value(docUserId));
+			double prevPos = doc["position"].getNumber();
+			double prevValue = doc["value"].getNumber();
+				double assetChange = data.size * multp;
+				double currChange = -data.price * data.size * multp;
+				double newPos = mcfg->adjustSize(prevPos+assetChange);
+				double newValue = mcfg->adjustTotal(prevValue+currChange);
+			if (sign(newPos) != sign(prevPos)) newValue = mcfg->adjustPrice(-newPos * lastPrice);
+			doc("position", newPos);
+			doc("value", newValue);
+			doc("lastTrade",data.id);
+			doc.enableTimestamp();
+			wrtx.update(doc);
+		}
+	};
+
+
+	balanceChange(data.buyer,1);
+	balanceChange(data.seller,-1);
+
+	wrtx.commit();
+	auto &commited = wrtx.getCommitedDocs();
+	for (auto &&c : commited) {
+		Value newDoc = c.doc.replace("_rev", c.newRev);
+		positionMap[newDoc["_id"]] = newDoc;
 	}
-}*/
+
+}
+
 
 void MarginTradingSvc::syncPositions() {
 	positionMap.clear();
@@ -105,16 +120,7 @@ void MarginTradingSvc::syncPositions() {
 	}
 }
 
-/*void MarginTradingSvc::commitTrade(Value tradeId) {
-	wrtx.commit();
-	auto &commited = wrtx.getCommitedDocs();
-	for (auto &&c : commited) {
-		Value newDoc = c.doc.replace("_rev", c.newRev);
-		positionMap[newDoc["_id"]] = newDoc;
-	}
 
-	target->commitTrade(tradeId);
-}*/
 
 
 void MarginTradingSvc::updatePosition(Document doc) {

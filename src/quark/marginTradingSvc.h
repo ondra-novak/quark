@@ -37,7 +37,6 @@ protected:
 	typedef std::unordered_map<Value, Value> PositionMap;
 	PositionMap positionMap;
 
-	Changeset wrtx;
 	std::mutex lock;
 	typedef std::unique_lock<std::mutex> Guard;
 

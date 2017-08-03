@@ -17,5 +17,5 @@ add_subdirectory (src/quark)
 add_subdirectory (src/create)
 add_subdirectory (src/rpc)
 add_subdirectory (src/jsonrpc_netcat)
-add_dependencies(quark couchcpp) 
+add_dependencies(quark couchcpp)  
  

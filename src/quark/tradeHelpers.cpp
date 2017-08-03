@@ -20,6 +20,8 @@ using namespace json;
 
 
 void extractTrade(const couchit::Value& trade,
+		const couchit::Value &buyorder,
+		const couchit::Value &sellorder,
 		IMoneySrvClient::TradeData& tdata) {
 
 	tdata.dir = OrderDir::str[trade["dir"].getString()];
@@ -27,8 +29,10 @@ void extractTrade(const couchit::Value& trade,
 	tdata.price = trade["price"].getNumber();
 	tdata.size = trade["size"].getNumber();
 	tdata.timestamp = trade["time"].getUInt();
-	tdata.nonce = trade["index"].getUInt();
-
+	tdata.buyer.context = buyorder[OrderFields::context];
+	tdata.buyer.userId = buyorder[OrderFields::user];
+	tdata.seller.context= sellorder[OrderFields::context];
+	tdata.seller.userId= sellorder[OrderFields::user];
 }
 
 
@@ -44,35 +48,6 @@ static double calcFee(const Document &order, double total, bool taker) {
 		return 0;
 	}
 
-}
-
-void extractBalanceChange(const couchit::Value& order,
-		const couchit::Value& trade, IMoneySrvClient::BalanceChange& tdata,
-		OrderDir::Type dir,const MarketConfig &mcfg) {
-
-
-	double size = trade["size"].getNumber();
-	double price = trade["price"].getNumber();
-	double total = mcfg.adjustTotal(size*price);
-	switch (dir) {
-	    case OrderDir::buy:
-		tdata.assetChange = size;
-		tdata.currencyChange = -total;
-		break;
-	    case OrderDir::sell:
-		tdata.assetChange = -size;
-		tdata.currencyChange = total;
-		break;
-	    default:
-		throw std::runtime_error("extractBalanceChange: invalid direction");
-		break;
-	};
-	tdata.context = OrderContext::str[order[OrderFields::context].getString()];
-	tdata.fee = mcfg.adjustTotal(
-					calcFee(order, fabs(total), OrderDir::str[trade["dir"].getString()] == dir)
-					);
-	tdata.user = order[OrderFields::user];
-	tdata.trade = trade["_id"];
 }
 
 
@@ -99,14 +74,14 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 	for (Row v : r) {
 		if (v.id == fromTrade) continue;
 		IMoneySrvClient::TradeData td;
-		IMoneySrvClient::BalanceChange bch;
-		extractTrade(v.doc, td);
+		Query q = ordersDB.createQuery(View::includeDocs);
+		q.keys({v["buyOrder"],v["sellOrder"]});
+		Result ores = q.exec();
+		if (ores.size() != 2) {
+			throw std::runtime_error(String({"Order not found for trade:" , v.id.getString(),}).c_str());
+		}
+		extractTrade(v.doc, Row(ores[0]).doc, Row(ores[1]).doc, td);
 		moneySrvClient.reportTrade(lastTradeId, td);
-		extractBalanceChange(ordersDB.get(v.doc["buyOrder"].getString()),v.doc,bch,OrderDir::buy,mcfg);
-		moneySrvClient.reportBalanceChange(bch);
-		extractBalanceChange(ordersDB.get(v.doc["sellOrder"].getString()),v.doc,bch,OrderDir::sell,mcfg);
-		moneySrvClient.reportBalanceChange(bch);
-		moneySrvClient.commitTrade(td.id);
 		if (v.id == toTrade) break;
 		lastTradeId = td.id;
 	}
