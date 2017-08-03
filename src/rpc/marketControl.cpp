@@ -69,7 +69,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Stream.lastId", me, &MarketControl::rpcStreamLastId);
 	rpcServer.add("Status.get", me, &MarketControl::rpcStatusGet);
 	rpcServer.add("Status.clear", me, &MarketControl::rpcStatusClear);
-//	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
+	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
 
 	return getMarketStatus();
 
@@ -213,17 +213,8 @@ public:
 	}
 	static void sendNotify(RpcRequest &rq, StrViewA streamName, Value doc, Value seq) {
 		Object ntf;
-		if (doc["finished"].getBool()) {
-			ntf("removed",true)
-			   ("id", doc["_id"]);
-		} else {
-			ntf("removed",false)
-			   ("id",doc["_id"])
-			   ("dir",doc["dir"])
-			   ("price",doc["limitPrice"])
-			   ("size",doc["size"]);
-		}
-		rq.sendNotify(streamName,{seq,ntf});
+		bool finished = doc["finished"].getBool();
+		rq.sendNotify(streamName,{seq,{doc["_id"],doc["dir"],doc["limitPrice"],finished?Value(0):doc["size"]}});
 	}
 
 };
@@ -396,20 +387,13 @@ void quark::MarketControl::rpcStatusClear(RpcRequest rq) {
 }
 
 void quark::MarketControl::rpcOrderbookGet(RpcRequest rq) {
-	couchit::View orderbookView("_design/orderbook/_view/all",couchit::View::update);
+	couchit::View orderbookView("_design/index/_view/orderbook",couchit::View::update);
 	couchit::Result res = ordersDb.createQuery(orderbookView).exec();
-	Array orders[2];
-	bool bid = false;
+	Array out;
 	for (couchit::Row rw : res) {
-		Array resr;
-		unsigned int place = rw.key[0].getUInt();
-		resr.push_back(rw.key[1]);
-		resr.push_back(rw.value);
-		orders[place].push_back(resr);
+		out.push_back({rw["id"],rw.key[0], rw.key[1], rw.value});
 	}
-	rq.setResult(Object("bids",orders[0])
-					   ("asks",orders[1]));
-
+	rq.setResult(out);
 }
 
 
