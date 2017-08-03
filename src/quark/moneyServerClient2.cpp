@@ -130,6 +130,7 @@ void MoneyServerClient2::reportTrade2(Value prevTrade, const TradeData& data) {
 	lastReportedTrade = data.id;
 }
 
+/*
 void MoneyServerClient2::reportBalanceChange(const BalanceChange& data) {
 	RefCntPtr<MyClient> c(client);
 	//no connect here - if disconnected, request will be discarded
@@ -165,8 +166,8 @@ void MoneyServerClient2::reportBalanceChange(const BalanceChange& data) {
 
 }
 
-
-void MoneyServerClient2::commitTrade(Value tradeId) {
+*/
+/*void MoneyServerClient2::commitTrade(Value tradeId) {
 	RefCntPtr<MyClient> c(client);
 	//no connect here - if disconnected, request will be discarded
 
@@ -193,7 +194,7 @@ void MoneyServerClient2::commitTrade(Value tradeId) {
 		}
 
 	};
-}
+}*/
 
 MoneyServerClient2::MyClient::MyClient(String addr,
 		MoneyServerClient2& owner):owner(owner),closed(false) {
@@ -221,12 +222,6 @@ public:
 	ResyncStream(MoneyServerClient2 &owner):owner(owner) {}
 	virtual void reportTrade(Value prevTrade, const TradeData &data) {
 		owner.reportTrade2(prevTrade, data);
-	}
-	virtual void reportBalanceChange(const BalanceChange &data) {
-		owner.reportBalanceChange(data);
-	}
-	virtual void commitTrade(Value tradeId) {
-		owner.commitTrade(tradeId);
 	}
 };
 

@@ -76,7 +76,7 @@ static double sign(double v) {
 }
 
 
-void MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
+/*void MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
 	target->reportBalanceChange(data);
 	if (data.context == OrderContext::margin) {
 		String docUserId  = user2docid(data.user);
@@ -93,7 +93,7 @@ void MarginTradingSvc::reportBalanceChange(const BalanceChange &data) {
 		doc.enableTimestamp();
 		wrtx.update(doc);
 	}
-}
+}*/
 
 void MarginTradingSvc::syncPositions() {
 	positionMap.clear();
@@ -105,7 +105,7 @@ void MarginTradingSvc::syncPositions() {
 	}
 }
 
-void MarginTradingSvc::commitTrade(Value tradeId) {
+/*void MarginTradingSvc::commitTrade(Value tradeId) {
 	wrtx.commit();
 	auto &commited = wrtx.getCommitedDocs();
 	for (auto &&c : commited) {
@@ -114,7 +114,7 @@ void MarginTradingSvc::commitTrade(Value tradeId) {
 	}
 
 	target->commitTrade(tradeId);
-}
+}*/
 
 
 void MarginTradingSvc::updatePosition(Document doc) {

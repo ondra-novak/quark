@@ -57,9 +57,9 @@ void MockupMoneyService::worker() {
 	}
 }
 
-void MockupMoneyService::commitTrade(Value tradeId) {
+/*void MockupMoneyService::commitTrade(Value tradeId) {
 	logInfo({"Commit trade", tradeId});
-}
+}*/
 
 bool MockupMoneyService::allocBudget(json::Value user, const OrderBudget& b) {
 	bool allowed = !(b.above(maxBudget));
@@ -74,11 +74,11 @@ void MockupMoneyService::reportTrade(Value prevTrade, const TradeData &data) {
 
 }
 
-void MockupMoneyService::reportBalanceChange(const BalanceChange &data) {
+/*void MockupMoneyService::reportBalanceChange(const BalanceChange &data) {
 
 	logInfo({"MoneyServer-BalChange", data.trade, data.user, OrderContext::str[data.context], data.assetChange, data.currencyChange, data.fee});
 
-}
+}*/
 
 }
 

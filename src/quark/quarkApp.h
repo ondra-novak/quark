@@ -89,6 +89,7 @@ protected:
 	void rejectOrder(Document order, const OrderErrorException &e, bool update);
 
 	void initMoneyService();
+	void watchDog();
 
 private:
 	POrder docOrder2POrder(const Document& order);
@@ -154,6 +155,9 @@ private:
 	void runOrder2(Document order, bool update);
 	void processPendingOrders(Value user);
 	void freeBudget(const Document& order);
+
+
+
 
 };
 

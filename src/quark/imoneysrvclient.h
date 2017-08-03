@@ -16,46 +16,24 @@ class OrderBudget;
 
 class ITradeStream {
 public:
+
+	struct UserInfo {
+		Value userId;
+		OrderContext::Type context;
+	};
+
 	struct TradeData {
 		Value id;
 		double price;
 		double size;
-		std::size_t nonce;
 		OrderDir::Type dir;
 		std::size_t timestamp;
+		UserInfo buyer;
+		UserInfo seller;
+
 	};
 
-	struct BalanceChange {
-		Value trade;
-		Value user;
-		OrderContext::Type context;
-		double assetChange;
-		double currencyChange;
-		double fee;
-		bool taker;
-	};
-
-	///Report trade executed
-	/**
-	 * @param prevTrade ID of previous trade. If it doesn't match, function must perform resync or report an error
-	 * @param data trade data
-	 */
 	virtual void reportTrade(Value prevTrade, const TradeData &data) = 0;
-	///Reports balance change for the user
-	/**
-	 * @param trade ID of trade as reference
-	 * @param user ID of user
-	 * @param context context (exchange or margin)
-	 * @param assetChange (asset change - position change for margin)
-	 * @param currencyChange (change of currency - or value of the position for margin trading)
-	 * @param fee fee
-	 * @retval true reported
-	 * @retval false referenced trade was not last trade, please start over
-	 */
-	virtual void reportBalanceChange(const BalanceChange &data) = 0;
-
-	virtual void commitTrade(Value tradeId) = 0;
-
 
 	virtual ~ITradeStream() {}
 };

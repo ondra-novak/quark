@@ -718,12 +718,14 @@ void QuarkApp::syncWithDb() {
 }
 
 
+
 void QuarkApp::mainloop() {
 
 
 	ChangesFeed chfeed = ordersDb->createChangesFeed();
 	exitFn = [&] {
 		chfeed.cancelWait();
+		finish = true;
 	};
 
 	try {

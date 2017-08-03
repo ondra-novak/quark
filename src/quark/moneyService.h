@@ -125,8 +125,6 @@ public:
 	virtual void adjustBudget(json::Value user, OrderBudget &total) override {}
 	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) override;
 	virtual void reportTrade(Value , const TradeData &d) override {}
-	virtual void reportBalanceChange(const BalanceChange &)  override {}
-	virtual void commitTrade(Value tradeId) {}
 	virtual void setMarketConfig(PMarketConfig) {}
 };
 }

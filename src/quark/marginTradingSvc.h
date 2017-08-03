@@ -23,8 +23,6 @@ public:
 	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback);
 
 	virtual void reportTrade(Value prevTrade, const TradeData &data) override;
-	virtual void reportBalanceChange(const BalanceChange &data) override;
-	virtual void commitTrade(Value tradeId) override;
 
 
 	void syncPositions();
