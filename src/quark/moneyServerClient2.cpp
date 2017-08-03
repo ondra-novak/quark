@@ -76,7 +76,7 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 	Value params = Object
 			("user_id",user)
 			("currency",total.currency)
-			("amount",total.asset)
+			("asset",total.asset)
 			("marginLong",total.marginLong)
 			("marginShort",total.marginShort)
 			("posLong",total.posLong)
