@@ -42,6 +42,51 @@ bool MarketControl::testDatabase() {
 	}
 }
 
+void MarketControl::rpcConfigGet(RpcRequest rq) {
+
+	rq.setResult(ordersDb.get("settings",CouchDB::flgCreateNew));
+
+}
+
+void MarketControl::rpcConfigSet(RpcRequest rq) {
+	static Value args = Value::fromString(
+
+			"[{"
+			   "\"assetSign\": \"string\","
+			   "\"currencySign\": \"string\","
+			   "\"granuality\": [[\">\",0]],"
+			   "\"maxBudget\": [[\">\",0]],"
+			   "\"maxPrice\": [[\">\",0]],"
+			   "\"maxSize\": [[\">\",0]],"
+			   "\"maxSlippagePct\": [[\">=\",0]],"
+			   "\"maxSpreadPct\": [[\">=\",0]],"
+			   "\"minPrice\": [[\">\",0]],"
+			   "\"minSize\": [[\">\",0]],"
+			   "\"pipSize\":[[\">\",0]],"
+			   "\"moneyService\": [{"
+				   	   "\"type\":\"'mockup\","
+				   	   "\"latency\":[[\">=\",0,\"integer\"]],"
+				   	   "\"maxBudget\": {"
+				   			   "\"asset\":[[\">=\",0]],"
+				   			   "\"currency\":[[\">=\",0]],"
+				   			   "\"marginLong\":[[\">=\",0]],"
+				   			   "\"marginShort\":[[\">=\",0]]"
+				   	   "}"
+			   "}]"
+			"},\"string\"]");
+
+	if (!rq.checkArgs(args)) return rq.setArgError();
+	couchit::Document newDoc;
+	newDoc.setBaseObject(rq.getArgs()[0]);
+	newDoc.setID("settings");
+	newDoc.setRev(rq.getArgs()[1]);
+	ordersDb.put(newDoc);
+	rq.setResult(newDoc.getRevValue());
+
+
+
+}
+
 Value MarketControl::getMarketStatus()  {
 
 	Value err = ordersDb.get("error",CouchDB::flgNullIfMissing);
@@ -70,6 +115,8 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Status.get", me, &MarketControl::rpcStatusGet);
 	rpcServer.add("Status.clear", me, &MarketControl::rpcStatusClear);
 	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
+	rpcServer.add("Config.get",me, &MarketControl::rpcConfigGet);
+	rpcServer.add("Config.set",me, &MarketControl::rpcConfigSet);
 
 	return getMarketStatus();
 

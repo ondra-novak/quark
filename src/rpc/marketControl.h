@@ -41,6 +41,8 @@ protected:
 	void rpcStatusGet(RpcRequest rq);
 	void rpcStatusClear(RpcRequest rq);
 	void rpcOrderbookGet(RpcRequest rq);
+	void rpcConfigGet(RpcRequest rq);
+	void rpcConfigSet(RpcRequest rq);
 
 
 	Value getMarketStatus();
