@@ -206,7 +206,7 @@ public:
 	virtual void init() override {
 		static couchit::View initView("_design/index/_view/orderbook",couchit::View::includeDocs|couchit::View::update);
 		this->initialView = &initView;
-		feed.setFilter(couchit::Filter("index/orders",couchit::Filter::includeDocs));
+		feed.setFilter(couchit::Filter("index/orderbook",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
 		sendNotify(rq, streamName, doc, seqNum.toString());
