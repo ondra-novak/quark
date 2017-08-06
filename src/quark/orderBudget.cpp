@@ -54,9 +54,9 @@ OrderBudget::OrderBudget(double asset,double currency)
 
 OrderBudget OrderBudget::adjust(const MarketConfig &cfg) const {
 	return OrderBudget(cfg.adjustSize(asset),
-			cfg.adjustPrice(currency),
-			cfg.adjustPrice(marginLong),
-			cfg.adjustPrice(marginShort),
+			cfg.adjustTotal(currency),
+			cfg.adjustTotal(marginLong),
+			cfg.adjustTotal(marginShort),
 			cfg.adjustSize(posLong),
 			cfg.adjustSize(posShort));
 }

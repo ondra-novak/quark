@@ -460,14 +460,19 @@ bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order, OrderQu
 
 		//both pointers are defined
 		if (ask != orderbook_ask.end() && bid != orderbook_bid.end()) {
+			std::intptr_t askval = (*ask)->getLimitPrice();
+
+			std::intptr_t bidval = (*bid)->getLimitPrice();
 			//calculate absolute spread
-			std::intptr_t spread = (*ask)->getLimitPrice() - (*bid)->getLimitPrice();
+			std::intptr_t spread = askval - bidval;
 			//calculate center price
-			std::intptr_t center = ((*ask)->getLimitPrice() + (*bid)->getLimitPrice()) / 2;
+			std::intptr_t center = (askval + bidval)/2;
 			//calculate spread in percent
 			std::intptr_t spreadpct = (spread*10000)/center;
 			//compare with required spread
 			if (spreadpct > maxSpread100Pct) {
+
+				//std::cerr << "Spread reached: " << askval << "," << bidval << "," << spreadpct << ">" << maxSpread100Pct << std::endl;
 				//prevent execution when spread test did not pass
 				return false;
 			}
