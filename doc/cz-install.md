@@ -33,6 +33,19 @@ $ curl -s -X PUT http://localhost:5984/_config/admins/admin - '"iamroot"'
  * Výše uvedený řádek vytváří účet admin a nastavuje heslo na "iamroot". Je možné zvolit jiné údaje, jen pozor na to, že některé konfiguráky mají tento login zadaný jako výchozí, tedy je nutné configurák upravit
  * pro založení dalších admin-účtu je třeba jméno a heslo prvního admina jako basic authentification (nebo použít webové rozhraní)
  
+## Další nastavení databáze
+
+### Zapnutí automatického compact
+
+Protože CouchDB je append only databáze, je potřeba občas provést compact databáze aby se optimalizovalo nepoužité místo. Compact řeší couchdb sama, ale musí se tato volba aktivovat
+
+V souboru /etc/couchdb/default.ini do sekce [compactions] dopsat řádek
+
+```
+_default = [{db_fragmentation, "70%"}, {view_fragmentation, "60%"}, {from, "00:00"}, {to, "23:59"}]
+```
+Pokud není compact povolen, velikost databáze narůstá obrovským tempem a za pár hodin může dosáhnout i stovek megabajt. Automatický compact probíhá na pozadí a nemělo by to způsobit nějaké výrazné zpoždění.
+ 
 ## Instalace aplikace
 
 ```bash
