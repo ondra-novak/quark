@@ -121,17 +121,20 @@ static std::pair<unsigned int,bool> getCountOfCommands(RpcClient &rpc) {
 }
 
 double getCurrentPrice(String url) {
-	couchit::HttpClient client;
-	client.open(url,"GET",false);
-	int status = client.send();
-	if (status != 200) {
-		logError({"Failed to retrieve current price", status});
-		return 0;
+	try {
+		couchit::HttpClient client;
+		client.open(url,"GET",false);
+		int status = client.send();
+		if (status != 200) {
+			logError({"Failed to retrieve current price", status});
+			return 0;
+		}
+		BufferedRead<couchit::InputStream> buffr(client.getResponse());
+		Value resp = Value::parse<BufferedRead<couchit::InputStream> &>(buffr);
+		return resp[0].getNumber();
+	} catch (std::exception &e) {
+		logError({"Failed to read price", e.what()});
 	}
-	BufferedRead<couchit::InputStream> buffr(client.getResponse());
-	Value resp = Value::parse<BufferedRead<couchit::InputStream> &>(buffr);
-	return resp[0].getNumber();
-
 
 
 }

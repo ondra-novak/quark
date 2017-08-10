@@ -117,6 +117,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
 	rpcServer.add("Config.get",me, &MarketControl::rpcConfigGet);
 	rpcServer.add("Config.set",me, &MarketControl::rpcConfigSet);
+	rpcServer.add("Chart.get",me, &MarketControl::rpcChartGet);
 
 	return getMarketStatus();
 
@@ -441,6 +442,124 @@ void quark::MarketControl::rpcOrderbookGet(RpcRequest rq) {
 		out.push_back({rw["id"],rw.key[0], rw.key[1], rw.value});
 	}
 	rq.setResult(out);
+}
+
+
+void MarketControl::rpcChartGet(RpcRequest rq) {
+
+	static Value args = Value(json::array,{
+			Object("startTime","integer")
+			      ("endTime",{"integer","optional"})
+			      ("timeFrame","string")
+	});
+
+	if (!rq.checkArgs(args)) return rq.setArgError();
+
+	int groupLevel;
+	int aggreg;
+	Value arg = rq.getArgs()[0];
+	Value startTime = arg["startTime"];
+	Value endTime = arg["endTime"];
+	Value timeFrame = arg["timeFrame"];
+
+	StrViewA tfs = timeFrame.getString();
+	if (tfs == "1m") {groupLevel=4; aggreg = 1;}
+	else if (tfs == "3m") {groupLevel=4; aggreg = 3;}
+	else if (tfs == "5m") {groupLevel=3; aggreg = 5;}
+	else if (tfs == "10m") {groupLevel=3; aggreg = 10;}
+	else if (tfs == "15m") {groupLevel=3; aggreg = 15;}
+	else if (tfs == "30m") {groupLevel=3; aggreg = 30;}
+	else if (tfs == "45m") {groupLevel=3; aggreg = 45;}
+	else if (tfs == "1h") {groupLevel=2; aggreg = 60;}
+	else if (tfs == "2h") {groupLevel=2; aggreg = 120;}
+	else if (tfs == "3h") {groupLevel=2; aggreg = 180;}
+	else if (tfs == "4h") {groupLevel=2; aggreg = 240;}
+	else if (tfs == "6h") {groupLevel=2; aggreg = 360;}
+	else if (tfs == "12h") {groupLevel=2; aggreg = 720;}
+	else if (tfs == "1D") {groupLevel=1; aggreg = 1440;}
+	else if (tfs == "2D") {groupLevel=1; aggreg = 2880;}
+	else if (tfs == "3D") {groupLevel=1; aggreg = 4320;}
+	else if (tfs == "7D") {groupLevel=1; aggreg = 10080;}
+	else if (tfs == "1W") {groupLevel=1; aggreg = 10080;}
+	else return rq.setError(400,"Undefined timeFrame",timeFrame);
+
+	couchit::View chartView("_design/trades/_view/chart", couchit::View::update);
+	auto query = tradesDb.createQuery(chartView);
+	query.groupLevel(groupLevel);
+	query.range(startTime, endTime,0);
+	couchit::Result res = query.exec();
+
+	Array result;
+	std::vector<Value> agrRecs;
+	std::size_t agrtime = 0;
+
+	auto calcTime = [](Value tmRec) {
+		std::uintptr_t x = tmRec[0].getUInt() * 86400UL
+				+ tmRec[1].getUInt() * 3600UL
+				* tmRec[2].getUInt() * 900UL
+				* tmRec[3].getUInt() * 60UL;
+		return x;
+	};
+
+	auto doAggregate = [&]() -> json::Value {
+
+		if (agrRecs.empty()) return json::undefined;
+		if (agrRecs.size() == 1) return agrRecs[0].replace("t", agrtime*aggreg);
+		double h = agrRecs[0]["h"].getNumber();
+		double l = agrRecs[0]["l"].getNumber();
+		double o = agrRecs[0]["o"].getNumber();
+		double c = agrRecs[0]["c"].getNumber();
+		double v = agrRecs[0]["v"].getNumber();
+		std::size_t n = agrRecs[0]["n"].getUInt();
+		double s = agrRecs[0]["s"].getNumber();
+		double s2 = agrRecs[0]["s2"].getNumber();
+		double v2 = agrRecs[0]["v2"].getNumber();
+		for (std::size_t i = 2, cnt = agrRecs.size(); i < cnt; i++) {
+			double xh = agrRecs[i]["h"].getNumber();
+			double xl = agrRecs[i]["l"].getNumber();
+			double xo = agrRecs[i]["o"].getNumber();
+			double xc = agrRecs[i]["c"].getNumber();
+			double xv = agrRecs[i]["v"].getNumber();
+			std::size_t xn = agrRecs[i]["n"].getUInt();
+			double xs = agrRecs[i]["s"].getNumber();
+			double xs2 = agrRecs[i]["s2"].getNumber();
+			double xv2 = agrRecs[i]["v2"].getNumber();
+			if (xh > h) h = xh;
+			if (xl < l) l = xl;
+			c = xc;
+			v += xv;
+			n += xn;
+			s += xs;
+			s2 += xs2;
+			v2 += xv2;
+		}
+		return Value(Object("o",o)
+				("h",h)
+				("l",l)
+				("c",c)
+				("o",o)
+				("v",v)
+				("n",n)
+				("s",s)
+				("s2",s2)
+				("t", agrtime*aggreg)
+				("v2",v2));
+	};
+
+	for (couchit::Row rw : res) {
+		std::size_t tm = calcTime(rw.key);
+		std::size_t atm = tm / aggreg;
+		if (atm != agrtime) {
+			result.push_back(doAggregate());
+			agrRecs.clear();
+			agrtime = atm;
+		}
+		agrRecs.push_back(rw.value);
+	}
+	result.push_back(doAggregate());
+
+	rq.setResult(result);
+
 }
 
 
