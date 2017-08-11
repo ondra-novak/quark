@@ -445,7 +445,29 @@ void quark::MarketControl::rpcOrderbookGet(RpcRequest rq) {
 }
 
 
+static Value crackTime(Value tm) {
+    if (tm.defined()) {
+	std::uintptr_t timestamp = tm.getUInt();
+        return {timestamp/86400, (timestamp/3600)%24, (timestamp/300)%12, (timestamp/60)%5};
+    } else {
+	return tm;
+    }
+}
+
+static std::uintptr_t decodeTime(Value tmRec) {
+		std::uintptr_t x = tmRec[0].getUInt() * 86400UL
+				+ tmRec[1].getUInt() * 3600UL
+				+ tmRec[2].getUInt() * 900UL
+				+ tmRec[3].getUInt() * 60UL;
+		return x;
+	};
+
+static double fixFloat(double c) {
+    return floor(c * 1000000000+0.5)/ 1000000000;
+}
+
 void MarketControl::rpcChartGet(RpcRequest rq) {
+
 
 	static Value args = Value(json::array,{
 			Object("startTime","integer")
@@ -488,69 +510,61 @@ void MarketControl::rpcChartGet(RpcRequest rq) {
 	couchit::View chartView("_design/trades/_view/chart", couchit::View::update);
 	auto query = tradesDb.createQuery(chartView);
 	query.groupLevel(groupLevel);
-	query.range(startTime, endTime,0);
+	query.range(crackTime(startTime), crackTime(endTime),0);
 	couchit::Result res = query.exec();
 
 	Array result;
-	result.push_back({groupLevel, aggreg});
+//	result.push_back({groupLevel, aggreg});
 	std::vector<Value> agrRecs;
 	std::size_t agrtime = 0;
 
-	auto calcTime = [](Value tmRec) {
-		std::uintptr_t x = tmRec[0].getUInt() * 86400UL
-				+ tmRec[1].getUInt() * 3600UL
-				+ tmRec[2].getUInt() * 900UL
-				+ tmRec[3].getUInt() * 60UL;
-		return x;
-	};
 
 	auto doAggregate = [&]() -> json::Value {
 
 		if (agrRecs.empty()) return json::undefined;
-		if (agrRecs.size() == 1) return agrRecs[0].replace("t", agrtime*aggreg);
-		double h = agrRecs[0]["h"].getNumber();
-		double l = agrRecs[0]["l"].getNumber();
-		double o = agrRecs[0]["o"].getNumber();
-		double c = agrRecs[0]["c"].getNumber();
-		double v = agrRecs[0]["v"].getNumber();
-		std::size_t n = agrRecs[0]["n"].getUInt();
-		double s = agrRecs[0]["s"].getNumber();
-		double s2 = agrRecs[0]["s2"].getNumber();
-		double v2 = agrRecs[0]["v2"].getNumber();
+		double h = agrRecs[0][1].getNumber();
+		double l = agrRecs[0][2].getNumber();
+		double o = agrRecs[0][0].getNumber();
+		double c = agrRecs[0][3].getNumber();
+		double v = agrRecs[0][4].getNumber();
+		std::size_t n = agrRecs[0][5].getUInt();
+//		std::size_t i = agrRecs[0][9].getUInt();
+		double s = agrRecs[0][6].getNumber();
+		double s2 = agrRecs[0][7].getNumber();
+		double v2 = agrRecs[0][8].getNumber();
 		for (std::size_t i = 2, cnt = agrRecs.size(); i < cnt; i++) {
-			double xh = agrRecs[i]["h"].getNumber();
-			double xl = agrRecs[i]["l"].getNumber();
-			double xo = agrRecs[i]["o"].getNumber();
-			double xc = agrRecs[i]["c"].getNumber();
-			double xv = agrRecs[i]["v"].getNumber();
-			std::size_t xn = agrRecs[i]["n"].getUInt();
-			double xs = agrRecs[i]["s"].getNumber();
-			double xs2 = agrRecs[i]["s2"].getNumber();
-			double xv2 = agrRecs[i]["v2"].getNumber();
+			double xh = agrRecs[i][1].getNumber();
+			double xl = agrRecs[i][2].getNumber();
+			//double xo = agrRecs[i][0].getNumber();
+			double xc = agrRecs[i][3].getNumber();
+			double xv = agrRecs[i][4].getNumber();
+			std::size_t xn = agrRecs[i][5].getUInt();
+			double xs = agrRecs[i][6].getNumber();
+			double xs2 = agrRecs[i][7].getNumber();
+			double xv2 = agrRecs[i][8].getNumber();
 			if (xh > h) h = xh;
 			if (xl < l) l = xl;
 			c = xc;
-			v += xv;
+			v = fixFloat(v + xv);
 			n += xn;
-			s += xs;
-			s2 += xs2;
-			v2 += xv2;
+			s = fixFloat(s + xs);
+			s2 = fixFloat( s2 + xs2);
+			v2 = fixFloat( v2 + xv2);
 		}
-		return Value(Object("o",o)
-				("h",h)
-				("l",l)
-				("c",c)
-				("o",o)
-				("v",v)
-				("n",n)
-				("s",s)
-				("s2",s2)
-				("t", agrtime*aggreg)
-				("v2",v2));
+		return Value(Object("open",o)
+				("high",h)
+				("low",l)
+				("close",c)				
+				("volume",v)
+				("count",n)
+				("sum",s)
+				("sum2",s2)
+				("time", agrtime*aggreg)
+				("volume2",v2));
 	};
 
 	for (couchit::Row rw : res) {
-		std::size_t tm = calcTime(rw.key);
+		std::size_t tm = decodeTime(rw.key);
 		std::size_t atm = tm / aggreg;
 //		std::cerr << tm << "," << atm << std::endl;
 		if (atm != agrtime) {
