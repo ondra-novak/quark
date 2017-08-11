@@ -483,6 +483,8 @@ void MarketControl::rpcChartGet(RpcRequest rq) {
 	else if (tfs == "1W") {groupLevel=1; aggreg = 10080;}
 	else return rq.setError(400,"Undefined timeFrame",timeFrame);
 
+	aggreg*=60;
+
 	couchit::View chartView("_design/trades/_view/chart", couchit::View::update);
 	auto query = tradesDb.createQuery(chartView);
 	query.groupLevel(groupLevel);
@@ -490,14 +492,15 @@ void MarketControl::rpcChartGet(RpcRequest rq) {
 	couchit::Result res = query.exec();
 
 	Array result;
+	result.push_back({groupLevel, aggreg});
 	std::vector<Value> agrRecs;
 	std::size_t agrtime = 0;
 
 	auto calcTime = [](Value tmRec) {
 		std::uintptr_t x = tmRec[0].getUInt() * 86400UL
 				+ tmRec[1].getUInt() * 3600UL
-				* tmRec[2].getUInt() * 900UL
-				* tmRec[3].getUInt() * 60UL;
+				+ tmRec[2].getUInt() * 900UL
+				+ tmRec[3].getUInt() * 60UL;
 		return x;
 	};
 
@@ -549,6 +552,7 @@ void MarketControl::rpcChartGet(RpcRequest rq) {
 	for (couchit::Row rw : res) {
 		std::size_t tm = calcTime(rw.key);
 		std::size_t atm = tm / aggreg;
+//		std::cerr << tm << "," << atm << std::endl;
 		if (atm != agrtime) {
 			result.push_back(doAggregate());
 			agrRecs.clear();
