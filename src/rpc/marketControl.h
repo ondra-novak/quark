@@ -44,6 +44,7 @@ protected:
 	void rpcConfigGet(RpcRequest rq);
 	void rpcConfigSet(RpcRequest rq);
 	void rpcChartGet(RpcRequest rq);
+	void rpcTradesStats(RpcRequest rq);
 
 
 	Value getMarketStatus();

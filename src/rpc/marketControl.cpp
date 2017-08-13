@@ -87,6 +87,7 @@ void MarketControl::rpcConfigSet(RpcRequest rq) {
 
 }
 
+
 Value MarketControl::getMarketStatus()  {
 
 	Value err = ordersDb.get("error",CouchDB::flgNullIfMissing);
@@ -118,6 +119,8 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Config.get",me, &MarketControl::rpcConfigGet);
 	rpcServer.add("Config.set",me, &MarketControl::rpcConfigSet);
 	rpcServer.add("Chart.get",me, &MarketControl::rpcChartGet);
+	rpcServer.add("Trades.chart",me, &MarketControl::rpcChartGet);
+	rpcServer.add("Trades.stats",me, &MarketControl::rpcTradesStats);
 
 	return getMarketStatus();
 
@@ -643,6 +646,32 @@ void MarketControl::ChartData::aggregate(const ChartData& with) {
 	}
 
 }
+
+void MarketControl::rpcTradesStats(RpcRequest rq) {
+	static Value args = Value(json::array,{
+			Object("startTime","integer")
+			      ("endTime",{"integer","optional"})
+	});
+
+	if (!rq.checkArgs(args)) return rq.setArgError();
+
+	Value arg = rq.getArgs()[0];
+	Value startTime = arg["startTime"];
+	Value endTime = arg["endTime"];
+
+	couchit::View chartView("_design/trades/_view/chart", couchit::View::update);
+	auto query = tradesDb.createQuery(chartView);
+	query.reduceAll();
+	query.range(crackTime(startTime), crackTime(endTime),0);
+	couchit::Result res = query.exec();
+
+	ChartData d;
+	d.fromDB(res[0],1);
+	rq.setResult(d.toJson());
+
+
+}
+
 
 }
 /* namespace quark */
