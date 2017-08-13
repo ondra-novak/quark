@@ -815,9 +815,10 @@ void QuarkApp::initMoneyService() {
 		sv = new MockupMoneyService(b,latency);
 	} else if (type == "singleJsonRPCServer"){
 		Value addr = cfg["addr"];
+		bool logTrafic = cfg["logTrafic"].getBool();
 		sv = new MoneyServerClient2(
 				new MoneySvcSupport(ordersDb, tradesDb,marketCfg,
-						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature, marketCfg->assetSign, marketCfg->currencySign);
+						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature, marketCfg->assetSign, marketCfg->currencySign, logTrafic);
 	} else {
 		throw std::runtime_error("Unsupported money service");
 	}

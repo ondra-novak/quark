@@ -77,6 +77,27 @@ protected:
 	typedef RefCntPtr<FeedControl> PFeedControl;
 
 
+	struct ChartData {
+		std::uintptr_t time;
+		std::uintptr_t count;
+		std::uintptr_t open_index;
+		std::uintptr_t close_index;
+		double open;
+		double close;
+		double high;
+		double low;
+		double volume;
+		double volume2;
+		double sum;
+		double sum2;
+
+		void fromDB(json::Value v, std::uintptr_t timeAgr);
+		json::Value toJson() const;
+
+		void aggregate(const ChartData &with);
+
+	};
+
 	PFeedControl ordersFeed, tradesFeed, posFeed, orderbookFeed;
 	OrderControl orderControl;
 

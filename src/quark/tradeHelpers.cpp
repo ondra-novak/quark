@@ -73,14 +73,15 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 	//sends reports to money server(s)
 	for (Row v : r) {
 		if (v.id == fromTrade) continue;
+		Value t = v.doc;
 		IMoneySrvClient::TradeData td;
 		Query q = ordersDB.createQuery(View::includeDocs);
-		q.keys({v["buyOrder"],v["sellOrder"]});
+		q.keys({t["buyOrder"],t["sellOrder"]}).update();
 		Result ores = q.exec();
 		if (ores.size() != 2) {
 			throw std::runtime_error(String({"Order not found for trade:" , v.id.getString(),}).c_str());
 		}
-		extractTrade(v.doc, Row(ores[0]).doc, Row(ores[1]).doc, td);
+		extractTrade(t, Row(ores[0]).doc, Row(ores[1]).doc, td);
 		moneySrvClient.reportTrade(lastTradeId, td);
 		if (v.id == toTrade) break;
 		lastTradeId = td.id;

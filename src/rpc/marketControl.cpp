@@ -423,18 +423,18 @@ void MarketControl::rpcStreamLastId(RpcRequest rq) {
 
 }
 
-void quark::MarketControl::rpcStatusGet(RpcRequest rq) {
+void MarketControl::rpcStatusGet(RpcRequest rq) {
 	rq.setResult(getMarketStatus());
 }
 
-void quark::MarketControl::rpcStatusClear(RpcRequest rq) {
+void MarketControl::rpcStatusClear(RpcRequest rq) {
 	couchit::Document doc = ordersDb.get("error");
 	doc.setDeleted();
 	ordersDb.put(doc);
 	rq.setResult(getMarketStatus());
 }
 
-void quark::MarketControl::rpcOrderbookGet(RpcRequest rq) {
+void MarketControl::rpcOrderbookGet(RpcRequest rq) {
 	couchit::View orderbookView("_design/index/_view/orderbook",couchit::View::update);
 	couchit::Result res = ordersDb.createQuery(orderbookView).exec();
 	Array out;
@@ -448,17 +448,21 @@ void quark::MarketControl::rpcOrderbookGet(RpcRequest rq) {
 static Value crackTime(Value tm) {
     if (tm.defined()) {
 	std::uintptr_t timestamp = tm.getUInt();
-        return {timestamp/86400, (timestamp/3600)%24, (timestamp/300)%12, (timestamp/60)%5};
+        return {(timestamp/604800),(timestamp/86400)%7, (timestamp/14400)%6, (timestamp/3600)%4, (timestamp/900)%4,(timestamp/300)%3, (timestamp/60)%5};
     } else {
 	return tm;
     }
 }
 
 static std::uintptr_t decodeTime(Value tmRec) {
-		std::uintptr_t x = tmRec[0].getUInt() * 86400UL
-				+ tmRec[1].getUInt() * 3600UL
-				+ tmRec[2].getUInt() * 900UL
-				+ tmRec[3].getUInt() * 60UL;
+		std::uintptr_t x =
+				  tmRec[0].getUInt() * 604800UL
+				+ tmRec[1].getUInt() * 86400UL
+				+ tmRec[2].getUInt() * 14400UL
+				+ tmRec[3].getUInt() * 3600UL
+				+ tmRec[4].getUInt() * 900UL
+				+ tmRec[5].getUInt() * 300UL
+				+ tmRec[6].getUInt() * 60UL;
 		return x;
 	};
 
@@ -466,123 +470,181 @@ static double fixFloat(double c) {
     return floor(c * 1000000000+0.5)/ 1000000000;
 }
 
+struct TimeFrameDef {
+	StrViewA name;
+	unsigned int groupLevel;
+	unsigned int divisor;
+};
+
+static TimeFrameDef supportedFrames[] = {
+
+		{"1m",7,1},
+		{"2m",7,2},
+		{"3m",7,3},
+		{"5m",6,5},
+		{"10m",6,10},
+		{"15m",5,15},
+		{"30m",5,30},
+		{"45m",5,45},
+		{"1h",4,60},
+		{"2h",4,120},
+		{"3h",4,180},
+		{"4h",3,240},
+		{"6h",4,360},
+		{"8h",3,240},
+		{"12h",3,720},
+		{"1D",2,1440},
+		{"2D",2,2880},
+		{"3D",2,4320},
+		{"7D",1,10080},
+		{"1W",1,10080},
+		{"14D",1,20160},
+		{"2W",1,20160}
+};
+
+
 void MarketControl::rpcChartGet(RpcRequest rq) {
 
 
 	static Value args = Value(json::array,{
 			Object("startTime","integer")
 			      ("endTime",{"integer","optional"})
-			      ("timeFrame","string")
+			      ("timeFrame",{"string","integer"})
 	});
 
 	if (!rq.checkArgs(args)) return rq.setArgError();
 
-	int groupLevel;
-	int aggreg;
+	const TimeFrameDef *selTmf = nullptr;
+
+
 	Value arg = rq.getArgs()[0];
 	Value startTime = arg["startTime"];
 	Value endTime = arg["endTime"];
 	Value timeFrame = arg["timeFrame"];
 
-	StrViewA tfs = timeFrame.getString();
-	if (tfs == "1m") {groupLevel=4; aggreg = 1;}
-	else if (tfs == "3m") {groupLevel=4; aggreg = 3;}
-	else if (tfs == "5m") {groupLevel=3; aggreg = 5;}
-	else if (tfs == "10m") {groupLevel=3; aggreg = 10;}
-	else if (tfs == "15m") {groupLevel=3; aggreg = 15;}
-	else if (tfs == "30m") {groupLevel=3; aggreg = 30;}
-	else if (tfs == "45m") {groupLevel=3; aggreg = 45;}
-	else if (tfs == "1h") {groupLevel=2; aggreg = 60;}
-	else if (tfs == "2h") {groupLevel=2; aggreg = 120;}
-	else if (tfs == "3h") {groupLevel=2; aggreg = 180;}
-	else if (tfs == "4h") {groupLevel=2; aggreg = 240;}
-	else if (tfs == "6h") {groupLevel=2; aggreg = 360;}
-	else if (tfs == "12h") {groupLevel=2; aggreg = 720;}
-	else if (tfs == "1D") {groupLevel=1; aggreg = 1440;}
-	else if (tfs == "2D") {groupLevel=1; aggreg = 2880;}
-	else if (tfs == "3D") {groupLevel=1; aggreg = 4320;}
-	else if (tfs == "7D") {groupLevel=1; aggreg = 10080;}
-	else if (tfs == "1W") {groupLevel=1; aggreg = 10080;}
-	else return rq.setError(400,"Undefined timeFrame",timeFrame);
+	if (timeFrame.type() == json::number) {
+		auto d = timeFrame.getUInt();
+		for (auto &&x : supportedFrames) {
+			if (x.divisor == d) {
+				selTmf = &x;
+				break;
+			}
+		}
+	} else {
+		auto d = timeFrame.getString();
+		for (auto &&x : supportedFrames) {
+			if (x.name == d) {
+				selTmf = &x;
+				break;
+			}
+		}
+	}
 
-	aggreg*=60;
+
+	if (selTmf == nullptr) {
+
+		Array list;
+		for (auto &&x : supportedFrames) {
+			list.push_back(x.name);
+		}
+		for (auto &&x : supportedFrames) {
+			list.push_back(x.divisor);
+		}
+
+		rq.setError(400, "Unknown timeFrane", list);
+		return ;
+
+	}
+
+	unsigned int aggreg=60*selTmf->divisor;;
 
 	couchit::View chartView("_design/trades/_view/chart", couchit::View::update);
 	auto query = tradesDb.createQuery(chartView);
-	query.groupLevel(groupLevel);
+	query.groupLevel(selTmf->groupLevel);
 	query.range(crackTime(startTime), crackTime(endTime),0);
 	couchit::Result res = query.exec();
 
-	Array result;
-//	result.push_back({groupLevel, aggreg});
-	std::vector<Value> agrRecs;
-	std::size_t agrtime = 0;
+	Array jres;
 
+	auto iter = res.begin();
+	if (iter != res.end()) {
 
-	auto doAggregate = [&]() -> json::Value {
-
-		if (agrRecs.empty()) return json::undefined;
-		double h = agrRecs[0][1].getNumber();
-		double l = agrRecs[0][2].getNumber();
-		double o = agrRecs[0][0].getNumber();
-		double c = agrRecs[0][3].getNumber();
-		double v = agrRecs[0][4].getNumber();
-		std::size_t n = agrRecs[0][5].getUInt();
-//		std::size_t i = agrRecs[0][9].getUInt();
-		double s = agrRecs[0][6].getNumber();
-		double s2 = agrRecs[0][7].getNumber();
-		double v2 = agrRecs[0][8].getNumber();
-		for (std::size_t i = 2, cnt = agrRecs.size(); i < cnt; i++) {
-			double xh = agrRecs[i][1].getNumber();
-			double xl = agrRecs[i][2].getNumber();
-			//double xo = agrRecs[i][0].getNumber();
-			double xc = agrRecs[i][3].getNumber();
-			double xv = agrRecs[i][4].getNumber();
-			std::size_t xn = agrRecs[i][5].getUInt();
-			double xs = agrRecs[i][6].getNumber();
-			double xs2 = agrRecs[i][7].getNumber();
-			double xv2 = agrRecs[i][8].getNumber();
-			if (xh > h) h = xh;
-			if (xl < l) l = xl;
-			c = xc;
-			v = fixFloat(v + xv);
-			n += xn;
-			s = fixFloat(s + xs);
-			s2 = fixFloat( s2 + xs2);
-			v2 = fixFloat( v2 + xv2);
+		Value rw = *iter;
+		ChartData agr;
+		agr.fromDB(rw, aggreg);
+		++iter;
+		while (iter != res.end()) {
+			ChartData item;
+			item.fromDB(*iter, aggreg);
+			if (item.time != agr.time) {
+				jres.push_back(agr.toJson());
+				agr = item;
+			} else {
+				agr.aggregate(item);
+			}
+			++iter;
 		}
-		return Value(Object("open",o)
-				("high",h)
-				("low",l)
-				("close",c)				
-				("volume",v)
-				("count",n)
-				("sum",s)
-				("sum2",s2)
-				("time", agrtime*aggreg)
-				("volume2",v2));
-	};
-
-	for (couchit::Row rw : res) {
-		std::size_t tm = decodeTime(rw.key);
-		std::size_t atm = tm / aggreg;
-//		std::cerr << tm << "," << atm << std::endl;
-		if (atm != agrtime) {
-			result.push_back(doAggregate());
-			agrRecs.clear();
-			agrtime = atm;
-		}
-		agrRecs.push_back(rw.value);
+		jres.push_back(agr.toJson());
 	}
-	result.push_back(doAggregate());
 
-	rq.setResult(result);
-
-}
-
+	rq.setResult(jres);
 
 }
 
+void MarketControl::ChartData::fromDB(json::Value v, std::uintptr_t timeAgr) {
+
+	Value key = v["key"];
+	Value data = v["value"];
+
+	time = (decodeTime(key)/timeAgr)*timeAgr;
+	count = data[5].getUInt();
+	close_index=open_index = data[9].getUInt();
+	high = data[1].getNumber();
+	low = data[2].getNumber();
+	open = data[0].getNumber();
+	close = data[3].getNumber();
+	volume = data[4].getNumber();
+	sum = data[6].getNumber();
+	sum2 = data[7].getNumber();
+	volume2 = data[8].getNumber();
+}
+
+
+json::Value MarketControl::ChartData::toJson() const {
+	return Value(Object("open",open)
+			("high",high)
+			("low",low)
+			("close",close)
+			("volume",volume)
+			("count",count)
+			("sum",sum)
+			("sum2",sum2)
+			("time", time)
+			("index",open_index)
+			("volume2",volume2));
+}
+
+void MarketControl::ChartData::aggregate(const ChartData& with) {
+
+	time = std::min(time, with.time);
+	count += with.count;
+	sum += with.sum;
+	sum2 += with.sum2;
+	volume += with.volume;
+	volume2 += with.volume2;
+	high = std::max(high, with.high);
+	low = std::max(low, with.low);
+	if (open_index > with.open_index) {
+		open = with.open;
+		open_index = with.open_index;
+	} else if (close_index < with.close_index) {
+		close = with.close;
+		close_index = with.close_index;
+	}
+
+}
+
+}
 /* namespace quark */
 
 

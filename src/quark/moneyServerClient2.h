@@ -14,7 +14,7 @@ class MoneyServerClient2: public IMoneySrvClient {
 public:
 
 
-	MoneyServerClient2(PMoneySvcSupport support, String addr, String signature, String asset, String currency);
+	MoneyServerClient2(PMoneySvcSupport support, String addr, String signature, String asset, String currency, bool logTrafic);
 	~MoneyServerClient2();
 
 

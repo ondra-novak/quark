@@ -27,7 +27,7 @@ namespace quark {
 
 
 MoneyServerClient2::MoneyServerClient2(PMoneySvcSupport support,
-		String addr, String signature, String asset, String currency)
+		String addr, String signature, String asset, String currency, bool logTrafic)
 	:support(support)
 	,addr(addr)
 	,signature(signature)
@@ -36,6 +36,7 @@ MoneyServerClient2::MoneyServerClient2(PMoneySvcSupport support,
 	,client(new MyClient(addr,*this))
 	,inited(false)
 {
+	client->enableLogTrafic(logTrafic);
 }
 
 MoneyServerClient2::~MoneyServerClient2() {
@@ -92,7 +93,7 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 				handleError(c,"CurrencyBalance.block_money", res);
 			callback(allocTryAgain);
 		} else {
-			if (Value(res).getBool()) {
+			if (Value(res)["success"].getBool()) {
 				callback(allocOk);
 			} else {
 				callback(allocReject);
@@ -180,7 +181,7 @@ void MoneyServerClient2::connectIfNeed() {
 				}
 			} else {
 				Value r(initres);
-				Value lastSyncId = r["last_sync_id"];
+				Value lastSyncId = r["last_trade_id"];
 				Value version = r["version"];
 
 				logInfo({"Initialized RPC client, version, lastId", version, lastSyncId});
