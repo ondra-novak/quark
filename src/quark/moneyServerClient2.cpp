@@ -27,12 +27,13 @@ namespace quark {
 
 
 MoneyServerClient2::MoneyServerClient2(PMoneySvcSupport support,
-		String addr, String signature, String asset, String currency, bool logTrafic)
+		String addr, String signature, String asset, String currency, String firstTradeId, bool logTrafic)
 	:support(support)
 	,addr(addr)
 	,signature(signature)
 	,asset(asset)
 	,currency(currency)
+	,firstTradeId(firstTradeId)
 	,client(new MyClient(addr,*this))
 	,inited(false)
 {
@@ -185,6 +186,10 @@ void MoneyServerClient2::connectIfNeed() {
 				Value version = r["version"];
 
 				logInfo({"Initialized RPC client, version, lastId", version, lastSyncId});
+
+				if (lastSyncId.getString() == "" && firstTradeId != "") {
+					lastSyncId = firstTradeId;
+				}
 
 				ResyncStream resyncStream(*this);
 				support->resync(resyncStream, lastSyncId, lastReportedTrade);

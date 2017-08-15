@@ -11,6 +11,8 @@
 #include <couchit/minihttp/netio.h>
 #include <imtjson/string.h>
 #include <imtjson/parser.h>
+#include <imtjson/serializer.h>
+
 #include "../quark/asyncrpcclient.h"
 
 using namespace json;
@@ -117,6 +119,8 @@ int main(int argc, char **argv) {
 		std::cerr << "Usage: " << argv[0] << " <address>:port" << std::endl;
 		return 1;
 	}
+
+	maxPrecisionDigits=9;
 
 	String addr = argv[1];
 
