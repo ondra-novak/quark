@@ -700,6 +700,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 
 void QuarkApp::syncWithDb() {
 
+	logInfo("Syncing... (can take long time)");
 	Value lastTrade = fetchLastTrade(*tradesDb);
 	if (lastTrade != nullptr) {
 		tradeCounter = lastTrade["index"].getUInt();
@@ -773,7 +774,7 @@ void QuarkApp::mainloop() {
 			return true;
 		};
 
-		logInfo("==== Preload commands ====");
+		logInfo("Reading orders ... (can take long time)");
 
 		Query q = ordersDb->createQuery(queueView);
 		Result res = q.exec();

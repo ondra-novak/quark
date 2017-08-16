@@ -185,11 +185,12 @@ void MoneyServerClient2::connectIfNeed() {
 				Value lastSyncId = r["last_trade_id"];
 				Value version = r["version"];
 
-				logInfo({"Initialized RPC client, version, lastId", version, lastSyncId});
 
 				if (lastSyncId.getString() == "" && firstTradeId != "") {
 					lastSyncId = firstTradeId;
 				}
+
+				logInfo({"Initialized RPC client, version, lastId", version, lastSyncId});
 
 				ResyncStream resyncStream(*this);
 				support->resync(resyncStream, lastSyncId, lastReportedTrade);
