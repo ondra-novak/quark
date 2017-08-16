@@ -173,6 +173,22 @@ void MoneyServerClient2::connectIfNeed() {
 	if (!client->isConnected()) {
 		if (client->connect(addr)) {
 
+			time_t now;
+			time(&now);
+			if (now - lastDropTime < 10) {
+				retryCounter++;
+				if (retryCounter == 10) {
+					try {
+						throw std::runtime_error("MoneyServer client - too many connection drops, this is fatal");
+					} catch(...) {
+						unhandledException();
+					}
+				}
+				std::this_thread::sleep_for(std::chrono::seconds(retryCounter));
+			} else {
+				retryCounter=0;
+			}
+
 			RpcResult initres = (*client)("CurrencyBalance.init", Object
 					("signature",signature)
 					("asset",asset)
@@ -191,7 +207,12 @@ void MoneyServerClient2::connectIfNeed() {
 					lastSyncId = firstTradeId;
 				}
 
-				logInfo({"Initialized RPC client, version, lastId", version, lastSyncId});
+				logInfo({"Initialized RPC client, version, lastId", version, lastSyncId, retryCounter});
+
+				time(&now);
+				lastDropTime = now;
+
+
 
 				try {
 					ResyncStream resyncStream(*this);

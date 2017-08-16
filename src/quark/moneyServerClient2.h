@@ -73,6 +73,8 @@ protected:
 
 	Value lastReportedTrade;
 
+	int retryCounter = 0;
+	time_t lastDropTime = 0;
 
 public:
 
