@@ -700,6 +700,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 
 void QuarkApp::syncWithDb() {
 
+	logInfo("Syncing... (can take long time)");
 	Value lastTrade = fetchLastTrade(*tradesDb);
 	if (lastTrade != nullptr) {
 		tradeCounter = lastTrade["index"].getUInt();
@@ -773,7 +774,7 @@ void QuarkApp::mainloop() {
 			return true;
 		};
 
-		logInfo("==== Preload commands ====");
+		logInfo("Reading orders ... (can take long time)");
 
 		Query q = ordersDb->createQuery(queueView);
 		Result res = q.exec();
@@ -816,9 +817,10 @@ void QuarkApp::initMoneyService() {
 	} else if (type == "singleJsonRPCServer"){
 		Value addr = cfg["addr"];
 		bool logTrafic = cfg["logTrafic"].getBool();
+		String firstTradeId ( cfg["firstTradeId"]);
 		sv = new MoneyServerClient2(
 				new MoneySvcSupport(ordersDb, tradesDb,marketCfg,
-						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature, marketCfg->assetSign, marketCfg->currencySign, logTrafic);
+						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature, marketCfg->assetSign, marketCfg->currencySign, firstTradeId, logTrafic);
 	} else {
 		throw std::runtime_error("Unsupported money service");
 	}

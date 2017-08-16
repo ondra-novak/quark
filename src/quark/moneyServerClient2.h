@@ -14,7 +14,13 @@ class MoneyServerClient2: public IMoneySrvClient {
 public:
 
 
-	MoneyServerClient2(PMoneySvcSupport support, String addr, String signature, String asset, String currency, bool logTrafic);
+	MoneyServerClient2(PMoneySvcSupport support,
+				String addr,
+				String signature,
+				String asset,
+				String currency,
+				String firstTradeId,
+				bool logTrafic);
 	~MoneyServerClient2();
 
 
@@ -56,6 +62,7 @@ protected:
 	const String asset;
 
 	const String currency;
+	const String firstTradeId;
 
 	RefCntPtr<MyClient> client;
 

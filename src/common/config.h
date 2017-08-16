@@ -12,6 +12,7 @@ couchit::Config initCouchDBConfig(json::Value cfgjson,  StrViewA dbname, json::S
 	cfg.authInfo.password = json::String(cfgjson["password"]);
 	cfg.baseUrl = json::String(cfgjson["server"]);
 	cfg.databaseName = String({cfgjson["dbprefix"].getString(),dbname,suffix});
+	cfg.syncQueryTimeout = 86400000; //long timeout for some sync operations
 	return cfg;
 }
 
