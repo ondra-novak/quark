@@ -193,8 +193,12 @@ void MoneyServerClient2::connectIfNeed() {
 
 				logInfo({"Initialized RPC client, version, lastId", version, lastSyncId});
 
-				ResyncStream resyncStream(*this);
-				support->resync(resyncStream, lastSyncId, lastReportedTrade);
+				try {
+					ResyncStream resyncStream(*this);
+					support->resync(resyncStream, lastSyncId, lastReportedTrade);
+				}  catch (...) {
+					unhandledException();
+				}
 			}
 
 		} else {
