@@ -1,0 +1,11 @@
+quark (1.0.0-1ubuntu1) UNRELEASED; urgency=medium
+
+  * testing build system
+
+ --  <ondra@meranda>  Fri, 25 Aug 2017 23:43:24 -0600
+
+quark (1.0.0-1) unstable; urgency=medium
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- unknown <ondra@unknown>  Fri, 25 Aug 2017 22:04:15 -0600

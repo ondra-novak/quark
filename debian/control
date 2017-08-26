@@ -1,0 +1,13 @@
+Source: quark
+Section: unknown
+Priority: optional
+Maintainer: Ondrej Novak <nov.ondej@gmail.com>
+Build-Depends: debhelper (>=9)
+Standards-Version: 3.9.6
+Homepage: https://github.com/ondra-novak/quark
+Vcs-Git: https://github.com/ondra-novak/quark.git
+
+Package: quark
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, xinetd
+Description: quark matching engine
