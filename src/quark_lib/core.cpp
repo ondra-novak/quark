@@ -10,7 +10,7 @@ bool sortDomPriority(const POrder &a, const POrder &b) {
 	if (a->getDomPriority() > b->getDomPriority())
 		return true;
 	if (a->getDomPriority()==b->getDomPriority()) {
-		if (a->getQueuePos() < b->getQueuePos()) {
+		if (a->getQueuePos() > b->getQueuePos()) {
 			return true;
 		} else {
 			return json::Value::compare(a->getId(),b->getId()) < 0;
@@ -22,7 +22,7 @@ bool sortMarketPriority(const POrder &a, const POrder &b) {
 	if (a->getQueuePriority() > b->getQueuePriority())
 		return true;
 	if (a->getQueuePriority()==b->getQueuePriority()) {
-		if (a->getQueuePos() < b->getQueuePos()) {
+		if (a->getQueuePos() > b->getQueuePos()) {
 			return true;
 		} else {
 			return json::Value::compare(a->getId(),b->getId()) < 0;
