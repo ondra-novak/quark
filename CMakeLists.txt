@@ -19,4 +19,5 @@ add_subdirectory (src/rpc)
 add_subdirectory (src/jsonrpc_netcat)
 add_subdirectory (src/bot)
 add_dependencies(quark couchcpp)  
- 
+
+# set_target_properties(couchcpp  jsonrpc_netcat  quark  quark_bot  quark_init  quark_rpc PROPERTIES LINK_FLAGS_RELEASE "-static" LINK_FLAGS_RELWITHDEBINFO "-static")

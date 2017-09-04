@@ -1,8 +1,8 @@
-quark (1.0.0-1ubuntu1) UNRELEASED; urgency=medium
+quark (1.0.0-3) UNRELEASED; urgency=medium
 
-  * testing build system
+  * dynamic libs
 
- --  <ondra@meranda>  Fri, 25 Aug 2017 23:43:24 -0600
+ -- root <root@quark>  Mon, 04 Sep 2017 15:21:49 +0000
 
 quark (1.0.0-1) unstable; urgency=medium
 
