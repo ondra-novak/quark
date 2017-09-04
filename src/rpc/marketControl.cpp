@@ -121,6 +121,8 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Chart.get",me, &MarketControl::rpcChartGet);
 	rpcServer.add("Trades.chart",me, &MarketControl::rpcChartGet);
 	rpcServer.add("Trades.stats",me, &MarketControl::rpcTradesStats);
+	rpcServer.add("User.orders",me, &MarketControl::rpcUserOrders);
+	rpcServer.add("User.trades",me, &MarketControl::rpcUserTrades);
 
 	return getMarketStatus();
 
@@ -210,13 +212,17 @@ public:
 		feed.setFilter(couchit::Filter("index/stream",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
-		rq.sendNotify(streamName,{seqNum.toString(),
-				Object(doc)
-				("id",doc["_id"])
-				("_id",undefined)});
+		rq.sendNotify(streamName,{seqNum.toString(),OrderControl::normFields(doc)});
 	}
 
 };
+
+static json::Value normTrade(json::Value doc) {
+	return 	Object(doc)
+			("id",doc["_id"])
+			("_id",undefined)
+			("_rev",undefined);
+}
 
 class MarketControl::TradesFeed: public BasicFeed {
 public:
@@ -225,12 +231,7 @@ public:
 		feed.setFilter(couchit::Filter("trades/stream",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
-		rq.sendNotify(streamName,{seqNum.toString(),
-				Object(doc)
-				("id",doc["_id"])
-				("_id",undefined)
-				("_rev",undefined)
-		});
+		rq.sendNotify(streamName,{seqNum.toString(),normTrade(doc)});
 	}
 
 };
@@ -669,6 +670,106 @@ void MarketControl::rpcTradesStats(RpcRequest rq) {
 	d.fromDB(res[0],1);
 	rq.setResult(d.toJson());
 
+
+}
+
+static	couchit::View ordersByUser("_design/index/_view/users", couchit::View::update);
+static	couchit::View tradesByOrder("_design/trades/_view/byOrder", couchit::View::update);
+
+
+static Value getUserDataArgs = Value(json::array,{
+		Object("user","any")
+		      ("startTime","integer")
+		      ("endTime",{"integer","optional"})
+});
+
+
+
+static void setupUserQuery(couchit::Query &q, Value args) {
+
+	Value user = args["user"];
+	Value startTime = args["startTime"];
+	Value endTime =args["endTime"];
+
+	couchit::Value startKey = {user,startTime};
+	couchit::Value endKey = {user, endTime.defined()?endTime:Value(json::object)};
+
+	q.range(startKey,endKey);
+
+}
+
+void MarketControl::rpcUserOrders(RpcRequest rq) {
+	if (!rq.checkArgs(getUserDataArgs)) return rq.setArgError();
+
+	auto query = ordersDb.createQuery(ordersByUser);
+	query.includeDocs();
+	setupUserQuery(query,rq.getArgs()[0]);
+
+
+	couchit::Result res = query.exec();
+	Array rx;
+	rx.reserve(res.size());
+	for (couchit::Row r: res) {
+		rx.push_back(OrderControl::normFields(r.doc));
+	}
+	rq.setResult(rx);
+
+}
+
+void MarketControl::rpcUserTrades(RpcRequest rq) {
+	if (!rq.checkArgs(getUserDataArgs)) return rq.setArgError();
+
+	auto allOrders = ordersDb.createQuery(ordersByUser);
+	setupUserQuery(allOrders,rq.getArgs()[0]);
+
+	couchit::Result res = allOrders.exec();
+	Array xords;
+	xords.reserve(res.size());
+	for (couchit::Row r: res) {
+		xords.push_back(r.id);
+	}
+
+	Value ords = xords;
+
+	auto alltrades = tradesDb.createQuery(tradesByOrder);
+	alltrades.includeDocs().nosort().keys(ords);
+
+
+	couchit::Result res2 = alltrades.exec();
+
+
+	Array trades;
+	trades.reserve(res2.size());
+	unsigned int pos = 0;
+	auto seekToOrder = [&](Value trade) {
+		auto l = ords.size();
+		do {
+			Value ord = ords[pos];
+			if (trade["buyOrder"] == ord) {
+				return "buyer";
+			} else if (trade["sellOrder"] == ord) {
+				return "seller";
+			}
+			pos++;
+		} while (pos < l);
+		throw std::runtime_error("Reached unreachable code");
+	};
+
+	for (couchit::Row r: res2) {
+		Value x = normTrade(r.doc).replace("user_dir", seekToOrder(r.doc));
+		trades.push_back(x);
+	}
+	json::Value unordered = trades;
+	json::Value ordered = unordered.sort([](const json::Value &a, const json::Value &b) {\
+		std::uintptr_t ta = a["index"].getUInt();
+		std::uintptr_t tb = b["index"].getUInt();
+		if (ta < tb) return -1;
+		else if (ta > tb) return 1;
+		else return 0;
+	});
+
+
+	rq.setResult(trades);
 
 }
 

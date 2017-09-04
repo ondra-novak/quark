@@ -60,6 +60,7 @@ namespace OrderFields {
 	extern StrViewA timeCreated;
 	extern StrViewA timeModified;
 	extern StrViewA queue;
+	extern StrViewA vendorId;
 
 	static const int takerFee = 1;
 	static const int makerFee = 0;

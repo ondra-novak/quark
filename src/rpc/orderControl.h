@@ -13,6 +13,8 @@ public:
 	json::Value cancel(json::Value orderId);
 	json::Value getOrder(json::Value orderId);
 
+	static json::Value normFields(json::Value data);
+	static void normFields(json::Object &data);
 
 
 protected:

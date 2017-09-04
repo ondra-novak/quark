@@ -141,14 +141,33 @@ json::Value OrderControl::create(json::Value reqOrder) {
 	time_t ct;
 	time(&ct);
 
-	Document doc = db.newDocument("o.");
+	Document doc;
+	Value vid = reqOrder[OrderFields::vendorId];
+	if (vid.defined()) {
+		if (vid.type() != json::string)
+			return validationError(OrderFields::vendorId, "must be string");
+		if (vid.getString().substr(0,2) != "o.")
+			return validationError(OrderFields::vendorId, "must begin with prefix 'o.' ");
+		doc.setID(vid);
+	} else {
+		doc = db.newDocument("o.");
+	}
+
 	doc.setBaseObject(reqOrder);
 	doc.set( OrderFields::status,Status::str[Status::validating])
 		.set(OrderFields::timeCreated, ct)
 		.set(OrderFields::origSize, reqOrder[OrderFields::size]);
+	doc.unset(OrderFields::vendorId);
 	doc.enableTimestamp();
-	db.put(doc);
-	return {doc.getIDValue(),doc.getRevValue()};
+
+	try {
+		db.put(doc);
+		return {doc.getIDValue(),doc.getRevValue()};
+	} catch (UpdateException &e) {
+		if (e.getErrors()[0].isConflict()) {
+			throw ConflictError(normFields(db.get(doc.getID())));
+		}
+	}
 
 }
 
@@ -162,8 +181,10 @@ Document OrderControl::loadOrder(const json::Value& orderId, const json::Value& 
 		throw OrderNotFoundError();
 
 	Document doc(v);
-	if (revId.defined() && doc.getRevValue() != revId)
+	if (revId.defined() && doc.getRevValue() != revId) {
+		normFields(doc);
 		throw ConflictError(doc);
+	}
 
 	return doc;
 }
@@ -227,6 +248,7 @@ json::Value OrderControl::cancel(json::Value orderId) {
 
 json::Value OrderControl::getOrder(json::Value orderId) {
 	Document doc = loadOrder(orderId,Value());
+	normFields(doc);
 	return doc;
 }
 
@@ -243,6 +265,23 @@ const char* quark::OrderNotFoundError::what() const throw () {
 	return "Order not found";
 }
 
+json::Value quark::OrderControl::normFields(json::Value data) {
+	Object res(data);
+	normFields(res);
+	return res;
+}
+
+void quark::OrderControl::normFields(json::Object& data) {
+	Value id = data["_id"];
+	Value rev = data["_rev"];
+	data.set("id", id)
+		   ("rev",rev)
+		   ("_id",json::undefined)
+		   ("_rev",json::undefined);
 
 }
+
+
+}
+
 

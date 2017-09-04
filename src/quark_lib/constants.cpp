@@ -37,6 +37,7 @@ json::NamedEnum<Type> str(
 namespace OrderFields {
 
 StrViewA orderId("_id");
+StrViewA vendorId("id");
 STRCONST(dir);
 STRCONST(type);
 STRCONST(size);
