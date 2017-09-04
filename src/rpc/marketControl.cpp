@@ -137,6 +137,8 @@ void MarketControl::rpcOrderCreate(RpcRequest rq) {
 		rq.setResult(orderControl.create(args[0]));
 	} catch (ValidatonError &e) {
 		rq.setError(400,"Validation failed", e.getError());
+	} catch (ConflictError &e) {
+		rq.setError(409,"Conflict",e.getActualDoc());
 	}
 }
 
