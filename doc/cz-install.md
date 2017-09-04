@@ -14,7 +14,7 @@ $ sudo apt install couchdb xinetd curl
 Produkční stroj by neměl mít přístupné webové rozhraní, ale pokud je to třeba, existují dvě cesty
  1. Povolit couchdb otevřít port na všech síťových rozhraní: 
   ```bash
-  $ sudo nano /etc/couchdb/local.ini
+  $ sudo nano /etc/couchdb/default.ini
   # Odkomentovat řádek bind_address a místo 127.0.0.1 napsat 0.0.0.0
 ```
      * webové rozhraní je pak přístupné na url: http://<adresa_stroje>:5984/_utils
