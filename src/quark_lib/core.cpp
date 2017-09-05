@@ -10,31 +10,32 @@ bool sortDomPriority(const POrder &a, const POrder &b) {
 	if (a->getDomPriority() > b->getDomPriority())
 		return true;
 	if (a->getDomPriority()==b->getDomPriority()) {
-		if (a->getQueuePos() > b->getQueuePos()) {
+		if (a->getQueuePos() < b->getQueuePos()) {
 			return true;
-		} else {
+		} else if (a->getQueuePos() == b->getQueuePos()) {
 			return json::Value::compare(a->getId(),b->getId()) < 0;
 		}
 	}
+    return false;
 }
 
 bool sortMarketPriority(const POrder &a, const POrder &b) {
 	if (a->getQueuePriority() > b->getQueuePriority())
 		return true;
 	if (a->getQueuePriority()==b->getQueuePriority()) {
-		if (a->getQueuePos() > b->getQueuePos()) {
+		if (a->getQueuePos() < b->getQueuePos()) {
 			return true;
-		} else {
+		} else if (a->getQueuePos() == b->getQueuePos()) {
 			return json::Value::compare(a->getId(),b->getId()) < 0;
 		}
 	}
+	return false;
 }
 
 bool sortLimitPriceUp(const POrder &a, const POrder &b) {
 	if (a->getLimitPrice()<b->getLimitPrice())
 		return true;
 	if (a->getLimitPrice() == b->getLimitPrice()) {
-			return true;
 		return sortDomPriority(a,b);
 	}
 	return false;
@@ -44,8 +45,6 @@ bool sortLimitPriceDown(const POrder &a, const POrder &b) {
 	if (a->getLimitPrice()>b->getLimitPrice())
 		return true;
 	if (a->getLimitPrice() == b->getLimitPrice()) {
-			return true;
-
 		return sortDomPriority(a,b);
 	}
 	return false;

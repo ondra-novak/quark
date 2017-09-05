@@ -11,7 +11,12 @@
 
 namespace quark {
 
-Order::Order() {}
+static std::size_t counter = 0;
+
+
+Order::Order() {
+	queuePos = counter++;
+}
 
 OrderJsonData::OrderJsonData(json::Value data) {
 
@@ -77,10 +82,11 @@ Order::Order(const OrderJsonData &data) {
 
 	domPriority = data.domPriority;
 	queuePriority = data.queuePriority;
+	queuePos = counter++;
+
 
 }
 
-static std::size_t counter = 0;
 
 POrder quark::Order::changeState(State newState) const {
 
@@ -130,7 +136,7 @@ bool quark::Order::isSimpleUpdate(const Order& other) const {
 }
 
 POrder Order::doSimpleUpdate(const Order& other) const {
-	Order *x = new Order(*this);
+	Order *x = new Order(*this);	
 	x->id = id;
 	x->triggerPrice = other.triggerPrice;
 	x->size = other.size;
@@ -138,7 +144,7 @@ POrder Order::doSimpleUpdate(const Order& other) const {
 	x->queuePriority = other.queuePriority;
 	x->budget = other.budget;
 	x->data = other.data;
-	x->trailingDistance = other.trailingDistance;
+	x->trailingDistance = other.trailingDistance;	
 	return x;
 }
 
