@@ -38,6 +38,7 @@ MoneyServerClient2::MoneyServerClient2(PMoneySvcSupport support,
 	,inited(false)
 {
 	client->enableLogTrafic(logTrafic);
+	client->setRecvTimeout(30000);
 }
 
 MoneyServerClient2::~MoneyServerClient2() {
@@ -69,6 +70,8 @@ void MoneyServerClient2::callWithRetry(RefCntPtr<MyClient> client,PMoneySvcSuppo
 	};
 
 }
+
+
 
 bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 		Callback callback) {
@@ -109,32 +112,42 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 
 }
 
+class CancelException {};
+
 void MoneyServerClient2::reportTrade(Value prevTrade, const TradeData& data) {
 
 	 connectIfNeed();
-	 reportTrade2(prevTrade, data);
+	 try {
+		 reportTrade2(prevTrade, data);
+	 } catch (CancelException &e) {
+		 //ignore here - we cannot do anything with it
+	 }
 
 }
 void MoneyServerClient2::reportTrade2(Value prevTrade, const TradeData& data) {
 
 	RefCntPtr<MyClient> c(client);
-	(*c)("CurrencyBalance.trade", Object("trade_id",data.id)
-										("prev_trade_id", prevTrade)
-										("timestamp",data.timestamp)
-										("asset",data.size)
-										("currency",data.price)
-										("buyer",Object("user_id",data.buyer.userId)
-													   ("context",data.buyer.context))
-										("seller",Object("user_id",data.seller.userId)
-													   ("context",data.seller.context))
-										("taker",data.dir == OrderDir::buy?"buyer":"seller"))
+	if (c->isConnected()) {
+		(*c)("CurrencyBalance.trade", Object("trade_id",data.id)
+											("prev_trade_id", prevTrade)
+											("timestamp",data.timestamp)
+											("asset",data.size)
+											("currency",data.price)
+											("buyer",Object("user_id",data.buyer.userId)
+														   ("context",data.buyer.context))
+											("seller",Object("user_id",data.seller.userId)
+														   ("context",data.seller.context))
+											("taker",data.dir == OrderDir::buy?"buyer":"seller"))
 
-	>> [c](const RpcResult &res){
-		if (res.isError()) {
-			handleError(c, "CurrencyBalance.trade", res);
-		}
-	};
-	lastReportedTrade = data.id;
+		>> [c](const RpcResult &res){
+			if (res.isError()) {
+				handleError(c, "CurrencyBalance.trade", res);
+			}
+		};
+		lastReportedTrade = data.id;
+	} else {
+		throw CancelException();
+	}
 }
 
 
@@ -217,6 +230,8 @@ void MoneyServerClient2::connectIfNeed() {
 				try {
 					ResyncStream resyncStream(*this);
 					support->resync(resyncStream, lastSyncId, lastReportedTrade);
+				} catch (CancelException &e) {
+					//continue disconnected
 				}  catch (...) {
 					unhandledException();
 				}

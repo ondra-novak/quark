@@ -118,7 +118,7 @@ RpcClient::~RpcClient() {
 }
 
 void RpcClient::worker(PNetworkConection conn) {
-	while (conn->waitForInput(-1)) {
+	while (conn->waitForInput(rcvtimeout)) {
 		try {
 			InputStream in(conn);
 			BinaryView b = in(0);
@@ -155,4 +155,9 @@ void RpcClient::worker(PNetworkConection conn) {
 	this->conn = nullptr;
 }
 
+void RpcClient::setRecvTimeout(int timeoutms) {
+	rcvtimeout = timeoutms;
 }
+
+}
+

@@ -74,6 +74,7 @@ bool QuarkApp::runOrder(Document order, bool update) {
 						break;
 					case IMoneySrvClient::allocTryAgain:
 						mptr->runOrder(order,update);
+						return;
 					}
 
 
@@ -738,18 +739,8 @@ void QuarkApp::mainloop() {
 
 		//receive market config - halt processing, if no market config defined
 		Value marketDoc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
-		while (marketDoc == nullptr) {
-			logError("Waiting for market configuration");
-			chfeed.setFilter(waitfordoc).arg("doc",marketConfigDocName)
-				  .includeDocs(true)
-				 .since(ordersDb->getLastKnownSeqNumber())
-				  .setTimeout(-1) >> [&](ChangedDoc chdoc) {
-					if (!chdoc.deleted) {
-						marketDoc = chdoc.doc;
-						return false;
-					}
-					return true;
-			};
+		if (marketDoc == nullptr) {
+			throw std::runtime_error("No market configuration");
 		}
 		applyMarketConfig(marketDoc);
 
@@ -814,7 +805,7 @@ void QuarkApp::initMoneyService() {
 				,maxBudget["marginLong"].getNumber(),maxBudget["marginShort"].getNumber(), 0 ,0);
 		std::size_t latency =jlatency.getUInt();
 		sv = new MockupMoneyService(b,latency);
-	} else if (type == "singleJsonRPCServer"){
+	} else if (type == "singleJsonRPCServer" || type == "jsonrpc"){
 		Value addr = cfg["addr"];
 		bool logTrafic = cfg["logTrafic"].getBool();
 		String firstTradeId ( cfg["firstTradeId"]);

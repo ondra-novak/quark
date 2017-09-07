@@ -36,6 +36,7 @@ public:
 	bool  connect(StrViewA addr);
 
 	bool isConnected() const {return connected;}
+	void setRecvTimeout(int timeoutms);
 
 protected:
 
@@ -43,6 +44,8 @@ protected:
 
 
 	String addr;
+
+	int rcvtimeout = -1;
 
 	couchit::PNetworkConection conn;
 	couchit::CancelFunction cancelFn;
