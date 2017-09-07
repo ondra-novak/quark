@@ -68,8 +68,8 @@ void createConfig(std::ostream &out) {
 			<< "  \"rpc_login\":\"quark_rpc\"," << std::endl
 			<< "  \"rpc_password\":\"quark\"," << std::endl
 			<< "  \"couchdb_etc\":\"/etc/couchdb\"," << std::endl
-			<< "  \"daemon_bin\":\"/usr/local/bin/quark\"," << std::endl
-			<< "  \"daemon_cfg\":\"/usr/local/etc/quark/quark.conf\"," << std::endl
+			<< "  \"daemon_bin\":\"/usr/bin/quark\"," << std::endl
+			<< "  \"daemon_cfg\":\"/etc/quark/quark.conf\"," << std::endl
 			<< "  \"marketName\":\"<enter_market_name>\"," << std::endl
 			<< "  \"asset\":\"<enter_asset_signature>\"," << std::endl
 			<< "  \"currency\":\"<enter_currency_signature>\"," << std::endl

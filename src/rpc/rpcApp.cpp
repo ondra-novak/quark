@@ -10,9 +10,43 @@
 #include <imtjson/binjson.tcc>
 #include <imtjson/utf8.h>
 #include "marketControl.h"
+#include <stdio.h>
 
 namespace quark {
 
+
+void RpcApp::streamLog(RpcRequest req) {
+    static std::thread thr;
+
+
+    String cmdline ( config["logReadCmd"] );
+    FILE *f = popen(cmdline.c_str(),"r");
+
+    if (f == NULL) {
+	req.setError(500,"Open failed", cmdline);
+	return;
+    }
+
+    thr = std::thread([=]() mutable {
+	
+	std::vector<char> buffer;
+	int i = fgetc(f);
+	while (i != EOF) {
+	    if (i == '\n') {
+		json::StrViewA line (buffer.data(), buffer.size());
+		req.sendNotify("log", line);
+		buffer.clear();
+	    } else {
+		buffer.push_back((char)i);
+	    }
+	    i = fgetc(f);
+	}
+
+    });
+
+    req.setResult(true);
+
+}
 
 void RpcApp::run(std::istream& input, std::ostream& output) {
 
@@ -27,6 +61,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 		std::this_thread::sleep_for(std::chrono::seconds(req.getArgs()[0].getUInt()));
 		req.setResult(true);
 	});
+	rpcServer.add("Stream.log",me,&RpcApp::streamLog);
 
 
 	executor = std::thread([&]{

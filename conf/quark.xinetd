@@ -4,8 +4,8 @@ service quark_rpc
         socket_type     = stream
         wait            = no
         user            = couchdb
-        server          = /usr/local/bin/quark_rpc
-		server_args		= /usr/local/etc/quark/rpc.conf
+        server          = /usr/bin/quark_rpc
+		server_args		= /etc/quark/rpc.conf
         log_on_failure  += USERID
         disable         = no
         port			= 18123

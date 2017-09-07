@@ -27,6 +27,7 @@ public:
 protected:
 
 	void rpcInit(RpcRequest req);
+	void streamLog(RpcRequest req);
 
 	Value config;
 

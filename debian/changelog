@@ -1,3 +1,27 @@
+quark (1.0.4) zesty; urgency=medium
+
+  * added log monitor to rpc 
+
+ -- root <root@quark>  Thu, 07 Sep 2017 13:31:37 +0000
+
+quark (1.0.3) zesty; urgency=medium
+
+  * minor fix and improvements  
+
+ -- root <root@quark>  Thu, 07 Sep 2017 12:05:51 +0000
+
+quark (1.0.2) zesty; urgency=medium
+
+  * fixed paths 
+
+ -- root <root@quark>  Tue, 05 Sep 2017 15:15:36 +0000
+
+quark (1.0.1) zesty; urgency=medium
+
+  * fixed order ordering
+
+ -- root <root@quark>  Tue, 05 Sep 2017 14:53:07 +0000
+
 quark (1.0.0-3) UNRELEASED; urgency=medium
 
   * dynamic libs
