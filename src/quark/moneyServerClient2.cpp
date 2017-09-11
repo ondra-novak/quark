@@ -26,9 +26,10 @@ namespace quark {
 
 
 
-MoneyServerClient2::MoneyServerClient2(PMoneySvcSupport support,
+MoneyServerClient2::MoneyServerClient2(
+		ResyncFn resyncFn,
 		String addr, String signature, String asset, String currency, String firstTradeId, bool logTrafic)
-	:support(support)
+	:resyncFn(resyncFn)
 	,addr(addr)
 	,signature(signature)
 	,asset(asset)
@@ -229,7 +230,7 @@ void MoneyServerClient2::connectIfNeed() {
 
 				try {
 					ResyncStream resyncStream(*this);
-					support->resync(resyncStream, lastSyncId, lastReportedTrade);
+					resyncFn(resyncStream, lastSyncId, lastReportedTrade);
 				} catch (CancelException &e) {
 					//continue disconnected
 				}  catch (...) {

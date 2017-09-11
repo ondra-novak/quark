@@ -14,7 +14,10 @@ class MoneyServerClient2: public IMoneySrvClient {
 public:
 
 
-	MoneyServerClient2(PMoneySvcSupport support,
+	typedef std::function<void(ITradeStream &target, const Value fromTrade, const Value toTrade)> ResyncFn;
+
+	MoneyServerClient2(
+				ResyncFn resyncFn,
 				String addr,
 				String signature,
 				String asset,
@@ -51,9 +54,8 @@ protected:
 
 	};
 
-	///dispatcher - it is used to perform connects and post commands from replyes and errors
-	PMoneySvcSupport support;
 
+	ResyncFn resyncFn;
 	///connect addr
 	const String addr;
 	///signature of the client

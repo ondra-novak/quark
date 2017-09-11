@@ -96,7 +96,7 @@ Value fetchLastTrade(CouchDB& tradeDB) {
 }
 }
 
-quark::MoneySvcSupport::MoneySvcSupport(PCouchDB orderDB, PCouchDB tradeDB,PMarketConfig mcfg, Dispatcher dispatcher)
+quark::MoneySvcSupport::MoneySvcSupport(PCouchDB orderDB, PCouchDB tradeDB,PMarketConfig mcfg, Dispatcher &dispatcher)
 	:orderDB(orderDB),tradeDB(tradeDB),mcfg(mcfg),dispatcher(dispatcher)
 {
 }
@@ -106,5 +106,5 @@ void quark::MoneySvcSupport::resync(ITradeStream &target, const Value fromTrade,
 }
 
 void quark::MoneySvcSupport::dispatch(Action fn) {
-	dispatcher(fn);
+	fn >> dispatcher;
 }
