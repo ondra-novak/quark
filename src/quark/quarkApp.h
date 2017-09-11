@@ -45,7 +45,7 @@ public:
 	static String createTradeId(const TradeResultTrade &tr);
 
 protected:
-	void mainloop();
+	void monitorQueue();
 
 	String signature;
 	PCouchDB ordersDb;
