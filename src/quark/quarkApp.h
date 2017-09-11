@@ -46,7 +46,7 @@ public:
 	static String createTradeId(const TradeResultTrade &tr);
 
 protected:
-	void mainloop(std::promise<Action> &exitFnStore);
+	void monitorQueue(std::promise<Action> &exitFnStore);
 
 	String signature;
 	PCouchDB ordersDb;

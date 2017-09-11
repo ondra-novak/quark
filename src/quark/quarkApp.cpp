@@ -702,7 +702,6 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 
 void QuarkApp::syncWithDb() {
 
-	logInfo("Syncing... (can take long time)");
 	Value lastTrade = fetchLastTrade(*tradesDb);
 	if (lastTrade != nullptr) {
 		tradeCounter = lastTrade["index"].getUInt();
@@ -716,7 +715,7 @@ void QuarkApp::syncWithDb() {
 
 
 
-void QuarkApp::mainloop(std::promise<Action> &exitFnStore) {
+void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 
 
 	ChangesFeed chfeed = ordersDb->createChangesFeed();
@@ -724,66 +723,63 @@ void QuarkApp::mainloop(std::promise<Action> &exitFnStore) {
 		chfeed.cancelWait();
 	});
 
-	try {
 
-		//hakt processing, if there is error object
-		Value errorDoc = ordersDb->get("error", CouchDB::flgNullIfMissing);
-		if (!errorDoc.isNull()) {
-			logError("Error is signaled, engine stopped - please remove error file to continue");
-			chfeed.setFilter(waitfordoc).arg("doc","error")
-				 .since(ordersDb->getLastKnownSeqNumber())
-				  .setTimeout(-1) >> [](ChangedDoc chdoc) {
-					if (chdoc.deleted) return false;
-					return true;
-			};
-		}
-
-		//receive market config - halt processing, if no market config defined
-		Value marketDoc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
-		if (marketDoc == nullptr) {
-			throw std::runtime_error("No market configuration");
-		}
-		applyMarketConfig(marketDoc);
-
-		logInfo("==== Entering to main loop ====");
-
-		auto loopBody = [&](ChangedDoc chdoc) {
-
-			[=]{
-				if (chdoc.id == marketConfigDocName) {
-					try {
-						applyMarketConfig(chdoc.doc);
-						logInfo("Market configuration updated");
-
-					} catch (std::exception &e) {
-						logError( {	"MarketConfig update failed", e.what()});
-					}
-				} else if (chdoc.id.substr(0,8) != "_design/") {
-					processOrder(chdoc.doc);
-				}
-			} >> dispatcher;
-
-			return true;
+	//hakt processing, if there is error object
+	Value errorDoc = ordersDb->get("error", CouchDB::flgNullIfMissing);
+	if (!errorDoc.isNull()) {
+		logError("Error is signaled, engine stopped - please remove error file to continue");
+		chfeed.setFilter(waitfordoc).arg("doc","error")
+			 .since(ordersDb->getLastKnownSeqNumber())
+			  .setTimeout(-1) >> [](ChangedDoc chdoc) {
+				if (chdoc.deleted) return false;
+				return true;
 		};
-
-		logInfo("Reading orders ... (can take long time)");
-
-		Query q = ordersDb->createQuery(queueView);
-		Result res = q.exec();
-		for (Value v : res) {
-			loopBody(v);
-		}
-
-		logInfo("==== Inside of main loop ====");
-
-
-		chfeed.setFilter(queueFilter).since(res.getUpdateSeq()).setTimeout(-1)
-					>> 	loopBody;
-
-	} catch (CanceledException &e) {
-
+		if (chfeed.wasCanceled())
+			return;
 	}
-	logInfo("==== Leaving main loop ====");
+
+	//receive market config - halt processing, if no market config defined
+	Value marketDoc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
+	if (marketDoc == nullptr) {
+		throw std::runtime_error("No market configuration");
+	}
+	applyMarketConfig(marketDoc);
+
+	auto loopBody = [&](ChangedDoc chdoc) {
+
+
+		[=]{
+			if (chdoc.id == marketConfigDocName) {
+				try {
+					applyMarketConfig(chdoc.doc);
+					logInfo("Market configuration updated");
+
+				} catch (std::exception &e) {
+					logError( {	"MarketConfig update failed", e.what()});
+				}
+			} else if (chdoc.id.substr(0,8) != "_design/") {
+				processOrder(chdoc.doc);
+			}
+
+		} >> dispatcher;
+		return true;
+	};
+
+	logInfo("[Queue] Reading orders ... (can take long time)");
+
+	Query q = ordersDb->createQuery(queueView);
+	Result res = q.exec();
+	for (Value v : res) {
+		loopBody(v);
+	}
+
+	logInfo("[Queue] Processing new orders");
+
+
+	chfeed.setFilter(queueFilter).since(res.getUpdateSeq()).setTimeout(-1)
+				>> 	loopBody;
+
+	logInfo("[Queue] Quitting");
 
 	return;
 
@@ -895,6 +891,8 @@ void QuarkApp::start(Value cfg, String signature)
 
 	});
 
+	logInfo("[start] updating database");
+
 	ordersDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg, signature,"-orders"));
 	initOrdersDB(*ordersDb);
 
@@ -904,7 +902,11 @@ void QuarkApp::start(Value cfg, String signature)
 	positionsDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg,signature, "-positions"));
 	initPositionsDB(*positionsDb);
 
+	logInfo("[start] Syncing... (can take long time)");
+
 	syncWithDb();
+
+	logInfo("[start] Starting queue");
 
 	{
 		std::promise<Action> exitW;
@@ -912,7 +914,7 @@ void QuarkApp::start(Value cfg, String signature)
 		//
 		changesReader = std::thread([&]{
 			try {
-				mainloop(exitW);
+				monitorQueue(exitW);
 			} catch (...) {
 				unhandledException();
 			}});
@@ -922,9 +924,14 @@ void QuarkApp::start(Value cfg, String signature)
 	}
 
 
+	logInfo("[start] Dispatching");
+
+
 	try {
 		//run dispatcher now
 		dispatcher.run();
+
+		logInfo("[start] Exitting queue");
 		exitFn();
 		changesReader.join();
 		moneyService = nullptr;
@@ -932,6 +939,7 @@ void QuarkApp::start(Value cfg, String signature)
 	} catch (...) {
 		unhandledException();
 	}
+	logInfo("[start] Quit ");
 
 }
 

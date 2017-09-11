@@ -395,16 +395,13 @@ void MarketControl::FeedControl::start() {
 
 		if (since.defined())
 			feed.since(since);
-		try {
-			feed >> [&](ChangedDoc x) {
-				if (x.doc == lastDoc) return true;
-				lastDoc = json::undefined;
-				onEvent(x.seqId, x.doc);
-				return true;
-			};
-		} catch (couchit::CanceledException &) {
 
-		}
+		feed >> [&](ChangedDoc x) {
+			if (x.doc == lastDoc) return true;
+			lastDoc = json::undefined;
+			onEvent(x.seqId, x.doc);
+			return true;
+		};
 	});
 
 	std::unique_lock<std::mutex> _(lock);
