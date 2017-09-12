@@ -11,7 +11,6 @@
 #include <random>
 
 #include <couchit/minihttp/httpclient.h>
-#include <couchit/minihttp/buffered.h>
 #include <imtjson/string.h>
 #include <imtjson/parser.h>
 #include <imtjson/validator.h>
@@ -129,8 +128,7 @@ double getCurrentPrice(String url) {
 			logError({"Failed to retrieve current price", status});
 			return 0;
 		}
-		BufferedRead<couchit::InputStream> buffr(client.getResponse());
-		Value resp = Value::parse<BufferedRead<couchit::InputStream> &>(buffr);
+		Value resp = Value::parse<couchit::InputStream>(client.getResponse());
 		return resp[0].getNumber();
 	} catch (std::exception &e) {
 		logError({"Failed to read price", e.what()});

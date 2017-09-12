@@ -10,7 +10,7 @@
 
 #include "moneyServerClient2.h"
 
-#include <couchit/minihttp/buffered.h>
+
 #include <imtjson/object.h>
 
 #include "../common/runtime_error.h"
