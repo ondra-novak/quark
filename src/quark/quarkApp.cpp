@@ -27,12 +27,13 @@
 #include "orderRangeError.h"
 #include "tradeHelpers.h"
 #include "views.h"
+#include "../common/lexid.h"
 
 namespace quark {
 
 const StrViewA QuarkApp::marketConfigDocName("settings");
 
-QuarkApp::QuarkApp() {
+QuarkApp::QuarkApp():rnd(std::random_device()()) {
 
 }
 
@@ -557,6 +558,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 
 
 void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeList &trades) {
+	std::uniform_int_distribution<std::size_t> uniform_dist(1, 65536);
 	time_t now;
 	time(&now);
 	switch (r.getType()) {
@@ -586,17 +588,18 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					}
 					Document trade;
 
-					auto tradeId = createTradeId(t);
+
+					auto tradeId = lexID::create(tradeCounter);
+					tradeCounter += uniform_dist(rnd);
 					logInfo({"Trade",dir,price,amount,tradeId});
 
 					trade("_id",tradeId)
 						 ("price",price)
 						 ("buyOrder",t.getBuyOrder()->getId())
 						 ("sellOrder",t.getSellOrder()->getId())
-						 (OrderFields::size,amount)
+						 ("size",amount)
 						 ("dir",dir)
-						 ("time",(std::size_t)now)
-						 ("index",++tradeCounter);
+						 ("time",(std::size_t)now);
 					trade.optimize();
 					trades.push_back(trade);
 				}break;
@@ -704,7 +707,8 @@ void QuarkApp::syncWithDb() {
 
 	Value lastTrade = fetchLastTrade(*tradesDb);
 	if (lastTrade != nullptr) {
-		tradeCounter = lastTrade["index"].getUInt();
+		tradeCounter = 0;
+		tradeCounter = lexID::parse(lastTrade["_id"].getString(),tradeCounter)+1;
 		lastPrice = lastTrade["price"].getNumber();
 	} else {
 		tradeCounter = 1;

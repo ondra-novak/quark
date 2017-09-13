@@ -118,6 +118,7 @@ private:
 	Action exitFn;
 	Dispatcher dispatcher;
 	std::thread changesReader;
+	std::default_random_engine rnd;
 
 
 	///each transaction must have unique id

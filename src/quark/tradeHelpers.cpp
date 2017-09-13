@@ -89,8 +89,8 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 }
 
 Value fetchLastTrade(CouchDB& tradeDB) {
-	Query q = tradeDB.createQuery(tradesByCounter);
-	Result res = q.reversedOrder().includeDocs().update().limit(1).exec();
+	Query q = tradeDB.createQuery(View::includeDocs);
+	Result res = q.reversedOrder().update().limit(1).range("0","Z").exec();
 	if (res.empty()) return nullptr;
 	else return Row(res[0]).doc;
 }

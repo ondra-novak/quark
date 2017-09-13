@@ -137,7 +137,22 @@ double getCurrentPrice(String url) {
 
 }
 
+bool checkCommand(StrViewA lastId, RpcClient &rpc) {
+	if (lastId.empty()) return true;
+	RpcResult res = rpc("Order.get", {lastId});
+	if (res.isError()) {
+		logError(res);
+		return true;
+	} else {
+		Value v = res;
+		return v["status"].getString() != "validating";
+	}
+
+}
+
 void runBot(RpcClient &rpc, const BotConfig &cfg) {
+
+	String lastId;
 
 
 	std::default_random_engine rnd(cfg.seed);
@@ -177,11 +192,17 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(cfg.delay));
 		if (curPrice == 0) continue;
+
+
 		if (!connectRpc(rpc,rpc.getAddr(), cfg.market)) {
 			logError("Failed connect RPC");
 			continue;
 		}
 
+		if (!checkCommand(lastId, rpc)) {
+			logError("Market is not running, skipping this cycle...");
+			continue;
+		}
 		auto cmdCount = getCountOfCommands(rpc);
 		double rndsize = powf(randomSize(rnd),4)+ cfg.minSize;
 		bool marketCommand = cmdCount.first >= cfg.maxOrders;
@@ -230,7 +251,8 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 		if (r.isError()) {
 			logError({"Error creating request", order, Value(r)});
 		} else {
-			logInfo({"Order created", order, Value(r)});
+			lastId = String(Value(r)[0]);
+			logInfo({"Order created", order, lastId});
 		}
 
 
