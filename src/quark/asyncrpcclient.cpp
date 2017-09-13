@@ -10,8 +10,6 @@
 
 #include "asyncrpcclient.h"
 
-#include <couchit/minihttp/buffered.h>
-
 #include <couchit/minihttp/netio.h>
 #include <imtjson/parser.h>
 #include <imtjson/serializer.h>
@@ -87,10 +85,9 @@ void RpcClient::connectLk(StrViewA addr) {
 void RpcClient::sendJSON(const Value& v) {
 	if (logTrafic) logInfo({"RPC_send",addr,v});
 	OutputStream out(conn);
-	BufferedWrite<OutputStream> wr(out);
-	v.serialize<BufferedWrite<OutputStream> &>(wr);
-	wr('\n');
-	wr.flush();
+	v.serialize<OutputStream>(out);
+	out('\n');
+	out.flush();
 	if (conn->getLastSendError()) {
 		logError(
 				{ "RpcClient", "Failed to send message", addr,
@@ -131,8 +128,8 @@ void RpcClient::worker(PNetworkConection conn) {
 				in(1);
 				continue;
 			}
-			BufferedRead<InputStream> rd(in);
-			Value resp = Value::parse<BufferedRead<InputStream> &>(rd);
+
+			Value resp = Value::parse<InputStream>(in);
 			if (logTrafic) logInfo({"RPC_receive",addr,resp});
 			ReceiveStatus st = processResponse(resp);
 			if (st == notification) {

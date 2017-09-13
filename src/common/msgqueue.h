@@ -3,7 +3,7 @@
 #include <mutex>
 #include <queue>
 
-namespace quark {
+
 
 
 template<typename Msg, typename QueueImpl = std::queue<Msg> >
@@ -79,6 +79,8 @@ public:
 	 */
 	template<typename Fn>
 	void modifyQueue(Fn fn);
+
+	void clear();
 
 
 protected:
@@ -170,8 +172,11 @@ template<typename Fn>
 inline void MsgQueue<Msg, QueueImpl>::modifyQueue(Fn fn) {
 	Sync _(lock);
 	fn(queue);
+	condvar.notify_one();
 }
 
-
-
+template<typename Msg, typename QueueImpl>
+inline void MsgQueue<Msg, QueueImpl>::clear() {
+	Sync _(lock);
+	queue = QueueImpl();
 }

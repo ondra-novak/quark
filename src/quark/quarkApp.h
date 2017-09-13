@@ -6,13 +6,14 @@
  */
 
 #pragma once
+#include <future>
 #include <couchit/couchDB.h>
 #include <couchit/localView.h>
 #include <imtjson/value.h>
 #include <unordered_map>
 #include <unordered_set>
 
-#include "../common/msgqueue.h"
+#include "../common/dispatcher.h"
 
 
 #include "../quark_lib/core.h"
@@ -45,7 +46,7 @@ public:
 	static String createTradeId(const TradeResultTrade &tr);
 
 protected:
-	void monitorQueue();
+	void monitorQueue(std::promise<Action> &exitFnStore);
 
 	String signature;
 	PCouchDB ordersDb;
@@ -115,9 +116,9 @@ private:
 
 
 	Action exitFn;
-	typedef MsgQueue<Action> Dispatcher;
 	Dispatcher dispatcher;
 	std::thread changesReader;
+	std::default_random_engine rnd;
 
 
 	///each transaction must have unique id
