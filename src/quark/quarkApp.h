@@ -22,6 +22,7 @@
 #include "marketConfig.h"
 #include "moneyService.h"
 #include "tradeHelpers.h"
+#include <random>
 
 namespace quark {
 

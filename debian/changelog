@@ -1,3 +1,21 @@
+quark (1.0.4build4) UNRELEASED; urgency=medium
+
+  * fix resync 
+
+ -- root <root@quark>  Wed, 13 Sep 2017 17:35:41 +0000
+
+quark (1.0.4build3) zesty; urgency=medium
+
+  *  fix resync 
+
+ -- root <root@quark>  Wed, 13 Sep 2017 16:13:35 +0000
+
+quark (1.0.4build2) zesty; urgency=medium
+
+  * zmena ID tradu 
+
+ -- root <root@quark>  Wed, 13 Sep 2017 16:08:16 +0000
+
 quark (1.0.4build1) UNRELEASED; urgency=medium
 
   * hlaseni chyby do logu

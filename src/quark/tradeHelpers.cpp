@@ -61,12 +61,11 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 		ITradeStream &moneySrvClient, const Value fromTrade, const Value toTrade,
 		const MarketConfig &mcfg) {
 
-	Query q = tradeDB.createQuery(tradesByCounter);
-	q.includeDocs();
-	q.update();
+	Query q = tradeDB.createQuery(View::includeDocs);
 	if (fromTrade != nullptr) {
-		Value cntv = findTradeCounter(tradeDB,fromTrade);
-		q.range(cntv, json::undefined);
+		q.range(fromTrade, "Z");
+	} else {
+	    q.range("A","Z");
 	}
 	Result r = q.exec();
 	Value lastTradeId = fromTrade;

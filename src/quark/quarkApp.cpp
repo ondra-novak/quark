@@ -200,6 +200,15 @@ void QuarkApp::processOrder(Value cmd) {
 
 
 	Value user = cmd[OrderFields::user];
+	if (user == "!!stop") 
+	    try {
+		cancelOrder(cmd);
+		throw std::runtime_error("Stopped by request");
+	    } catch(...) {
+		unhandledException();
+		return;
+	    }
+	
 	if (!pendingOrders.lock(user, cmd)) {
 		LOGDEBUG3("Order delayed because user is locked", user, cmd[OrderFields::orderId]);
 		return;
