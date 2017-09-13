@@ -870,6 +870,7 @@ void QuarkApp::start(Value cfg, String signature)
 			time(&t);
 			errdoc("time",t);
 			db.put(errdoc);
+			logError({"FATAL ERROR", errdesc});
 		} catch (std::exception &e) {
 			logError({"Fatal error (...and database is not available)",errdesc,e.what()});
 		}

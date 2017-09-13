@@ -1,3 +1,9 @@
+quark (1.0.4build1) UNRELEASED; urgency=medium
+
+  * hlaseni chyby do logu
+
+ -- root <root@quark>  Mon, 11 Sep 2017 15:13:11 +0000
+
 quark (1.0.4) zesty; urgency=medium
 
   * added log monitor to rpc 
