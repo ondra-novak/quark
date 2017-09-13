@@ -79,7 +79,7 @@ public:
 			}
 			try {
 				if (this->rd.nextWs() != ':')
-					throw ParseError("Expected ':'");
+					throw ParseError("Expected ':'", this->rd.getLastInput());
 				this->rd.commit();
 				Value v = parse();
 				this->tmpArr.push_back(Value(Parser<Fn>::getString(name),v));
@@ -100,7 +100,7 @@ public:
 				c = this->rd.nextWs();
 			}
 			else {
-				throw ParseError("Expected ',' or '}'");
+				throw ParseError("Expected ',' or '}'", this->rd.getLastInput());
 			}
 		} while (cont);
 		StringView<Value> data = this->tmpArr;

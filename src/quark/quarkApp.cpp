@@ -27,12 +27,13 @@
 #include "orderRangeError.h"
 #include "tradeHelpers.h"
 #include "views.h"
+#include "../common/lexid.h"
 
 namespace quark {
 
 const StrViewA QuarkApp::marketConfigDocName("settings");
 
-QuarkApp::QuarkApp() {
+QuarkApp::QuarkApp():rnd(std::random_device()()) {
 
 }
 
@@ -58,7 +59,8 @@ bool QuarkApp::runOrder(Document order, bool update) {
 		if (!moneyService->allocBudget(order[OrderFields::user], order.getIDValue(), b,
 							[me,order,update,user](IMoneySrvClient::AllocResult response) {
 				QuarkApp *mptr = me;
-				me->dispatcher.push([mptr,response,order,update,user]{
+
+				 [mptr,response,order,update,user]{
 					//in positive response
 					switch (response) {
 					case IMoneySrvClient::allocOk:
@@ -79,9 +81,9 @@ bool QuarkApp::runOrder(Document order, bool update) {
 
 
 					mptr->processPendingOrders(user);
-				});
-				}
-			)) return false;
+				} >> me->dispatcher;
+
+		})) return false;
 		else {
 			runOrder2(order,update);
 			return true;
@@ -362,7 +364,7 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
 
 void QuarkApp::exitApp() {
-	dispatcher.push(nullptr);
+	dispatcher.quit();
 }
 
 void QuarkApp::recordRevisions(const Changeset& chset) {
@@ -556,6 +558,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 
 
 void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeList &trades) {
+	std::uniform_int_distribution<std::size_t> uniform_dist(1, 65536);
 	time_t now;
 	time(&now);
 	switch (r.getType()) {
@@ -585,17 +588,18 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					}
 					Document trade;
 
-					auto tradeId = createTradeId(t);
+
+					auto tradeId = lexID::create(tradeCounter);
+					tradeCounter += uniform_dist(rnd);
 					logInfo({"Trade",dir,price,amount,tradeId});
 
 					trade("_id",tradeId)
 						 ("price",price)
 						 ("buyOrder",t.getBuyOrder()->getId())
 						 ("sellOrder",t.getSellOrder()->getId())
-						 (OrderFields::size,amount)
+						 ("size",amount)
 						 ("dir",dir)
-						 ("time",(std::size_t)now)
-						 ("index",++tradeCounter);
+						 ("time",(std::size_t)now);
 					trade.optimize();
 					trades.push_back(trade);
 				}break;
@@ -703,7 +707,8 @@ void QuarkApp::syncWithDb() {
 
 	Value lastTrade = fetchLastTrade(*tradesDb);
 	if (lastTrade != nullptr) {
-		tradeCounter = lastTrade["index"].getUInt();
+		tradeCounter = 0;
+		tradeCounter = lexID::parse(lastTrade["_id"].getString(),tradeCounter)+1;
 		lastPrice = lastTrade["price"].getNumber();
 	} else {
 		tradeCounter = 1;
@@ -714,13 +719,13 @@ void QuarkApp::syncWithDb() {
 
 
 
-void QuarkApp::monitorQueue() {
+void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 
 
 	ChangesFeed chfeed = ordersDb->createChangesFeed();
-	exitFn = [&] {
+	exitFnStore.set_value( [&] {
 		chfeed.cancelWait();
-	};
+	});
 
 
 	//hakt processing, if there is error object
@@ -746,7 +751,8 @@ void QuarkApp::monitorQueue() {
 
 	auto loopBody = [&](ChangedDoc chdoc) {
 
-		dispatcher.push([=]{
+
+		[=]{
 			if (chdoc.id == marketConfigDocName) {
 				try {
 					applyMarketConfig(chdoc.doc);
@@ -758,8 +764,8 @@ void QuarkApp::monitorQueue() {
 			} else if (chdoc.id.substr(0,8) != "_design/") {
 				processOrder(chdoc.doc);
 			}
-		});
 
+		} >> dispatcher;
 		return true;
 	};
 
@@ -788,6 +794,14 @@ void QuarkApp::monitorQueue() {
 
 void QuarkApp::initMoneyService() {
 
+	PCouchDB orders = ordersDb;
+	PCouchDB trades = tradesDb;
+	PMarketConfig mcfg = marketCfg;
+	auto resyncFn = [=](ITradeStream &target, const Value fromTrade, const Value toTrade) {
+		resync(*orders,*trades,target,fromTrade,toTrade,*mcfg);
+	};
+
+
 	Value cfg = marketCfg->moneyService;
 	StrViewA type = cfg["type"].getString();
 	PMoneySrvClient sv;
@@ -804,9 +818,13 @@ void QuarkApp::initMoneyService() {
 		Value addr = cfg["addr"];
 		bool logTrafic = cfg["logTrafic"].getBool();
 		String firstTradeId ( cfg["firstTradeId"]);
-		sv = new MoneyServerClient2(
-				new MoneySvcSupport(ordersDb, tradesDb,marketCfg,
-						[&](Action a){this->dispatcher.push(a);}), addr.getString(), signature, marketCfg->assetSign, marketCfg->currencySign, firstTradeId, logTrafic);
+		sv = new MoneyServerClient2(resyncFn,
+						 addr.getString(),
+						 signature,
+						 marketCfg->assetSign,
+						 marketCfg->currencySign,
+						 firstTradeId,
+						 logTrafic);
 	} else {
 		throw std::runtime_error("Unsupported money service");
 	}
@@ -891,33 +909,34 @@ void QuarkApp::start(Value cfg, String signature)
 
 	logInfo("[start] Syncing... (can take long time)");
 
-/*	this->moneySrvClient = new MarginTradingSvc(*positionsDb,moneyService);
-	this->moneyService = new MoneyService(this->moneySrvClient);
-	receiveMarketConfig();*/
 	syncWithDb();
 
 	logInfo("[start] Starting queue");
 
-	changesReader = std::thread([=]{
-		try {
-			monitorQueue();
-		} catch (...) {
-			unhandledException();
-		}});
+	{
+		std::promise<Action> exitW;
+		std::future<Action> f_exitW = exitW.get_future();
+		//
+		changesReader = std::thread([&]{
+			try {
+				monitorQueue(exitW);
+			} catch (...) {
+				unhandledException();
+			}});
+
+		//wait until the exit function is known
+		exitFn = f_exitW.get();
+	}
 
 
 	logInfo("[start] Dispatching");
 
 
 	try {
-		Action a = dispatcher.pop();
-		while (a != nullptr) {
-			a();
-			a = nullptr;
-			a = dispatcher.pop();
-		}
+		//run dispatcher now
+		dispatcher.run();
 
-		logInfo("[start] Quit dispatcher");
+		logInfo("[start] Exitting queue");
 		exitFn();
 		changesReader.join();
 		moneyService = nullptr;
@@ -925,6 +944,7 @@ void QuarkApp::start(Value cfg, String signature)
 	} catch (...) {
 		unhandledException();
 	}
+	logInfo("[start] Quit ");
 
 }
 

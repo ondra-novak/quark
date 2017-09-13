@@ -1,3 +1,3 @@
 function(doc) {
-	return doc._id.substr(0,2) == "t." && !doc._deleted;
+	return doc.buyOrder && doc.sellOrder && !doc._deleted;
 }

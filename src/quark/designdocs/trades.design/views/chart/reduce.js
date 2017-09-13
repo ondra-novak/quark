@@ -18,14 +18,14 @@ if (rereduce) {
 	});
 	return agr;
 } else {
-        var p = values[0][0];
-	var i = values[0][2];
+    var p = values[0][0];
+	var i = keys[0][0];
 	var v = values[0][1];
 	agr = [p,p,p,p,0,0,0,0,0,i];
-	values.forEach(function(x) {
+	values.forEach(function(x,idx) {
 		var p = x[0];
 		var v = x[1];
-		var i = x[2];
+		var i = keys[idx][0];
 		if (ci < i) {ci = i; agr[3] = p;}
 		if (oi > i) {oi = i; agr[0] = p;agr[9] = i;}
 		if (agr.h < p) agr[1] = p;
