@@ -23,6 +23,7 @@
 #include "moneyService.h"
 #include "tradeHelpers.h"
 #include <random>
+#include <imtjson/rpc.h>
 
 namespace quark {
 
@@ -58,6 +59,8 @@ protected:
 
 	PMarketConfig marketCfg;
 	static const StrViewA marketConfigDocName;
+	static const StrViewA errorDocName;
+	static const StrViewA controlDocName;
 	CurrentState coreState;
 
 	typedef std::unordered_map<Value, Document> OrdersToUpdate;
@@ -157,9 +160,15 @@ private:
 	void runOrder2(Document order, bool update);
 	void processPendingOrders(Value user);
 	void freeBudget(const Document& order);
+	bool blockOnError(ChangesFeed &chfeed);
 
+	json::RpcServer controlServer;
 
+	void execControlOrder(Value cmd);
 
+	void controlStop(RpcRequest req);
+	void controlCancelAllOrders(RpcRequest req);
+	void controlCancelUserOrders(RpcRequest req);
 
 };
 

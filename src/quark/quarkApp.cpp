@@ -32,8 +32,15 @@
 namespace quark {
 
 const StrViewA QuarkApp::marketConfigDocName("settings");
+const StrViewA QuarkApp::errorDocName("error");
+const StrViewA QuarkApp::controlDocName("control");
 
 QuarkApp::QuarkApp():rnd(std::random_device()()) {
+	controlServer.add("stop",this,&QuarkApp::controlStop);
+	controlServer.add("cancelAllOrders",this,&QuarkApp::controlCancelAllOrders);
+	controlServer.add("cancelUserOrders",this,&QuarkApp::controlCancelUserOrders);
+	controlServer.add_ping();
+	controlServer.add_listMethods();
 
 }
 
@@ -190,24 +197,65 @@ void QuarkApp::runOrder2(Document order, bool update) {
 
 		//handle various exceptions
 	 }catch (OrderRangeError &e) {
-		 rejectOrder(order, e, update);
+			 rejectOrder(order, e, update);
 	 }
 
 }
 
 
+
+void QuarkApp::execControlOrder(Value cmd) {
+
+	try {
+		Value req = cmd["request"];
+		if (req.defined()) {
+			json::RpcRequest rpcreq = json::RpcRequest::create(req,
+					[=](Value resp) {
+
+				Document doc(cmd);
+				doc(OrderFields::finished,true)
+				   (OrderFields::status,Status::executed)
+				   ("response",resp);
+
+				 try {
+					 ordersDb->put(doc);
+				 } catch (UpdateException &e) {
+					 logError({"Unable to update control order (success)", doc});
+				 }
+
+			});
+
+			controlServer(rpcreq);
+		}
+
+
+	} catch (std::exception &e) {
+		Document doc(cmd);
+		doc(OrderFields::finished,true)
+		   (OrderFields::status,Status::rejected)
+		   (OrderFields::error,Object("code", 400)("message",e.what()));
+		 try {
+			 ordersDb->put(doc);
+		 } catch (UpdateException &e) {
+			 logError({"Unable to update control order (failure)", doc});
+		 }
+	}
+
+}
+
+
+
 void QuarkApp::processOrder(Value cmd) {
 
 
-	Value user = cmd[OrderFields::user];
-	if (user == "!!stop") 
-	    try {
-		cancelOrder(cmd);
-		throw std::runtime_error("Stopped by request");
-	    } catch(...) {
-		unhandledException();
+	Value type = cmd[OrderFields::type];
+	if (type == "control") {
+		execControlOrder(cmd);
 		return;
-	    }
+
+	}
+
+	Value user = cmd[OrderFields::user];
 	
 	if (!pendingOrders.lock(user, cmd)) {
 		LOGDEBUG3("Order delayed because user is locked", user, cmd[OrderFields::orderId]);
@@ -726,16 +774,7 @@ void QuarkApp::syncWithDb() {
 
 }
 
-
-
-void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
-
-
-	ChangesFeed chfeed = ordersDb->createChangesFeed();
-	exitFnStore.set_value( [&] {
-		chfeed.cancelWait();
-	});
-
+bool QuarkApp::blockOnError(ChangesFeed &chfeed) {
 
 	//hakt processing, if there is error object
 	Value errorDoc = ordersDb->get("error", CouchDB::flgNullIfMissing);
@@ -747,18 +786,34 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 				if (chdoc.deleted) return false;
 				return true;
 		};
-		if (chfeed.wasCanceled())
-			return;
+		return !chfeed.wasCanceled();
 	}
+	return true;
+
+
+}
+
+void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
+
+
+	ChangesFeed chfeed = ordersDb->createChangesFeed();
+	exitFnStore.set_value( [&] {
+		chfeed.cancelWait();
+	});
+
+	if (!blockOnError(chfeed)) return;
 
 	//receive market config - halt processing, if no market config defined
 	Value marketDoc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
 	if (marketDoc == nullptr) {
 		throw std::runtime_error("No market configuration");
 	}
+
 	applyMarketConfig(marketDoc);
+	bool restartQueue = false;
 
 	auto loopBody = [&](ChangedDoc chdoc) {
+
 
 
 		[=]{
@@ -770,7 +825,7 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 				} catch (std::exception &e) {
 					logError( {	"MarketConfig update failed", e.what()});
 				}
-			} else if (chdoc.id.substr(0,8) != "_design/") {
+			} else if (chdoc.id.substr(0,2) == "o.") {
 				processOrder(chdoc.doc);
 			}
 
@@ -1029,6 +1084,24 @@ bool QuarkApp::checkOrderRev(Value docId, Value revId) {
 }
 
 
+void QuarkApp::controlStop(RpcRequest req) {
+	[=] {
+		try {
+			throw std::runtime_error("Stopped on porpose");
+		} catch (...) {
+			unhandledException();
+		}
+	} >> dispatcher;
+
+	req.setResult(true);
+}
+
+void QuarkApp::controlCancelAllOrders(RpcRequest req) {
+
+}
+
+void QuarkApp::controlCancelUserOrders(RpcRequest req) {
+
+}
 
 } /* namespace quark */
-
