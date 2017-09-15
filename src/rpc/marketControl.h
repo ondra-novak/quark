@@ -47,6 +47,10 @@ protected:
 	void rpcTradesStats(RpcRequest rq);
 	void rpcUserOrders(RpcRequest rq);
 	void rpcUserTrades(RpcRequest rq);
+	void rpcControlStop(RpcRequest rq);
+	void rpcControlCancelAllOrders(RpcRequest rq);
+	void rpcControlCancelUserOrders(RpcRequest rq);
+	void rpcControlPing(RpcRequest rq);
 
 
 	Value getMarketStatus();
@@ -104,6 +108,7 @@ protected:
 	PFeedControl ordersFeed, tradesFeed, posFeed, orderbookFeed;
 	OrderControl orderControl;
 
+	void callDaemonService(String command, Value params, RpcRequest req);
 
 
 

@@ -39,8 +39,8 @@ QuarkApp::QuarkApp():rnd(std::random_device()()) {
 	controlServer.add("stop",this,&QuarkApp::controlStop);
 	controlServer.add("cancelAllOrders",this,&QuarkApp::controlCancelAllOrders);
 	controlServer.add("cancelUserOrders",this,&QuarkApp::controlCancelUserOrders);
-	controlServer.add_ping();
-	controlServer.add_listMethods();
+	controlServer.add_ping("ping");
+	controlServer.add_listMethods("listMethods");
 
 }
 
@@ -214,7 +214,7 @@ void QuarkApp::execControlOrder(Value cmd) {
 
 				Document doc(cmd);
 				doc(OrderFields::finished,true)
-				   (OrderFields::status,Status::executed)
+				   (OrderFields::status,Status::strExecuted)
 				   ("response",resp);
 
 				 try {
@@ -232,7 +232,7 @@ void QuarkApp::execControlOrder(Value cmd) {
 	} catch (std::exception &e) {
 		Document doc(cmd);
 		doc(OrderFields::finished,true)
-		   (OrderFields::status,Status::rejected)
+		   (OrderFields::status,Status::strRejected)
 		   (OrderFields::error,Object("code", 400)("message",e.what()));
 		 try {
 			 ordersDb->put(doc);
@@ -1097,11 +1097,11 @@ void QuarkApp::controlStop(RpcRequest req) {
 }
 
 void QuarkApp::controlCancelAllOrders(RpcRequest req) {
-
+	req.setError(501,"not implemented yet");
 }
 
 void QuarkApp::controlCancelUserOrders(RpcRequest req) {
-
+	req.setError(501,"not implemented yet");
 }
 
 } /* namespace quark */

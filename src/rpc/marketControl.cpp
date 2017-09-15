@@ -11,7 +11,10 @@
 #include <couchit/exception.h>
 #include <couchit/query.h>
 #include <imtjson/rpc.h>
+#include <imtjson/stringview.h>
+
 #include "../common/config.h"
+#include "../quark_lib/order.h"
 
 namespace quark {
 
@@ -123,6 +126,10 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Trades.stats",me, &MarketControl::rpcTradesStats);
 	rpcServer.add("User.orders",me, &MarketControl::rpcUserOrders);
 	rpcServer.add("User.trades",me, &MarketControl::rpcUserTrades);
+	rpcServer.add("Control.stop",me, &MarketControl::rpcControlStop);
+	rpcServer.add("Control.cancelAllOrders",me, &MarketControl::rpcControlCancelAllOrders);
+	rpcServer.add("Control.cancelUserOrders",me, &MarketControl::rpcControlCancelUserOrders);
+	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
 
 	return getMarketStatus();
 
@@ -214,6 +221,8 @@ public:
 		feed.setFilter(couchit::Filter("index/stream",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
+		//do not show control orders
+		if (doc["type"].getString() == "control") return;
 		rq.sendNotify(streamName,{seqNum.toString(),OrderControl::normFields(doc)});
 	}
 
@@ -772,8 +781,83 @@ void MarketControl::rpcUserTrades(RpcRequest rq) {
 
 }
 
+void MarketControl::rpcControlStop(RpcRequest rq) {
+	callDaemonService("stop",rq.getArgs(),rq);
+}
+
+void MarketControl::rpcControlCancelAllOrders(RpcRequest rq) {
+	callDaemonService("cancelAllOrders",rq.getArgs(),rq);
+}
+
+void MarketControl::rpcControlCancelUserOrders(RpcRequest rq) {
+	callDaemonService("cancelUserOrders",rq.getArgs(),rq);
+}
+
+void MarketControl::rpcControlPing(RpcRequest rq) {
+	callDaemonService("ping",rq.getArgs(),rq);
+}
+
+void MarketControl::callDaemonService(String command,
+		Value params, RpcRequest req) {
+
+
+	couchit::Filter docwait("index/waitfordoc",View::includeDocs);
+
+	couchit::Document doc = ordersDb.newDocument("o.");
+	Value id = doc.getIDValue();
+	doc(OrderFields::type, "control");
+	doc(OrderFields::status, Status::strValidating);
+	doc("request", Object("id",req.getId())
+						("jsonrpc","2.0")
+						("method",command)
+						("params",params));
+
+
+	ordersDb.put(doc);
+	couchit::Query q = ordersDb.createQuery(couchit::View::includeDocs);
+	q.key(id);
+	couchit::Result r = q.exec();
+	couchit::SeqNumber ofs = r.getUpdateSeq();
+	couchit::Row rw = r[0];
+	doc = rw.doc;
+	while (doc[OrderFields::finished].getBool() == false) {
+		couchit::ChangesFeed chf = ordersDb.createChangesFeed();
+		Value chg = chf.since(ofs).includeDocs(true).setFilter(docwait).arg("doc",id).setTimeout(30000).exec().getAllChanges();
+		if (chg.empty()) {
+			doc.setDeleted();
+			try {
+				ordersDb.put(doc);
+				req.setError(502,"Service timeout");
+				return ;
+			} catch (couchit::UpdateException &) {
+				continue;
+			}
+		}
+		couchit::ChangedDoc chdoc = chg[0];
+		doc = chdoc.doc;
+		ofs = chf.getLastSeq();
+	}
+	if (doc[OrderFields::status] == Status::strRejected) {
+		req.setError(403,"Service rejected the request", doc[OrderFields::error]);
+	} else if (doc[OrderFields::status] == Status::strExecuted) {
+		Value resp = doc["response"];
+		Value result = resp["result"];
+		Value error = resp["error"];
+		if (result.defined() && !result.isNull()) {
+			req.setResult(result);
+		} else {
+			req.setError(error);
+		}
+	} else {
+		req.setError(500,"Unknown response", doc);
+	}
+
 
 }
+
+
+}
+
 /* namespace quark */
 
 
