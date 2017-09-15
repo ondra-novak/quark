@@ -38,7 +38,7 @@ bool MoneyService::allocBudget(json::Value user,
 		client->allocBudget(user, badv.second,nullptr);
 	}
 	//update local map
-	updateBudget(user, order, badv.second);
+	updateBudget(user, order, budget);
 	return true;
 }
 

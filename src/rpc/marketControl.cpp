@@ -7,6 +7,8 @@
 
 #include "marketControl.h"
 
+#include <couchit/changeset.h>
+
 #include <couchit/couchDB.h>
 #include <couchit/exception.h>
 #include <couchit/query.h>
@@ -110,6 +112,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Order.create", me, &MarketControl::rpcOrderCreate);
 	rpcServer.add("Order.modify", me, &MarketControl::rpcOrderUpdate);
 	rpcServer.add("Order.cancel", me, &MarketControl::rpcOrderCancel);
+	rpcServer.add("Order.cancelAll", me, &MarketControl::rpcOrderCancelAll);
 	rpcServer.add("Order.get", me, &MarketControl::rpcOrderGet);
 	rpcServer.add("Stream.orders",  me, &MarketControl::rpcStreamOrders);
 	rpcServer.add("Stream.trades", me, &MarketControl::rpcStreamTrades);
@@ -127,8 +130,6 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("User.orders",me, &MarketControl::rpcUserOrders);
 	rpcServer.add("User.trades",me, &MarketControl::rpcUserTrades);
 	rpcServer.add("Control.stop",me, &MarketControl::rpcControlStop);
-	rpcServer.add("Control.cancelAllOrders",me, &MarketControl::rpcControlCancelAllOrders);
-	rpcServer.add("Control.cancelUserOrders",me, &MarketControl::rpcControlCancelUserOrders);
 	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
 
 	return getMarketStatus();
@@ -785,16 +786,40 @@ void MarketControl::rpcControlStop(RpcRequest rq) {
 	callDaemonService("stop",rq.getArgs(),rq);
 }
 
-void MarketControl::rpcControlCancelAllOrders(RpcRequest rq) {
-	callDaemonService("cancelAllOrders",rq.getArgs(),rq);
-}
-
-void MarketControl::rpcControlCancelUserOrders(RpcRequest rq) {
-	callDaemonService("cancelUserOrders",rq.getArgs(),rq);
-}
-
 void MarketControl::rpcControlPing(RpcRequest rq) {
 	callDaemonService("ping",rq.getArgs(),rq);
+}
+
+void MarketControl::rpcOrderCancelAll(RpcRequest rq) {
+	couchit::View userActive("_design/index/_view/active", View::includeDocs|View::update);
+	unsigned int count = 0;
+	do {
+		couchit::Query q = ordersDb.createQuery(userActive);
+		if (!rq.getArgs().empty()) q.keys(rq.getArgs());
+
+		couchit::Result res = q.exec();
+		if (res.empty()) {
+			rq.setResult(Object("count", count)("success",true));
+			return;
+		}
+
+		couchit::Changeset chs = ordersDb.createChangeset();
+		for (couchit::Row rw : res) {
+
+			couchit::Document doc(rw.doc);
+			doc(OrderFields::cancelReq,true);
+			chs.update(doc);
+
+		}
+		try {
+			chs.commit();
+			count += res.size();
+		} catch (couchit::UpdateException &e) {
+			//if there is conflict, we will try again
+			count += res.size() - e.getErrorCnt();
+		}
+	} while (true);
+
 }
 
 void MarketControl::callDaemonService(String command,

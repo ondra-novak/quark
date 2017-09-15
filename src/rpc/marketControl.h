@@ -48,9 +48,8 @@ protected:
 	void rpcUserOrders(RpcRequest rq);
 	void rpcUserTrades(RpcRequest rq);
 	void rpcControlStop(RpcRequest rq);
-	void rpcControlCancelAllOrders(RpcRequest rq);
-	void rpcControlCancelUserOrders(RpcRequest rq);
 	void rpcControlPing(RpcRequest rq);
+	void rpcOrderCancelAll(RpcRequest rq);
 
 
 	Value getMarketStatus();
