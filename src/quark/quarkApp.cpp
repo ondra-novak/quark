@@ -44,13 +44,6 @@ QuarkApp::QuarkApp():rnd(std::random_device()()) {
 
 }
 
-void QuarkApp::processPendingOrders(Value user) {
-	Value cmd = pendingOrders.unlock(user);
-	while (cmd.defined()) {
-		if (!processOrder2(cmd)) break;
-		cmd = pendingOrders.unlock(user);
-	}
-}
 
 bool QuarkApp::runOrder(Document order, bool update) {
 
@@ -67,8 +60,11 @@ bool QuarkApp::runOrder(Document order, bool update) {
 							[me,order,update,user](IMoneySrvClient::AllocResult response) {
 				QuarkApp *mptr = me;
 
-				 [mptr,response,order,update,user]{
-					//in positive response
+				//probably exit, do not process the order
+				if (me->moneyService == nullptr)
+					return;
+
+				 	//in positive response
 					switch (response) {
 					case IMoneySrvClient::allocOk:
 						mptr->runOrder2(order, update);
@@ -82,13 +78,11 @@ bool QuarkApp::runOrder(Document order, bool update) {
 								"Failed to allocate budget (money server error)"),update);
 						break;
 					case IMoneySrvClient::allocTryAgain:
-						mptr->runOrder(order,update);
 						return;
 					}
 
 
-					mptr->processPendingOrders(user);
-				} >> me->dispatcher;
+
 
 		})) return false;
 		else {
@@ -254,16 +248,8 @@ void QuarkApp::processOrder(Value cmd) {
 		return;
 
 	}
-
-	Value user = cmd[OrderFields::user];
 	
-	if (!pendingOrders.lock(user, cmd)) {
-		LOGDEBUG3("Order delayed because user is locked", user, cmd[OrderFields::orderId]);
-		return;
-	}
-
-	if (processOrder2(cmd))
-		processPendingOrders(user);
+	processOrder2(cmd);
 
 };
 
@@ -781,11 +767,11 @@ bool QuarkApp::blockOnError(ChangesFeed &chfeed) {
 	if (!errorDoc.isNull()) {
 		logError("Error is signaled, engine stopped - please remove error file to continue");
 		chfeed.setFilter(waitfordoc).arg("doc","error")
-			 .since(ordersDb->getLastKnownSeqNumber())
+			 .since(ordersDb->getLastSeqNumber())
 			  .setTimeout(-1) >> [](ChangedDoc chdoc) {
-				if (chdoc.deleted) return false;
-				return true;
+				return !chdoc.deleted;
 		};
+		logInfo("Status clear, going on");
 		return !chfeed.wasCanceled();
 	}
 	return true;
@@ -885,8 +871,7 @@ void QuarkApp::initMoneyService() {
 		sv = new MoneyServerClient2(resyncFn,
 						 addr.getString(),
 						 signature,
-						 marketCfg->assetSign,
-						 marketCfg->currencySign,
+						 marketCfg,
 						 firstTradeId,
 						 logTrafic);
 	} else {
@@ -894,7 +879,7 @@ void QuarkApp::initMoneyService() {
 	}
 	moneySrvClient = new MarginTradingSvc(*positionsDb,marketCfg,sv);
 	if (moneyService == nullptr) {
-		moneyService = new MoneyService(moneySrvClient,marketCfg);
+		moneyService = new MoneyService(moneySrvClient,marketCfg,dispatcher);
 	} else {
 		moneyService->setClient(moneySrvClient);
 		moneyService->setMarketConfig(marketCfg);
@@ -1001,10 +986,17 @@ void QuarkApp::start(Value cfg, String signature)
 		dispatcher.run();
 
 		logInfo("[start] Exitting queue");
-		exitFn();
-		changesReader.join();
-		moneyService = nullptr;
-		moneySrvClient = nullptr;
+		std::thread exitTh ([=]{
+			exitFn();
+			exitFn = nullptr;
+			changesReader.join();
+			moneyService = nullptr;
+			moneySrvClient = nullptr;
+			dispatcher.quit();
+		});
+		dispatcher.run();
+		exitTh.join();
+		dispatcher.clear();
 	} catch (...) {
 		unhandledException();
 	}

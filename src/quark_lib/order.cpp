@@ -8,15 +8,18 @@
 #include "order.h"
 
 #include "orderErrorException.h"
+#include "../quark/logfile.h"
 
 namespace quark {
 
-static std::size_t counter = 0;
-
+static std::size_t pos_counter = 0;
 
 Order::Order() {
-	queuePos = counter++;
+	queuePos = pos_counter++;
 }
+
+
+
 
 OrderJsonData::OrderJsonData(json::Value data) {
 
@@ -36,6 +39,7 @@ OrderJsonData::OrderJsonData(json::Value data) {
 }
 
 Order::Order(const OrderJsonData &data) {
+
 
 	using namespace json;
 
@@ -82,7 +86,8 @@ Order::Order(const OrderJsonData &data) {
 
 	domPriority = data.domPriority;
 	queuePriority = data.queuePriority;
-	queuePos = counter++;
+	queuePos = pos_counter++;
+
 
 
 }
@@ -92,7 +97,7 @@ POrder quark::Order::changeState(State newState) const {
 
 	Order *x = new Order(*this);
 	x->state = newState;
-	x->queuePos = counter++;
+	x->queuePos = pos_counter++;
 	return x;
 }
 
@@ -122,7 +127,7 @@ bool Order::willBeFilled(std::size_t price, std::size_t size) const {
 POrder Order::changeType(OrderType::Type newType) const {
 	Order *x = new Order(*this);
 	x->type= newType;
-	x->queuePos = counter++;
+	x->queuePos = pos_counter++;
 	return x;
 }
 

@@ -57,6 +57,7 @@ protected:
 	PMoneyService moneyService;
 	PMoneySrvClient moneySrvClient;
 
+
 	PMarketConfig marketCfg;
 	static const StrViewA marketConfigDocName;
 	static const StrViewA errorDocName;
@@ -79,7 +80,6 @@ protected:
 		Value unlock(Value id);
 	};
 
-	PendingOrders pendingOrders;
 
 //	void createOrder(Document order);
 	//Document saveOrder(Document order, Object newItems);
@@ -158,7 +158,6 @@ private:
 	bool checkOrderRev(Value docId, Value revId);
 	bool runOrder(Document order, bool update);
 	void runOrder2(Document order, bool update);
-	void processPendingOrders(Value user);
 	void freeBudget(const Document& order);
 	bool blockOnError(ChangesFeed &chfeed);
 

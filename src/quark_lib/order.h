@@ -126,6 +126,7 @@ public:
 		return data;
 	}
 
+
 protected:
 
 	Value id;

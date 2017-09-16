@@ -9,6 +9,7 @@
 #include <queue>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 
 
 
@@ -16,6 +17,10 @@
 #include "orderBudget.h"
 #include "marketConfig.h"
 #include "imoneysrvclient.h"
+#include <common/mtcounter.h>
+
+class Dispatcher;
+
 
 namespace quark {
 
@@ -37,10 +42,32 @@ namespace quark {
 class MoneyService: public RefCntObj {
 public:
 
-	MoneyService(PMoneySrvClient client, PMarketConfig mcfg):client(client),mcfg(mcfg) {}
-
-
 	typedef IMoneySrvClient::Callback Callback;
+
+	class AllocReq: public json::RefCntObj {
+	public:
+		const json::Value user;
+		const json::Value order;
+		const OrderBudget budget;
+		const Callback callback;
+
+		AllocReq(const json::Value &user,
+				const json::Value &order, const OrderBudget& budget,
+				const Callback &callback)
+			:user(user),order(order),budget(budget),callback(callback) {}
+	};
+
+	typedef RefCntPtr<AllocReq> PAllocReq;
+
+
+	MoneyService(PMoneySrvClient client,
+				 PMarketConfig mcfg,
+				 Dispatcher &dispatch)
+		:client(client),mcfg(mcfg),dispatch(dispatch) {}
+
+
+	~MoneyService();
+
 
 	///Allocate user's budget
 	/**
@@ -59,16 +86,26 @@ public:
 
 	bool allocBudget(json::Value user, json::Value order, const OrderBudget &budget, Callback callback);
 
+	bool allocBudget(const PAllocReq &req);
 
 	//void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;client->setMarketConfig(cfg);}*/
 
-	OrderBudget getOrderBudget(const json::Value &user, const json::Value &order) const;
+//	OrderBudget getOrderBudget(const json::Value &user, const json::Value &order) const;
 
 	void setClient(PMoneySrvClient client) {this->client = client;}
 	void setMarketConfig(PMarketConfig cfg) {this->mcfg = mcfg;}
 
 protected:
 
+	PMoneySrvClient client;
+	PMarketConfig mcfg;
+	Dispatcher &dispatch;
+protected:
+
+
+
+
+	bool allocBudgetLk(const PAllocReq &req);
 
 
 	struct Key {
@@ -100,18 +137,27 @@ protected:
 	};
 
 	typedef std::map<Key, OrderBudget, CmpKey> BudgetUserMap;
+	typedef std::unordered_set<json::Value> LockedUsers;
+	typedef std::queue<PAllocReq> AllocQueue;
 
-	PMoneySrvClient client;
+
 	BudgetUserMap budgetMap;
-	mutable std::mutex requestLock;
+	LockedUsers lockedUsers;
+	AllocQueue allocQueue;
+	MTCounter inflight;
+	mutable std::mutex lock;
 
 
 	void updateBudget(json::Value user, json::Value order, const OrderBudget& toBlock);
 
-	PMarketConfig mcfg;
 
 	OrderBudget calculateBudget(Value user) const;
 	std::pair<OrderBudget,OrderBudget> calculateBudgetAdv(Value user, Value order, const OrderBudget &b) const;
+
+	typedef std::unique_lock<std::mutex> Sync;
+
+	void allocFinish(const PAllocReq &req, IMoneySrvClient::AllocResult b);
+	void unlockUser(const json::Value user);
 };
 
 

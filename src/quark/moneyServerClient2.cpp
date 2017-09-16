@@ -28,12 +28,12 @@ namespace quark {
 
 MoneyServerClient2::MoneyServerClient2(
 		ResyncFn resyncFn,
-		String addr, String signature, String asset, String currency, String firstTradeId, bool logTrafic)
+		String addr, String signature,
+		PMarketConfig mcfg, String firstTradeId, bool logTrafic)
 	:resyncFn(resyncFn)
 	,addr(addr)
 	,signature(signature)
-	,asset(asset)
-	,currency(currency)
+	,mcfg(mcfg)
 	,firstTradeId(firstTradeId)
 	,client(new MyClient(addr,*this))
 	,inited(false)
@@ -205,8 +205,11 @@ void MoneyServerClient2::connectIfNeed() {
 
 			RpcResult initres = (*client)("CurrencyBalance.init", Object
 					("signature",signature)
-					("asset",asset)
-					("currency",currency));
+					("asset",mcfg->assetSign)
+					("currency",mcfg->currencySign)
+					("currency_step",mcfg->pipSize)
+					("asset_step",mcfg->granuality)
+			);
 			if (initres.isError()) {
 				if (initres.defined()) {
 					handleError(client,"CurrencyBalance.init", initres);
@@ -239,6 +242,15 @@ void MoneyServerClient2::connectIfNeed() {
 			}
 
 		} else {
+			retryCounter++;
+			std::this_thread::sleep_for(std::chrono::seconds(retryCounter));
+			if (retryCounter == 10) {
+				try {
+					throw std::runtime_error(String({"Failed to make connection to: ", addr}).c_str());
+				} catch(...) {
+					unhandledException();
+				}
+			}
 			//failed connect
 			//nothing here - commands send to disconnected client are rejected through callback
 		}

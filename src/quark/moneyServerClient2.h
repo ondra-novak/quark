@@ -20,8 +20,7 @@ public:
 				ResyncFn resyncFn,
 				String addr,
 				String signature,
-				String asset,
-				String currency,
+				PMarketConfig mcfg,
 				String firstTradeId,
 				bool logTrafic);
 	~MoneyServerClient2();
@@ -61,9 +60,7 @@ protected:
 	///signature of the client
 	const String signature;
 
-	const String asset;
-
-	const String currency;
+	PMarketConfig mcfg;
 	const String firstTradeId;
 
 	RefCntPtr<MyClient> client;
