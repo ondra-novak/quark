@@ -31,6 +31,8 @@ bool MockupMoneyService::allocBudget(json::Value user, OrderBudget total, Callba
 void MockupMoneyService::stop() {
 	queue.push(nullptr);
 	workerThread.join();
+	logInfo("Moneyserver-Thread stopped");
+
 }
 
 void MockupMoneyService::worker() {

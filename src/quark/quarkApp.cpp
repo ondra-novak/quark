@@ -986,16 +986,26 @@ void QuarkApp::start(Value cfg, String signature)
 		dispatcher.run();
 
 		logInfo("[start] Exitting queue");
+		//create special thread for dispatching remaining messages
+		//while the thread is busy with cleanup
 		std::thread exitTh ([=]{
-			exitFn();
-			exitFn = nullptr;
-			changesReader.join();
-			moneyService = nullptr;
-			moneySrvClient = nullptr;
-			dispatcher.quit();
+			dispatcher.run();
 		});
-		dispatcher.run();
+		//send exit to monitor queue
+		exitFn();
+		//clear exit function (no longer needed)
+		exitFn = nullptr;
+		//join monitor thread
+		changesReader.join();
+		//destroy money service client
+		moneySrvClient = nullptr;
+		//destroy money service
+		moneyService = nullptr;
+		//everything should be clean now, so quit the dispatcher
+		dispatcher.quit();
+		//join exit thread
 		exitTh.join();
+		//clear anything in the dispatcher
 		dispatcher.clear();
 	} catch (...) {
 		unhandledException();

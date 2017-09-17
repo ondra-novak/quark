@@ -69,6 +69,8 @@ bool MoneyService::allocBudgetLk(const PAllocReq &req) {
 		return false;
 	}
 
+	if (client == nullptr) return true;
+
 	lockedUsers.insert(req->user);
 
 	auto badv = calculateBudgetAdv(req->user,req->order,req->budget);
@@ -153,9 +155,11 @@ bool ErrorMoneyService::allocBudget(json::Value user, OrderBudget total, Callbac
 quark::MoneyService::~MoneyService() {
 		{
 		Sync _(lock);
+		client = nullptr;
 		allocQueue = AllocQueue();
 		}
 	inflight.zeroWait();
+	logDebug("MoneyService destructor");
 }
 
 /*
