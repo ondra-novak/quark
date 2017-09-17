@@ -981,9 +981,25 @@ void QuarkApp::start(Value cfg, String signature)
 	logInfo("[start] Dispatching");
 
 
+	watchdog.start(30000,
+		[=](unsigned int nonce) {
+			dispatcher << [=]{
+				logInfo({"Watchog test",nonce});
+				watchdog.reply(nonce);
+			};
+		},[=]{
+			try {
+				throw std::runtime_error("Watchdog failure");
+			} catch (...) {
+				unhandledException();
+			}
+		}
+	);
+
 	try {
 		//run dispatcher now
 		dispatcher.run();
+
 
 		logInfo("[start] Exitting queue");
 		//create special thread for dispatching remaining messages
@@ -1001,6 +1017,8 @@ void QuarkApp::start(Value cfg, String signature)
 		moneySrvClient = nullptr;
 		//destroy money service
 		moneyService = nullptr;
+		//stop watchdog
+		watchdog.stop();
 		//everything should be clean now, so quit the dispatcher
 		dispatcher.quit();
 		//join exit thread

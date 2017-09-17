@@ -14,6 +14,7 @@
 #include <unordered_set>
 
 #include "../common/dispatcher.h"
+#include "../common/watchdog.h"
 
 
 #include "../quark_lib/core.h"
@@ -162,6 +163,7 @@ private:
 	bool blockOnError(ChangesFeed &chfeed);
 
 	json::RpcServer controlServer;
+	Watchdog watchdog;
 
 	void execControlOrder(Value cmd);
 
