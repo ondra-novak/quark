@@ -46,6 +46,8 @@ protected:
 		void close() {closed = true;disconnect(true);}
 		bool isClosed() const {return closed;}
 
+		Value lastMMError;
+
 	protected:
 		MoneyServerClient2 &owner;
 		bool closed;

@@ -193,7 +193,8 @@ void MoneyServerClient2::connectIfNeed() {
 				retryCounter++;
 				if (retryCounter == 10) {
 					try {
-						throw std::runtime_error("MoneyServer client - too many connection drops, this is fatal");
+						String msg({"MoneyServer client - too many connection drops, this is fatal - ", client->lastMMError.toString()});
+						throw std::runtime_error(msg.c_str());
 					} catch(...) {
 						unhandledException();
 					}
@@ -260,6 +261,7 @@ void MoneyServerClient2::connectIfNeed() {
 void MoneyServerClient2::handleError(MyClient *c, StrViewA method, const RpcResult& res)
 {
 	logError({method, "Money server error, dropping connection", c->getAddr(), Value(res)});
+	c->lastMMError = res;
 	c->disconnect(false);
 }
 
