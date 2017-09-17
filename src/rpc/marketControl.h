@@ -86,8 +86,8 @@ protected:
 	struct ChartData {
 		std::uintptr_t time;
 		std::uintptr_t count;
-		std::uintptr_t open_index;
-		std::uintptr_t close_index;
+		String open_index;
+		String close_index;
 		double open;
 		double close;
 		double high;

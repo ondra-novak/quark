@@ -50,6 +50,10 @@ public:
 	json::String currencySign;
 	json::String assetSign;
 	json::Value moneyService;
+	json::String updateUrl;
+	json::Value updateLastModified;
+	json::Value updateETag;
+	json::Value rev;
 
 };
 

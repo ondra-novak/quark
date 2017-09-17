@@ -410,6 +410,8 @@ void QuarkApp::exitApp() {
 	dispatcher.quit();
 }
 
+
+
 void QuarkApp::recordRevisions(const Changeset& chset) {
 	for (auto x : chset.getCommitedDocs()) {
 		recordRevision(x.doc["_id"], Value(x.newRev));
@@ -445,6 +447,8 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 	//commit in one call (any possible conflicts are thrown here before orders are
 	//sent to the money server
 	chset.commit();
+	if (!chset.getCommitedDocs().empty())
+		tradesDb->updateView(userTrades,false);
 	Array keys;
 
 	if (!tradeList.empty())
@@ -640,6 +644,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 						 ("price",price)
 						 ("buyOrder",t.getBuyOrder()->getId())
 						 ("sellOrder",t.getSellOrder()->getId())
+						 ("buyUser", t.getBuyOrder()->getUser())
+						 ("sellUser", t.getSellOrder()->getUser())
 						 ("size",amount)
 						 ("dir",dir)
 						 ("time",(std::size_t)now);
@@ -789,14 +795,8 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 
 	if (!blockOnError(chfeed)) return;
 
-	//receive market config - halt processing, if no market config defined
-	Value marketDoc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
-	if (marketDoc == nullptr) {
-		throw std::runtime_error("No market configuration");
-	}
+	initialReceiveMarketConfig();
 
-	applyMarketConfig(marketDoc);
-	bool restartQueue = false;
 
 	auto loopBody = [&](ChangedDoc chdoc) {
 
@@ -805,9 +805,13 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 		[=]{
 			if (chdoc.id == marketConfigDocName) {
 				try {
-					applyMarketConfig(chdoc.doc);
-					logInfo("Market configuration updated");
-
+					//validate market config;
+					MarketConfig c(chdoc.doc);
+					if (c.rev != marketCfg->rev) {
+						logInfo("Market configuration updated (restart)");
+						exitCode = true;
+						exitApp();
+					}
 				} catch (std::exception &e) {
 					logError( {	"MarketConfig update failed", e.what()});
 				}
@@ -902,11 +906,25 @@ void QuarkApp::receiveMarketConfig() {
 	}
 }
 
+void QuarkApp::initialReceiveMarketConfig() {
+	Value doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
+	if (doc != nullptr) {
+		String s (doc["updateUrl"]);
+		if (!s.empty()) {
+			updateConfigFromUrl(s, doc["updateLastModified"], doc["updateETag"]);
+			doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
+		}
+		applyMarketConfig(doc);
+	} else {
+		throw std::runtime_error("No money service available");
+	}
+}
 
-void QuarkApp::start(Value cfg, String signature)
+bool QuarkApp::start(Value cfg, String signature)
 
 {
 
+	exitCode = false;
 	this->signature = signature;
 
 	setUnhandledExceptionHandler([cfg,signature]{
@@ -981,12 +999,13 @@ void QuarkApp::start(Value cfg, String signature)
 	logInfo("[start] Dispatching");
 
 
-	watchdog.start(30000,
-		[=](unsigned int nonce) {
+	watchdog.start(60000,
+		[=](unsigned int nonce)  {
 			dispatcher << [=]{
 				logInfo({"Watchog test",nonce});
 				watchdog.reply(nonce);
 			};
+			updateConfig();
 		},[=]{
 			try {
 				throw std::runtime_error("Watchdog failure");
@@ -994,7 +1013,7 @@ void QuarkApp::start(Value cfg, String signature)
 				unhandledException();
 			}
 		}
-	);
+		);
 
 	try {
 		//run dispatcher now
@@ -1030,6 +1049,7 @@ void QuarkApp::start(Value cfg, String signature)
 	}
 	logInfo("[start] Quit ");
 
+	return exitCode;
 }
 
 
@@ -1124,4 +1144,72 @@ void QuarkApp::controlCancelUserOrders(RpcRequest req) {
 	req.setError(501,"not implemented yet");
 }
 
+void QuarkApp::updateConfig() {
+
+	PMarketConfig cfg = marketCfg;
+
+	if (cfg == nullptr) return;
+
+	String s = cfg->updateUrl;
+	//no update url specified, skip
+	if (s.empty()) return;
+
+	updateConfigFromUrl(s,cfg->updateLastModified, cfg->updateETag);
+}
+bool QuarkApp::updateConfigFromUrl(String s, Value lastModified, Value etag) {
+	try {
+
+		couchit::HttpClient client;
+		client.setTimeout(10000);
+		client.open(s,"GET",false);
+		Object hdrs;
+		if (lastModified.defined()) {
+			hdrs("If-Modified-Since", lastModified);
+		}
+		if (etag.defined()) {
+			hdrs("If-None-Match", etag);
+		}
+		client.setHeaders(hdrs);
+		int status = client.send();
+		if (status != 304) {
+			logInfo({"[remote_config] Downloading new config",s});
+			if (status == 200) {
+
+				Value data = Value::parse(client.getResponse());
+				auto hash = std::hash<Value>()(data);
+
+				Document settings = ordersDb->get("settings");
+				if (settings["updateHash"].getUInt() != hash) {
+					Document newSettings;
+					newSettings.setBaseObject(data);
+					newSettings.setID(settings.getIDValue());
+					newSettings.setRev(settings.getRevValue());
+					if (!newSettings["updateUrl"].defined()) {
+						newSettings.set("updateUrl", s);
+					}
+					Value headers = client.getHeaders();
+					newSettings.set("updateLastModified",headers["Last-Modified"]);
+					newSettings.set("updateETag",headers["ETag"]);
+					newSettings.set("updateHash", hash);
+					MarketConfig validate(newSettings);
+					ordersDb->put(newSettings);
+					return true;
+				} else {
+					logInfo({"[remote_config] No change detected",s});
+					return false;
+				}
+			} else {
+				logInfo({"[remote_config] Download failed", status});
+				return false;
+			}
+		}
+		return true;
+	} catch (std::exception &e) {
+		logError({"[remote_config] Error reading config", s, e.what()});
+		return false;
+	}
+
+}
+
 } /* namespace quark */
+

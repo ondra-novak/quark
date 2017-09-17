@@ -11,15 +11,17 @@ public:
 	void stop();
 protected:
 	std::thread thr;
+	bool running;
 	std::promise<bool> exitSignal;
 	unsigned int lastNonce;
 };
 
 inline Watchdog::Watchdog() {
+	running = false;
 }
 
 inline Watchdog::~Watchdog() {
-	stop();
+	if (running) stop();
 }
 
 template<typename WatchFn, typename ErrorFn>
@@ -35,6 +37,7 @@ inline void Watchdog::start(unsigned int intervalms, WatchFn watchFn, ErrorFn er
 			watchFn(nonce);
 		}
 	});
+	running = true;
 }
 
 inline void Watchdog::reply(unsigned int nonce) {
@@ -44,4 +47,5 @@ inline void Watchdog::reply(unsigned int nonce) {
 inline void Watchdog::stop() {
 	exitSignal.set_value(true);
 	thr.join();
+	running = false;
 }

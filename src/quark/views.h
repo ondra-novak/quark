@@ -6,9 +6,9 @@ namespace quark {
 using namespace couchit;
 
 
-extern View tradesByCounter;
 extern View queueView;
 extern Filter waitfordoc;
 extern Filter queueFilter;
+extern View userTrades;
 
 }

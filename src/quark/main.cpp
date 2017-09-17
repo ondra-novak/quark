@@ -90,10 +90,17 @@ json::maxPrecisionDigits=9;
 	std::this_thread::sleep_for(std::chrono::seconds(2));
 
 	PQuarkApp app = new QuarkApp;
-	std::thread thr([=]{
+	std::mutex lock;
+	bool finish = false;
+	std::thread thr([&]{
 		try {
 
-			app->start(cfgjson, signature);
+			while (app->start(cfgjson, signature) == true) {
+				std::lock_guard<std::mutex> _(lock);
+				if (finish) break;
+				//restart here
+				app = new QuarkApp;
+			}
 		} catch (std::exception &e) {
 			logError({"Quark exited with unhandled exception",e.what()});
 			exit(1);
@@ -103,7 +110,11 @@ json::maxPrecisionDigits=9;
 		char c = std::cin.get();;
 		if (c == 'x') break;
 	}
-	app->exitApp();
+	{
+		std::lock_guard<std::mutex> _(lock);
+		app->exitApp();
+		finish = true;
+	}
 	thr.join();
 
 }

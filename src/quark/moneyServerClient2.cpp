@@ -208,7 +208,7 @@ void MoneyServerClient2::connectIfNeed() {
 					("signature",signature)
 					("asset",mcfg->assetSign)
 					("currency",mcfg->currencySign)
-					("currency_step",mcfg->pipSize)
+					("currency_step",mcfg->pipSize*mcfg->granuality)
 					("asset_step",mcfg->granuality)
 			);
 			if (initres.isError()) {

@@ -40,9 +40,10 @@ public:
 
 	void processOrder(Value cmd);
 	void receiveMarketConfig();
+	void initialReceiveMarketConfig();
 	void applyMarketConfig(Value doc);
 
-	void start(Value cfg, String signature);
+	bool start(Value cfg, String signature);
 
 	void exitApp();
 
@@ -95,7 +96,6 @@ protected:
 	void rejectOrder(Document order, const OrderErrorException &e, bool update);
 
 	void initMoneyService();
-	void watchDog();
 
 private:
 	POrder docOrder2POrder(const Document& order);
@@ -135,6 +135,8 @@ private:
 
 	double lastPrice;
 
+	bool exitCode;
+
 
 
 
@@ -171,6 +173,9 @@ private:
 	void controlCancelAllOrders(RpcRequest req);
 	void controlCancelUserOrders(RpcRequest req);
 
+
+	void updateConfig();
+	bool updateConfigFromUrl(String url, Value lastModified, Value etag);
 };
 
 typedef RefCntPtr<QuarkApp> PQuarkApp;

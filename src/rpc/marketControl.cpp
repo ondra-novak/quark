@@ -611,7 +611,7 @@ void MarketControl::ChartData::fromDB(json::Value v, std::uintptr_t timeAgr) {
 
 	time = (decodeTime(key)/timeAgr)*timeAgr;
 	count = data[5].getUInt();
-	close_index=open_index = data[9].getUInt();
+	close_index=open_index = String(data[9]);
 	high = data[1].getNumber();
 	low = data[2].getNumber();
 	open = data[0].getNumber();
@@ -633,7 +633,7 @@ json::Value MarketControl::ChartData::toJson() const {
 			("sum",sum)
 			("sum2",sum2)
 			("time", time)
-			("index",open_index)
+			("firstTrade",open_index)
 			("volume2",volume2));
 }
 
@@ -683,7 +683,7 @@ void MarketControl::rpcTradesStats(RpcRequest rq) {
 }
 
 static	couchit::View ordersByUser("_design/index/_view/users", couchit::View::update);
-static	couchit::View tradesByOrder("_design/trades/_view/byOrder", couchit::View::update);
+static	couchit::View tradesByUser("_design/trades/_view/byUser", couchit::View::update);
 
 
 static Value getUserDataArgs = Value(json::array,{
@@ -728,57 +728,18 @@ void MarketControl::rpcUserOrders(RpcRequest rq) {
 void MarketControl::rpcUserTrades(RpcRequest rq) {
 	if (!rq.checkArgs(getUserDataArgs)) return rq.setArgError();
 
-	auto allOrders = ordersDb.createQuery(ordersByUser);
-	setupUserQuery(allOrders,rq.getArgs()[0]);
-
-	couchit::Result res = allOrders.exec();
-	Array xords;
-	xords.reserve(res.size());
-	for (couchit::Row r: res) {
-		xords.push_back(r.id);
-	}
-
-	Value ords = xords;
-
-	auto alltrades = tradesDb.createQuery(tradesByOrder);
-	alltrades.includeDocs().nosort().keys(ords);
+		auto query = tradesDb.createQuery(tradesByUser);
+		query.includeDocs();
+		setupUserQuery(query,rq.getArgs()[0]);
 
 
-	couchit::Result res2 = alltrades.exec();
-
-
-	Array trades;
-	trades.reserve(res2.size());
-	unsigned int pos = 0;
-	auto seekToOrder = [&](Value trade) {
-		auto l = ords.size();
-		do {
-			Value ord = ords[pos];
-			if (trade["buyOrder"] == ord) {
-				return "buyer";
-			} else if (trade["sellOrder"] == ord) {
-				return "seller";
-			}
-			pos++;
-		} while (pos < l);
-		throw std::runtime_error("Reached unreachable code");
-	};
-
-	for (couchit::Row r: res2) {
-		Value x = normTrade(r.doc).replace("user_dir", seekToOrder(r.doc));
-		trades.push_back(x);
-	}
-	json::Value unordered = trades;
-	json::Value ordered = unordered.sort([](const json::Value &a, const json::Value &b) {\
-		std::uintptr_t ta = a["index"].getUInt();
-		std::uintptr_t tb = b["index"].getUInt();
-		if (ta < tb) return -1;
-		else if (ta > tb) return 1;
-		else return 0;
-	});
-
-
-	rq.setResult(trades);
+		couchit::Result res = query.exec();
+		Array rx;
+		rx.reserve(res.size());
+		for (couchit::Row r: res) {
+			rx.push_back(normTrade(r.doc));
+		}
+		rq.setResult(rx);
 
 }
 
