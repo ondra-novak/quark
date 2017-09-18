@@ -3,10 +3,10 @@ function(keys, values, rereduce) {
 
 if (rereduce) {
 	agr = values[0];
-	var ci = agr[9];
+	var ci = agr[10];
 	var oi = agr[9];
 	values.forEach(function(x) {
-		if (ci < x[9]) {ci = x[9]; agr[3] = x[3];}
+		if (ci < x[10]) {ci = x[10]; agr[3] = x[3];agr[10]=x[10];}
 		if (oi > x[9]) {oi = x[9]; agr[0] = x[0];agr[9] = x[9];}
 		if (agr[1] < x[1]) agr[1] = x[1];
 		if (agr[2] > x[2]) agr[2] = x[2];
@@ -19,17 +19,18 @@ if (rereduce) {
 	return agr;
 } else {
     var p = values[0][0];
-	var i = keys[0][1];
+	var ci = keys[0][1];
+	var oi = keys[0][1];
 	var v = values[0][1];
-	agr = [p,p,p,p,0,0,0,0,0,i];
+	agr = [p,p,p,p,0,0,0,0,0,oi,ci];
 	values.forEach(function(x,idx) {
 		var p = x[0];
 		var v = x[1];
 		var i = keys[idx][1];
-		if (ci < i) {ci = i; agr[3] = p;}
+		if (ci < i) {ci = i; agr[3] = p;agr[10]= i;}
 		if (oi > i) {oi = i; agr[0] = p;agr[9] = i;}
-		if (agr.h < p) agr[1] = p;
-		if (agr.l > p) agr[2] = p;
+		if (agr[1] < p) agr[1] = p;
+		if (agr[2] > p) agr[2] = p;
 		agr[5] += 1;
 		agr[6] += p;
 		agr[4] += v;
