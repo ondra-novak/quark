@@ -851,9 +851,6 @@ void QuarkApp::initMoneyService() {
 	PCouchDB orders = ordersDb;
 	PCouchDB trades = tradesDb;
 	PMarketConfig mcfg = marketCfg;
-	auto resyncFn = [=](ITradeStream &target, const Value fromTrade, const Value toTrade) {
-		resync(*orders,*trades,target,fromTrade,toTrade,*mcfg);
-	};
 
 
 	Value cfg = marketCfg->moneyService;
@@ -872,7 +869,7 @@ void QuarkApp::initMoneyService() {
 		Value addr = cfg["addr"];
 		bool logTrafic = cfg["logTrafic"].getBool();
 		String firstTradeId ( cfg["firstTradeId"]);
-		sv = new MoneyServerClient2(resyncFn,
+		sv = new MoneyServerClient2(*this,
 						 addr.getString(),
 						 signature,
 						 marketCfg,
@@ -1210,6 +1207,18 @@ bool QuarkApp::updateConfigFromUrl(String s, Value lastModified, Value etag) {
 	}
 
 }
+
+void QuarkApp::resync(ITradeStream& target, const Value fromTrade, const Value toTrade) {
+	return quark::resync(*ordersDb,*tradesDb,target,fromTrade,toTrade,*marketCfg);
+}
+
+bool QuarkApp::cancelAllOrders(const json::Array& users) {
+}
+
+Dispatcher& QuarkApp::getDispatcher() {
+	return dispatcher;
+}
+
 
 } /* namespace quark */
 

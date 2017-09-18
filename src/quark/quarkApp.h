@@ -34,7 +34,7 @@ using namespace json;
 
 class OrderErrorException;
 
-class QuarkApp: public RefCntObj {
+class QuarkApp: public RefCntObj, public IMoneySrvClientSupport {
 public:
 	QuarkApp();
 
@@ -176,6 +176,10 @@ private:
 
 	void updateConfig();
 	bool updateConfigFromUrl(String url, Value lastModified, Value etag);
+
+	virtual void resync(ITradeStream &target, const Value fromTrade, const Value toTrade);
+	virtual bool cancelAllOrders(const json::Array &users);
+	virtual Dispatcher &getDispatcher();
 };
 
 typedef RefCntPtr<QuarkApp> PQuarkApp;

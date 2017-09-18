@@ -17,7 +17,7 @@ public:
 	typedef std::function<void(ITradeStream &target, const Value fromTrade, const Value toTrade)> ResyncFn;
 
 	MoneyServerClient2(
-				ResyncFn resyncFn,
+				IMoneySrvClientSupport &support,
 				String addr,
 				String signature,
 				PMarketConfig mcfg,
@@ -56,7 +56,7 @@ protected:
 	};
 
 
-	ResyncFn resyncFn;
+	IMoneySrvClientSupport &support;
 	///connect addr
 	const String addr;
 	///signature of the client
@@ -84,8 +84,6 @@ protected:
 	void connectIfNeed();
 
 	static void handleError(MyClient *c, StrViewA method, const RpcResult &res);
-	template<typename Fn>
-	static void callWithRetry(RefCntPtr<MyClient> client, PMoneySvcSupport supp, String methodName, Value params, Fn callback);
 
 	class ResyncStream;
 	void reportTrade2(Value prevTrade, const TradeData &data) ;
