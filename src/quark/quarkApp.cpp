@@ -1213,6 +1213,30 @@ void QuarkApp::resync(ITradeStream& target, const Value fromTrade, const Value t
 }
 
 bool QuarkApp::cancelAllOrders(const json::Array& users) {
+	do {
+		couchit::Query q = ordersDb->createQuery(userActiveOrders);
+		if (users.empty()) return false;
+		q.keys(users);
+
+		couchit::Result res = q.exec();
+		if (res.empty()) {
+			return true;
+		}
+
+		couchit::Changeset chs = ordersDb->createChangeset();
+		for (couchit::Row rw : res) {
+
+			couchit::Document doc(rw.doc);
+			doc(OrderFields::cancelReq,true);
+			chs.update(doc);
+
+		}
+		try {
+			chs.commit();
+		} catch (couchit::UpdateException &e) {
+			//nothing
+		}
+	} while (true);
 }
 
 Dispatcher& QuarkApp::getDispatcher() {
