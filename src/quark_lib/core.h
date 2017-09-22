@@ -129,6 +129,8 @@ public:
 
 	bool isKnownOrder(const OrderId &orderId) const;
 
+	json::Value toJson() const;
+
 protected:
 	void resetCurrentState();
 	void rollbackOneStep();

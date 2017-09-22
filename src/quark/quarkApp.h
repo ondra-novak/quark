@@ -170,8 +170,7 @@ private:
 	void execControlOrder(Value cmd);
 
 	void controlStop(RpcRequest req);
-	void controlCancelAllOrders(RpcRequest req);
-	void controlCancelUserOrders(RpcRequest req);
+	void controlDumpState(RpcRequest req);
 
 
 	void updateConfig();

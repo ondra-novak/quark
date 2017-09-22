@@ -49,6 +49,7 @@ protected:
 	void rpcUserTrades(RpcRequest rq);
 	void rpcControlStop(RpcRequest rq);
 	void rpcControlPing(RpcRequest rq);
+	void rpcControlDumpState(RpcRequest rq);
 	void rpcOrderCancelAll(RpcRequest rq);
 
 

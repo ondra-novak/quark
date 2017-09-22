@@ -131,6 +131,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("User.trades",me, &MarketControl::rpcUserTrades);
 	rpcServer.add("Control.stop",me, &MarketControl::rpcControlStop);
 	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
+	rpcServer.add("Control.dumpState",me, &MarketControl::rpcControlDumpState);
 
 	return getMarketStatus();
 
@@ -843,6 +844,10 @@ void MarketControl::callDaemonService(String command,
 
 }
 
+
+void MarketControl::rpcControlDumpState(RpcRequest rq) {
+	callDaemonService("dumpState",rq.getArgs(),rq);
+}
 
 }
 

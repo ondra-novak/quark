@@ -212,5 +212,35 @@ POrder Order::updateTrailing(std::size_t newPrice) const {
 
 }
 
+
+json::NamedEnum<Order::State> orderStateStr(
+		{
+	{Order::prepared,"prepared"},
+	{Order::marketQueue,"marketQueue"},
+	{Order::orderbook,"orderbook"},
+	{Order::stopQueue,"stopQueue"},
+	{Order::oco,"oco"}
+		}
+);
+
+
+json::Value Order::toJson() const {
+	return json::Object("id",id)
+			("user",user)
+			("data",data)
+			("size",size)
+			("budget",budget)
+			("limitPrice",limitPrice)
+			("triggerPrice",triggerPrice)
+			("trailingDistance",trailingDistance)
+			("domPriority",domPriority)
+			("queuePriority",queuePriority)
+			("queuePos",queuePos)
+			("dir",OrderDir::str[dir])
+			("type", OrderType::str[type])
+			("state", orderStateStr[state]);
+}
+
+
 } /* namespace quark */
 

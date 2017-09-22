@@ -37,8 +37,7 @@ const StrViewA QuarkApp::controlDocName("control");
 
 QuarkApp::QuarkApp():rnd(std::random_device()()) {
 	controlServer.add("stop",this,&QuarkApp::controlStop);
-	controlServer.add("cancelAllOrders",this,&QuarkApp::controlCancelAllOrders);
-	controlServer.add("cancelUserOrders",this,&QuarkApp::controlCancelUserOrders);
+	controlServer.add("dumpState",this,&QuarkApp::controlDumpState);
 	controlServer.add_ping("ping");
 	controlServer.add_listMethods("listMethods");
 
@@ -1133,13 +1132,6 @@ void QuarkApp::controlStop(RpcRequest req) {
 	req.setResult(true);
 }
 
-void QuarkApp::controlCancelAllOrders(RpcRequest req) {
-	req.setError(501,"not implemented yet");
-}
-
-void QuarkApp::controlCancelUserOrders(RpcRequest req) {
-	req.setError(501,"not implemented yet");
-}
 
 void QuarkApp::updateConfig() {
 
@@ -1217,6 +1209,10 @@ bool QuarkApp::cancelAllOrders(const json::Array& users) {
 
 Dispatcher& QuarkApp::getDispatcher() {
 	return dispatcher;
+}
+
+void QuarkApp::controlDumpState(RpcRequest req) {
+	req.setResult(coreState.toJson());
 }
 
 

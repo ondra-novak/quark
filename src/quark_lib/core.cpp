@@ -689,4 +689,49 @@ std::size_t CurrentState::getLastPrice() const {
 	else return 0;
 }
 
+static json::Value dumpQueue(const CurrentState::OrderList &list) {
+	json::Array res;
+	res.reserve(list.size());
+	for (auto x: list) {
+		res.push_back(x);
+	}
+	return res;
 }
+
+static json::Value dumpQueue(const CurrentState::OrderQueue &list) {
+	json::Array res;
+	res.reserve(list.size());
+	for (auto x: list) {
+		res.push_back(x->toJson());
+	}
+	return res;
+
+}
+
+
+static json::Value dumpQueue(const CurrentState::Queue &list) {
+	json::Array res;
+	res.reserve(list.size());
+	CurrentState::Queue cpy = list;
+	while (!cpy.empty()) {
+		res.push_back(cpy.top()->toJson());
+		cpy.pop();
+	}
+	return res;
+
+}
+
+json::Value quark::CurrentState::toJson() const {
+	json::Object out;
+	out("orderbook_ask", dumpQueue(orderbook_ask))
+		("orderbook_bid",dumpQueue(orderbook_bid))
+		("stop_below",dumpQueue(stop_below))
+		("stop_above",dumpQueue(stop_above))
+		("trailings",dumpQueue(trailings))
+		("curQueue",dumpQueue(curQueue));
+	return out;
+}
+
+
+}
+
