@@ -745,7 +745,6 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	odata.domPriority = order[OrderFields::domPriority].getInt();
 	odata.queuePriority = order[OrderFields::queuePriority].getInt();
 	odata.user = order[OrderFields::user];
-	odata.data = order.getRev();
 	po = new Order(odata);
 	return po;
 }
@@ -995,7 +994,7 @@ bool QuarkApp::start(Value cfg, String signature)
 	logInfo("[start] Dispatching");
 
 
-	watchdog.start(60000,
+/*	watchdog.start(60000,
 		[=](unsigned int nonce)  {
 			dispatcher << [=]{
 				logInfo({"Watchog test",nonce});
@@ -1009,7 +1008,7 @@ bool QuarkApp::start(Value cfg, String signature)
 				unhandledException();
 			}
 		}
-		);
+		);*/
 
 	try {
 		//run dispatcher now
@@ -1074,20 +1073,6 @@ Value QuarkApp::PendingOrders::unlock(Value id) {
 	return out;
 }
 
-String QuarkApp::createTradeId(const TradeResultTrade &tr) {
-	//because one of orders are always fully executed, it should never generate trade again
-	//so we can use its ID to build unique trade ID
-
-	if (tr.isFullBuy()) {
-		StrViewA revId = tr.getBuyOrder()->getData().getString().split("-")();
-		return String({"t.",tr.getBuyOrder()->getId().getString().substr(2),"_",revId});
-	}
-	if (tr.isFullSell()) {
-		StrViewA revId = tr.getSellOrder()->getData().getString().split("-")();
-		return String({"t.",tr.getSellOrder()->getId().getString().substr(2),"_",revId});
-	}
-	throw std::runtime_error("Reported partial matching for both orders, this should not happen");
-}
 
 
 void QuarkApp::PendingOrders::clear() {
@@ -1123,7 +1108,7 @@ bool QuarkApp::checkOrderRev(Value docId, Value revId) {
 void QuarkApp::controlStop(RpcRequest req) {
 	[=] {
 		try {
-			throw std::runtime_error("Stopped on porpose");
+			throw std::runtime_error("Stopped on purpose (Control.stop[])");
 		} catch (...) {
 			unhandledException();
 		}

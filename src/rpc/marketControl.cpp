@@ -803,6 +803,7 @@ void MarketControl::callDaemonService(String command,
 
 
 	ordersDb.put(doc);
+	req.sendNotify("control",Object("command",command)("params",params)("id",req.getId())("order", doc.getID()));
 	couchit::Query q = ordersDb.createQuery(couchit::View::includeDocs);
 	q.key(id);
 	couchit::Result r = q.exec();
@@ -839,6 +840,11 @@ void MarketControl::callDaemonService(String command,
 		}
 	} else {
 		req.setError(500,"Unknown response", doc);
+	}
+	try {
+		doc.setDeleted();
+		ordersDb.put(doc);
+	} catch (couchit::UpdateException &) {
 	}
 
 

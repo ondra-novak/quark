@@ -296,16 +296,13 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 			break;
 			}
 
-			//execute orders from stopped marked queue
-			while (!market.empty()) {
-				POrder order = *market.begin();
-				OrderQueue &orderbook = order->getDir() == OrderDir::buy?orderbook_ask:orderbook_bid;
-				if (!pairInQueue(orderbook ,order,output)) {
-					break;
-				} else {
-					market.erase(market.begin());
+			if (!market.empty()) {
+				OrderQueue oldMarket((OrderCompare(&sortMarketPriority)));
+				market.swap(oldMarket);
+				for (POrder item: oldMarket) {
+					//execute orders from stopped marked queue
+					matchNewOrder(item, output);
 				}
-
 			}
 
 		}
@@ -728,7 +725,7 @@ json::Value quark::CurrentState::toJson() const {
 		("stop_below",dumpQueue(stop_below))
 		("stop_above",dumpQueue(stop_above))
 		("trailings",dumpQueue(trailings))
-		("curQueue",dumpQueue(curQueue));
+		("market",dumpQueue(market));
 	return out;
 }
 

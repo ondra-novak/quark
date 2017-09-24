@@ -95,6 +95,7 @@ Order::Order(const OrderJsonData &data) {
 
 POrder quark::Order::changeState(State newState) const {
 
+	if (newState == state) return const_cast<Order *>(this);
 	Order *x = new Order(*this);
 	x->state = newState;
 	x->queuePos = pos_counter++;

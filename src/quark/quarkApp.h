@@ -47,7 +47,7 @@ public:
 
 	void exitApp();
 
-	static String createTradeId(const TradeResultTrade &tr);
+
 
 protected:
 	void monitorQueue(std::promise<Action> &exitFnStore);

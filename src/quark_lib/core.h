@@ -19,6 +19,12 @@ public:
 		bool inOrder(const POrder &a, const POrder &b) const {
 			return cmp(a,b);
 		}
+
+		void swap(OrderQueue &other) {
+			std::set<POrder, OrderCompare>::swap(other);
+			std::swap(cmp,other.cmp);
+		}
+
 	protected:
 		OrderCompare cmp;
 	};
