@@ -1,3 +1,9 @@
+quark (1.0.6) zesty; urgency=medium
+
+  * fixed bugs and various improvements
+
+ -- root <root@quark>  Mon, 18 Sep 2017 00:18:22 +0000
+
 quark (1.0.4build4) UNRELEASED; urgency=medium
 
   * fix resync 

@@ -611,7 +611,8 @@ void MarketControl::ChartData::fromDB(json::Value v, std::uintptr_t timeAgr) {
 
 	time = (decodeTime(key)/timeAgr)*timeAgr;
 	count = data[5].getUInt();
-	close_index=open_index = String(data[9]);
+	open_index = String(data[9]);
+	close_index = String(data[10]);
 	high = data[1].getNumber();
 	low = data[2].getNumber();
 	open = data[0].getNumber();
@@ -634,6 +635,7 @@ json::Value MarketControl::ChartData::toJson() const {
 			("sum2",sum2)
 			("time", time)
 			("firstTrade",open_index)
+			("lastTrade",close_index)
 			("volume2",volume2));
 }
 
