@@ -127,6 +127,8 @@ public:
 	}
 
 
+	Value toJson() const;
+
 protected:
 
 	Value id;

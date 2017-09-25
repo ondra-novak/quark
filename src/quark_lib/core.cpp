@@ -296,16 +296,13 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 			break;
 			}
 
-			//execute orders from stopped marked queue
-			while (!market.empty()) {
-				POrder order = *market.begin();
-				OrderQueue &orderbook = order->getDir() == OrderDir::buy?orderbook_ask:orderbook_bid;
-				if (!pairInQueue(orderbook ,order,output)) {
-					break;
-				} else {
-					market.erase(market.begin());
+			if (!market.empty()) {
+				OrderQueue oldMarket((OrderCompare(&sortMarketPriority)));
+				market.swap(oldMarket);
+				for (POrder item: oldMarket) {
+					//execute orders from stopped marked queue
+					matchNewOrder(item, output);
 				}
-
 			}
 
 		}
@@ -689,4 +686,49 @@ std::size_t CurrentState::getLastPrice() const {
 	else return 0;
 }
 
+static json::Value dumpQueue(const CurrentState::OrderList &list) {
+	json::Array res;
+	res.reserve(list.size());
+	for (auto x: list) {
+		res.push_back(x);
+	}
+	return res;
 }
+
+static json::Value dumpQueue(const CurrentState::OrderQueue &list) {
+	json::Array res;
+	res.reserve(list.size());
+	for (auto x: list) {
+		res.push_back(x->toJson());
+	}
+	return res;
+
+}
+
+
+static json::Value dumpQueue(const CurrentState::Queue &list) {
+	json::Array res;
+	res.reserve(list.size());
+	CurrentState::Queue cpy = list;
+	while (!cpy.empty()) {
+		res.push_back(cpy.top()->toJson());
+		cpy.pop();
+	}
+	return res;
+
+}
+
+json::Value quark::CurrentState::toJson() const {
+	json::Object out;
+	out("orderbook_ask", dumpQueue(orderbook_ask))
+		("orderbook_bid",dumpQueue(orderbook_bid))
+		("stop_below",dumpQueue(stop_below))
+		("stop_above",dumpQueue(stop_above))
+		("trailings",dumpQueue(trailings))
+		("market",dumpQueue(market));
+	return out;
+}
+
+
+}
+

@@ -37,8 +37,7 @@ const StrViewA QuarkApp::controlDocName("control");
 
 QuarkApp::QuarkApp():rnd(std::random_device()()) {
 	controlServer.add("stop",this,&QuarkApp::controlStop);
-	controlServer.add("cancelAllOrders",this,&QuarkApp::controlCancelAllOrders);
-	controlServer.add("cancelUserOrders",this,&QuarkApp::controlCancelUserOrders);
+	controlServer.add("dumpState",this,&QuarkApp::controlDumpState);
 	controlServer.add_ping("ping");
 	controlServer.add_listMethods("listMethods");
 
@@ -746,7 +745,6 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	odata.domPriority = order[OrderFields::domPriority].getInt();
 	odata.queuePriority = order[OrderFields::queuePriority].getInt();
 	odata.user = order[OrderFields::user];
-	odata.data = order.getRev();
 	po = new Order(odata);
 	return po;
 }
@@ -851,9 +849,6 @@ void QuarkApp::initMoneyService() {
 	PCouchDB orders = ordersDb;
 	PCouchDB trades = tradesDb;
 	PMarketConfig mcfg = marketCfg;
-	auto resyncFn = [=](ITradeStream &target, const Value fromTrade, const Value toTrade) {
-		resync(*orders,*trades,target,fromTrade,toTrade,*mcfg);
-	};
 
 
 	Value cfg = marketCfg->moneyService;
@@ -872,7 +867,7 @@ void QuarkApp::initMoneyService() {
 		Value addr = cfg["addr"];
 		bool logTrafic = cfg["logTrafic"].getBool();
 		String firstTradeId ( cfg["firstTradeId"]);
-		sv = new MoneyServerClient2(resyncFn,
+		sv = new MoneyServerClient2(*this,
 						 addr.getString(),
 						 signature,
 						 marketCfg,
@@ -999,7 +994,7 @@ bool QuarkApp::start(Value cfg, String signature)
 	logInfo("[start] Dispatching");
 
 
-	watchdog.start(60000,
+/*	watchdog.start(60000,
 		[=](unsigned int nonce)  {
 			dispatcher << [=]{
 				logInfo({"Watchog test",nonce});
@@ -1013,7 +1008,7 @@ bool QuarkApp::start(Value cfg, String signature)
 				unhandledException();
 			}
 		}
-		);
+		);*/
 
 	try {
 		//run dispatcher now
@@ -1078,20 +1073,6 @@ Value QuarkApp::PendingOrders::unlock(Value id) {
 	return out;
 }
 
-String QuarkApp::createTradeId(const TradeResultTrade &tr) {
-	//because one of orders are always fully executed, it should never generate trade again
-	//so we can use its ID to build unique trade ID
-
-	if (tr.isFullBuy()) {
-		StrViewA revId = tr.getBuyOrder()->getData().getString().split("-")();
-		return String({"t.",tr.getBuyOrder()->getId().getString().substr(2),"_",revId});
-	}
-	if (tr.isFullSell()) {
-		StrViewA revId = tr.getSellOrder()->getData().getString().split("-")();
-		return String({"t.",tr.getSellOrder()->getId().getString().substr(2),"_",revId});
-	}
-	throw std::runtime_error("Reported partial matching for both orders, this should not happen");
-}
 
 
 void QuarkApp::PendingOrders::clear() {
@@ -1127,7 +1108,7 @@ bool QuarkApp::checkOrderRev(Value docId, Value revId) {
 void QuarkApp::controlStop(RpcRequest req) {
 	[=] {
 		try {
-			throw std::runtime_error("Stopped on porpose");
+			throw std::runtime_error("Stopped on purpose (Control.stop[])");
 		} catch (...) {
 			unhandledException();
 		}
@@ -1136,13 +1117,6 @@ void QuarkApp::controlStop(RpcRequest req) {
 	req.setResult(true);
 }
 
-void QuarkApp::controlCancelAllOrders(RpcRequest req) {
-	req.setError(501,"not implemented yet");
-}
-
-void QuarkApp::controlCancelUserOrders(RpcRequest req) {
-	req.setError(501,"not implemented yet");
-}
 
 void QuarkApp::updateConfig() {
 
@@ -1210,6 +1184,46 @@ bool QuarkApp::updateConfigFromUrl(String s, Value lastModified, Value etag) {
 	}
 
 }
+
+void QuarkApp::resync(ITradeStream& target, const Value fromTrade, const Value toTrade) {
+	return quark::resync(*ordersDb,*tradesDb,target,fromTrade,toTrade,*marketCfg);
+}
+
+bool QuarkApp::cancelAllOrders(const json::Array& users) {
+	do {
+		couchit::Query q = ordersDb->createQuery(userActiveOrders);
+		if (users.empty()) return false;
+		q.keys(users);
+
+		couchit::Result res = q.exec();
+		if (res.empty()) {
+			return true;
+		}
+
+		couchit::Changeset chs = ordersDb->createChangeset();
+		for (couchit::Row rw : res) {
+
+			couchit::Document doc(rw.doc);
+			doc(OrderFields::cancelReq,true);
+			chs.update(doc);
+
+		}
+		try {
+			chs.commit();
+		} catch (couchit::UpdateException &e) {
+			//nothing
+		}
+	} while (true);
+}
+
+Dispatcher& QuarkApp::getDispatcher() {
+	return dispatcher;
+}
+
+void QuarkApp::controlDumpState(RpcRequest req) {
+	req.setResult(coreState.toJson());
+}
+
 
 } /* namespace quark */
 

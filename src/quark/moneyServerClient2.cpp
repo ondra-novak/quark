@@ -12,6 +12,7 @@
 
 
 #include <imtjson/object.h>
+#include <imtjson/array.h>
 
 #include "../common/runtime_error.h"
 
@@ -27,10 +28,10 @@ namespace quark {
 
 
 MoneyServerClient2::MoneyServerClient2(
-		ResyncFn resyncFn,
+		IMoneySrvClientSupport &support,
 		String addr, String signature,
 		PMarketConfig mcfg, String firstTradeId, bool logTrafic)
-	:resyncFn(resyncFn)
+	:support(support)
 	,addr(addr)
 	,signature(signature)
 	,mcfg(mcfg)
@@ -50,28 +51,6 @@ void MoneyServerClient2::adjustBudget(json::Value ,
 		OrderBudget& ) {
 	//emoty
 }
-
-template<typename Fn>
-void MoneyServerClient2::callWithRetry(RefCntPtr<MyClient> client,PMoneySvcSupport supp,  String methodName, Value params, Fn callback) {
-
-	(*client)(methodName, params) >>
-			[=](RpcResult res) {
-		if (res.isError()) {
-			if (res.defined()) {
-				handleError(client,methodName,res);
-			}
-			if (!client->isClosed()) {
-				supp->dispatch([=]{callWithRetry(client,supp,methodName,params,callback);});
-			} else {
-				callback(res);
-			}
-		} else {
-			callback(res);
-		}
-	};
-
-}
-
 
 
 bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
@@ -169,6 +148,10 @@ void MoneyServerClient2::onInit() {
 }
 
 void MoneyServerClient2::onNotify(const Notify& ntf) {
+	if (ntf.eventName == "cancelAllOrders") {
+		json::Array x(ntf.data["users"]);
+		support.cancelAllOrders(x);
+	}
 	//empty
 }
 
@@ -234,7 +217,7 @@ void MoneyServerClient2::connectIfNeed() {
 
 				try {
 					ResyncStream resyncStream(*this);
-					resyncFn(resyncStream, lastSyncId, lastReportedTrade);
+					support.resync(resyncStream, lastSyncId, lastReportedTrade);
 				} catch (CancelException &e) {
 					//continue disconnected
 				}  catch (...) {

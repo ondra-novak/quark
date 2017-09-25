@@ -30,8 +30,11 @@ enum Type {
 	oco_limitstop
 };
 
+
 extern json::NamedEnum<Type> str;
 }
+
+
 
 namespace OrderFields {
 

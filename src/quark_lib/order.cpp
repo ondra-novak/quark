@@ -95,6 +95,7 @@ Order::Order(const OrderJsonData &data) {
 
 POrder quark::Order::changeState(State newState) const {
 
+	if (newState == state) return const_cast<Order *>(this);
 	Order *x = new Order(*this);
 	x->state = newState;
 	x->queuePos = pos_counter++;
@@ -211,6 +212,36 @@ POrder Order::updateTrailing(std::size_t newPrice) const {
 	return newOrder;
 
 }
+
+
+json::NamedEnum<Order::State> orderStateStr(
+		{
+	{Order::prepared,"prepared"},
+	{Order::marketQueue,"marketQueue"},
+	{Order::orderbook,"orderbook"},
+	{Order::stopQueue,"stopQueue"},
+	{Order::oco,"oco"}
+		}
+);
+
+
+json::Value Order::toJson() const {
+	return json::Object("id",id)
+			("user",user)
+			("data",data)
+			("size",size)
+			("budget",budget)
+			("limitPrice",limitPrice)
+			("triggerPrice",triggerPrice)
+			("trailingDistance",trailingDistance)
+			("domPriority",domPriority)
+			("queuePriority",queuePriority)
+			("queuePos",queuePos)
+			("dir",OrderDir::str[dir])
+			("type", OrderType::str[type])
+			("state", orderStateStr[state]);
+}
+
 
 } /* namespace quark */
 

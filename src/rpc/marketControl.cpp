@@ -131,6 +131,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("User.trades",me, &MarketControl::rpcUserTrades);
 	rpcServer.add("Control.stop",me, &MarketControl::rpcControlStop);
 	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
+	rpcServer.add("Control.dumpState",me, &MarketControl::rpcControlDumpState);
 
 	return getMarketStatus();
 
@@ -802,6 +803,7 @@ void MarketControl::callDaemonService(String command,
 
 
 	ordersDb.put(doc);
+	req.sendNotify("control",Object("command",command)("params",params)("id",req.getId())("order", doc.getID()));
 	couchit::Query q = ordersDb.createQuery(couchit::View::includeDocs);
 	q.key(id);
 	couchit::Result r = q.exec();
@@ -839,10 +841,19 @@ void MarketControl::callDaemonService(String command,
 	} else {
 		req.setError(500,"Unknown response", doc);
 	}
+	try {
+		doc.setDeleted();
+		ordersDb.put(doc);
+	} catch (couchit::UpdateException &) {
+	}
 
 
 }
 
+
+void MarketControl::rpcControlDumpState(RpcRequest rq) {
+	callDaemonService("dumpState",rq.getArgs(),rq);
+}
 
 }
 
