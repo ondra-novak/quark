@@ -21,10 +21,16 @@ using quark::initCouchDBConfig;
 using namespace json;
 using namespace couchit;
 
-void createConfig(std::ostream &out);
-void createMarket(Value cfg);
+std::size_t backupDocuments(CouchDB &db, std::time_t timestamp, String fname) {
 
-void
+	return 0;
+
+}
+
+String getBackupName(StrViewA outdir, StrViewA market, Value timestamp, StrViewA suffix) {
+
+	return String({outdir,"/backup-",timestamp.toString(),"-",market,suffix,".json"});
+}
 
 int main(int argc, char **argv) {
 
@@ -108,23 +114,24 @@ int main(int argc, char **argv) {
 		CouchDB tradesDB(initCouchDBConfig(config, market, "-trades"));
 
 
+		String fname1 = getBackupName(outDir, market, timestamp, strOrderSfx);
+		std::size_t sz1 = backupDocuments(ordersDB, timestamp.getUInt(), fname1);
+		std::cout << "Backup orders: " << fname1 << ", count: " << sz1 << std::endl;
 
-		std::size_t sz1 = backupDocuments(orderDB, timestamp, out, market, strOrderSfx);
-		std::cout << "Backup orders: " << getBackupName(out, market, timestamp, strOrdersSfx) << ", count: " << sz1 << std::endl;
-
-		std::size_t sz2 = backupDocuments(tradesDB, timestamp, out, market, strTradesSfx);
-		std::cout << "Backup trades: " << getBackupName(out, market, timestamp, strTradesSfx) << ", count: " << sz2 << std::endl;
+		String fname2 = getBackupName(outDir, market, timestamp, strTradesSfx);
+		std::size_t sz2 = backupDocuments(tradesDB, timestamp.getUInt(),fname2);
+		std::cout << "Backup trades: " << fname2 << ", count: " << sz2 << std::endl;
 
 		if (!autoNo) {
 			if (!autoYes) {
 
 				std::cerr << "Really delete all old records? Operation is irreversible (y/n):";
 				std::cin.sync();
-				int c = tolower(std::in.get());
-				while (c != EOF && c != "y" && c != 'n') {
+				int c = tolower(std::cin.get());
+				while (c != EOF && c != 'y' && c != 'n') {
 					std::cerr << "Please enter y(yes) or n(no):";
 					std::cin.sync();
-					c = tolower(std::in.get());
+					c = tolower(std::cin.get());
 				}
 
 
