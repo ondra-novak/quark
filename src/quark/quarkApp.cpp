@@ -994,7 +994,7 @@ bool QuarkApp::start(Value cfg, String signature)
 	logInfo("[start] Dispatching");
 
 
-/*	watchdog.start(60000,
+	watchdog.start(60000,
 		[=](unsigned int nonce)  {
 			dispatcher << [=]{
 				logInfo({"Watchog test",nonce});
@@ -1008,7 +1008,7 @@ bool QuarkApp::start(Value cfg, String signature)
 				unhandledException();
 			}
 		}
-		);*/
+		);
 
 	try {
 		//run dispatcher now

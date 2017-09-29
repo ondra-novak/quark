@@ -14,7 +14,7 @@ add_subdirectory (src/quark_test EXCLUDE_FROM_ALL)
 
 
 add_subdirectory (src/quark)
-add_subdirectory (src/create) 
+add_subdirectory (src/quark_init) 
 add_subdirectory (src/rpc)
 add_subdirectory (src/jsonrpc_netcat)
 add_subdirectory (src/bot)
