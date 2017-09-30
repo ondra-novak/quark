@@ -45,6 +45,10 @@ MarketConfig::MarketConfig(json::Value v)
 ,currencySign(mandatory(v,"currencySign"))
 ,assetSign(mandatory(v,"assetSign"))
 ,moneyService(mandatory(v,"moneyService"))
+,updateUrl(String(v["updateUrl"]))
+,updateLastModified(String(v["updateLastModified"]))
+,updateETag(String(v["updateETag"]))
+,rev(v["_rev"])
 {
 
 	double maxSize = pow(2,sizeof(std::size_t)*8);

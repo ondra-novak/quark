@@ -3,6 +3,8 @@
 #include <imtjson/value.h>
 namespace quark {
 
+using namespace json;
+
 couchit::Config initCouchDBConfig(json::Value cfgjson,  StrViewA dbname, json::StrViewA suffix) {
 	couchit::Config cfg;
 	if (cfgjson["singleDB"].getBool()) {

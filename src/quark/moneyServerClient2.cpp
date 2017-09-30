@@ -12,6 +12,7 @@
 
 
 #include <imtjson/object.h>
+#include <imtjson/array.h>
 
 #include "../common/runtime_error.h"
 
@@ -27,13 +28,13 @@ namespace quark {
 
 
 MoneyServerClient2::MoneyServerClient2(
-		ResyncFn resyncFn,
-		String addr, String signature, String asset, String currency, String firstTradeId, bool logTrafic)
-	:resyncFn(resyncFn)
+		IMoneySrvClientSupport &support,
+		String addr, String signature,
+		PMarketConfig mcfg, String firstTradeId, bool logTrafic)
+	:support(support)
 	,addr(addr)
 	,signature(signature)
-	,asset(asset)
-	,currency(currency)
+	,mcfg(mcfg)
 	,firstTradeId(firstTradeId)
 	,client(new MyClient(addr,*this))
 	,inited(false)
@@ -50,28 +51,6 @@ void MoneyServerClient2::adjustBudget(json::Value ,
 		OrderBudget& ) {
 	//emoty
 }
-
-template<typename Fn>
-void MoneyServerClient2::callWithRetry(RefCntPtr<MyClient> client,PMoneySvcSupport supp,  String methodName, Value params, Fn callback) {
-
-	(*client)(methodName, params) >>
-			[=](RpcResult res) {
-		if (res.isError()) {
-			if (res.defined()) {
-				handleError(client,methodName,res);
-			}
-			if (!client->isClosed()) {
-				supp->dispatch([=]{callWithRetry(client,supp,methodName,params,callback);});
-			} else {
-				callback(res);
-			}
-		} else {
-			callback(res);
-		}
-	};
-
-}
-
 
 
 bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
@@ -169,6 +148,10 @@ void MoneyServerClient2::onInit() {
 }
 
 void MoneyServerClient2::onNotify(const Notify& ntf) {
+	if (ntf.eventName == "cancelAllOrders") {
+		json::Array x(ntf.data["users"]);
+		support.cancelAllOrders(x);
+	}
 	//empty
 }
 
@@ -193,7 +176,8 @@ void MoneyServerClient2::connectIfNeed() {
 				retryCounter++;
 				if (retryCounter == 10) {
 					try {
-						throw std::runtime_error("MoneyServer client - too many connection drops, this is fatal");
+						String msg({"MoneyServer client - too many connection drops, this is fatal - ", client->lastMMError.toString()});
+						throw std::runtime_error(msg.c_str());
 					} catch(...) {
 						unhandledException();
 					}
@@ -205,8 +189,11 @@ void MoneyServerClient2::connectIfNeed() {
 
 			RpcResult initres = (*client)("CurrencyBalance.init", Object
 					("signature",signature)
-					("asset",asset)
-					("currency",currency));
+					("asset",mcfg->assetSign)
+					("currency",mcfg->currencySign)
+					("currency_step",mcfg->pipSize*mcfg->granuality)
+					("asset_step",mcfg->granuality)
+			);
 			if (initres.isError()) {
 				if (initres.defined()) {
 					handleError(client,"CurrencyBalance.init", initres);
@@ -230,7 +217,7 @@ void MoneyServerClient2::connectIfNeed() {
 
 				try {
 					ResyncStream resyncStream(*this);
-					resyncFn(resyncStream, lastSyncId, lastReportedTrade);
+					support.resync(resyncStream, lastSyncId, lastReportedTrade);
 				} catch (CancelException &e) {
 					//continue disconnected
 				}  catch (...) {
@@ -239,6 +226,15 @@ void MoneyServerClient2::connectIfNeed() {
 			}
 
 		} else {
+			retryCounter++;
+			std::this_thread::sleep_for(std::chrono::seconds(retryCounter));
+			if (retryCounter == 10) {
+				try {
+					throw std::runtime_error(String({"Failed to make connection to: ", addr}).c_str());
+				} catch(...) {
+					unhandledException();
+				}
+			}
 			//failed connect
 			//nothing here - commands send to disconnected client are rejected through callback
 		}
@@ -248,6 +244,7 @@ void MoneyServerClient2::connectIfNeed() {
 void MoneyServerClient2::handleError(MyClient *c, StrViewA method, const RpcResult& res)
 {
 	logError({method, "Money server error, dropping connection", c->getAddr(), Value(res)});
+	c->lastMMError = res;
 	c->disconnect(false);
 }
 

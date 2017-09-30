@@ -126,6 +126,9 @@ public:
 		return data;
 	}
 
+
+	Value toJson() const;
+
 protected:
 
 	Value id;

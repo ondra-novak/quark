@@ -53,7 +53,7 @@ public:
 
 
 	///dispatch function
-	void operator>>(const Msg &msg) {
+	void operator<<(const Msg &msg) {
 		queue.push(msg);
 	}
 
@@ -67,7 +67,7 @@ public:
 
 	///allows to use syntax function >> dispatcher
 	friend void operator>>(const Msg &msg, Dispatcher &dispatcher) {
-		dispatcher >> msg;
+		dispatcher << msg;
 	}
 
 };

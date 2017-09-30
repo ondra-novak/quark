@@ -1,5 +1,8 @@
 #include "mockupmoneyserver.h"
 
+#include <random>
+
+
 #include "error.h"
 
 #include "logfile.h"
@@ -7,53 +10,46 @@
 namespace quark {
 
 void MockupMoneyService::start() {
-	if (workerThread == nullptr)
-		workerThread = std::unique_ptr<std::thread>(new std::thread([=]{
+	workerThread = std::thread([=]{
 			try {
 				worker();
 			} catch (...) {
 				unhandledException();
 			}
-		}));
+		});
 }
 
 bool MockupMoneyService::allocBudget(json::Value user, OrderBudget total, Callback callback) {
-	std::lock_guard<std::mutex> _(queueLock);
-	if (workerThread == nullptr) {
-		start();
-	}
-	queue.push(QueueItem(user,total,callback));
-	runBackend.notify_all();
+	queue.push(
+			PQueueItem(
+					new QueueItem(user,total,callback,
+							std::chrono::steady_clock::now() + std::chrono::milliseconds(serverLatency)
+					)));
 	return false;
 }
 
 void MockupMoneyService::stop() {
-	if (workerThread != nullptr) {
-		finish = true;
-		runBackend.notify_all();
-		workerThread->join();
-	}
+	queue.push(nullptr);
+	workerThread.join();
+	logInfo("Moneyserver-Thread stopped");
+
 }
 
 void MockupMoneyService::worker() {
-	while (!finish) {
+	std::default_random_engine rnd((std::random_device()()));
+	std::uniform_int_distribution<int> rd(0,20);
+	PQueueItem x = queue.pop();
+	while (x != nullptr) {
 
-		std::queue<QueueItem> cpyq;
-		{
-			std::unique_lock<std::mutex> _(queueLock);
-			runBackend.wait(_, [&]{return !queue.empty()||finish;});
-			logInfo({"Moneyserver processing batch", queue.size()});
-			std::swap(cpyq, queue);
+		std::this_thread::sleep_until(x->execTime);
+		if (rd(rnd) == 0 && x->callBack) {
+			logInfo({"Moneyserver-Simulated failure", x->user, x->budget.toJson()});
+			x->callBack(allocTryAgain);
+		} else {
+			bool res = allocBudget(x->user, x->budget);
+			if (x->callBack) x->callBack(res?allocOk:allocReject);
 		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(serverLatency));
-
-		while (!cpyq.empty()) {
-			QueueItem itm = cpyq.front();
-			cpyq.pop();
-
-			bool res = allocBudget(itm.user,itm.budget);
-			if (itm.callBack) itm.callBack(res?allocOk:allocReject);
-		}
+		x = queue.pop();
 	}
 }
 

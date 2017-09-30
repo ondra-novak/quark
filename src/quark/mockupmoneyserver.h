@@ -4,6 +4,8 @@
 #include <mutex>
 #include <queue>
 #include <condition_variable>
+
+#include "../common/msgqueue.h"
 #include "orderBudget.h"
 #include "imoneysrvclient.h"
 
@@ -14,7 +16,9 @@ namespace quark {
 class MockupMoneyService: public IMoneySrvClient {
 public:
 
-	MockupMoneyService(OrderBudget maxBudget, std::size_t serverLatency):maxBudget(maxBudget),serverLatency(serverLatency) {}
+	MockupMoneyService(OrderBudget maxBudget, std::size_t serverLatency):maxBudget(maxBudget),serverLatency(serverLatency) {
+		start();
+	}
 	~MockupMoneyService() {stop();}
 
 
@@ -27,24 +31,24 @@ public:
 
 protected:
 
-	std::unique_ptr<std::thread> workerThread;
+	std::thread workerThread;
 	std::size_t serverLatency;
 	OrderBudget maxBudget;
 
-	struct QueueItem {
+	struct QueueItem: public RefCntObj {
 		json::Value user;
 		OrderBudget budget;
 		Callback callBack;
+		std::chrono::time_point<std::chrono::steady_clock> execTime;
 
 		QueueItem(){}
-		QueueItem(json::Value user,OrderBudget budget,Callback callBack)
-			:user(user),budget(budget),callBack(callBack) {}
+		QueueItem(json::Value user,OrderBudget budget,Callback callBack,
+				std::chrono::time_point<std::chrono::steady_clock> execTime)
+			:user(user),budget(budget),callBack(callBack),execTime(execTime) {}
 	};
 
-	std::mutex queueLock;
-	std::queue<QueueItem> queue;
-	std::condition_variable runBackend;
-	bool finish = false;
+	typedef json::RefCntPtr<QueueItem> PQueueItem;
+	MsgQueue<PQueueItem> queue;
 
 	void worker();
 

@@ -32,18 +32,17 @@
 namespace quark {
 
 const StrViewA QuarkApp::marketConfigDocName("settings");
+const StrViewA QuarkApp::errorDocName("error");
+const StrViewA QuarkApp::controlDocName("control");
 
 QuarkApp::QuarkApp():rnd(std::random_device()()) {
+	controlServer.add("stop",this,&QuarkApp::controlStop);
+	controlServer.add("dumpState",this,&QuarkApp::controlDumpState);
+	controlServer.add_ping("ping");
+	controlServer.add_listMethods("listMethods");
 
 }
 
-void QuarkApp::processPendingOrders(Value user) {
-	Value cmd = pendingOrders.unlock(user);
-	while (cmd.defined()) {
-		if (!processOrder2(cmd)) break;
-		cmd = pendingOrders.unlock(user);
-	}
-}
 
 bool QuarkApp::runOrder(Document order, bool update) {
 
@@ -60,8 +59,11 @@ bool QuarkApp::runOrder(Document order, bool update) {
 							[me,order,update,user](IMoneySrvClient::AllocResult response) {
 				QuarkApp *mptr = me;
 
-				 [mptr,response,order,update,user]{
-					//in positive response
+				//probably exit, do not process the order
+				if (me->moneyService == nullptr)
+					return;
+
+				 	//in positive response
 					switch (response) {
 					case IMoneySrvClient::allocOk:
 						mptr->runOrder2(order, update);
@@ -75,13 +77,11 @@ bool QuarkApp::runOrder(Document order, bool update) {
 								"Failed to allocate budget (money server error)"),update);
 						break;
 					case IMoneySrvClient::allocTryAgain:
-						mptr->runOrder(order,update);
 						return;
 					}
 
 
-					mptr->processPendingOrders(user);
-				} >> me->dispatcher;
+
 
 		})) return false;
 		else {
@@ -190,23 +190,65 @@ void QuarkApp::runOrder2(Document order, bool update) {
 
 		//handle various exceptions
 	 }catch (OrderRangeError &e) {
-		 rejectOrder(order, e, update);
+			 rejectOrder(order, e, update);
 	 }
 
 }
 
 
+
+void QuarkApp::execControlOrder(Value cmd) {
+
+	try {
+		Value req = cmd["request"];
+		if (req.defined()) {
+			json::RpcRequest rpcreq = json::RpcRequest::create(req,
+					[=](Value resp) {
+
+				Document doc(cmd);
+				doc(OrderFields::finished,true)
+				   (OrderFields::status,Status::strExecuted)
+				   ("response",resp);
+
+				 try {
+					 ordersDb->put(doc);
+				 } catch (UpdateException &e) {
+					 logError({"Unable to update control order (success)", doc});
+				 }
+
+			});
+
+			controlServer(rpcreq);
+		}
+
+
+	} catch (std::exception &e) {
+		Document doc(cmd);
+		doc(OrderFields::finished,true)
+		   (OrderFields::status,Status::strRejected)
+		   (OrderFields::error,Object("code", 400)("message",e.what()));
+		 try {
+			 ordersDb->put(doc);
+		 } catch (UpdateException &e) {
+			 logError({"Unable to update control order (failure)", doc});
+		 }
+	}
+
+}
+
+
+
 void QuarkApp::processOrder(Value cmd) {
 
 
-	Value user = cmd[OrderFields::user];
-	if (!pendingOrders.lock(user, cmd)) {
-		LOGDEBUG3("Order delayed because user is locked", user, cmd[OrderFields::orderId]);
+	Value type = cmd[OrderFields::type];
+	if (type == "control") {
+		execControlOrder(cmd);
 		return;
-	}
 
-	if (processOrder2(cmd))
-		processPendingOrders(user);
+	}
+	
+	processOrder2(cmd);
 
 };
 
@@ -367,6 +409,8 @@ void QuarkApp::exitApp() {
 	dispatcher.quit();
 }
 
+
+
 void QuarkApp::recordRevisions(const Changeset& chset) {
 	for (auto x : chset.getCommitedDocs()) {
 		recordRevision(x.doc["_id"], Value(x.newRev));
@@ -402,6 +446,8 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 	//commit in one call (any possible conflicts are thrown here before orders are
 	//sent to the money server
 	chset.commit();
+	if (!chset.getCommitedDocs().empty())
+		tradesDb->updateView(userTrades,false);
 	Array keys;
 
 	if (!tradeList.empty())
@@ -597,6 +643,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 						 ("price",price)
 						 ("buyOrder",t.getBuyOrder()->getId())
 						 ("sellOrder",t.getSellOrder()->getId())
+						 ("buyUser", t.getBuyOrder()->getUser())
+						 ("sellUser", t.getSellOrder()->getUser())
 						 ("size",amount)
 						 ("dir",dir)
 						 ("time",(std::size_t)now);
@@ -697,7 +745,6 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	odata.domPriority = order[OrderFields::domPriority].getInt();
 	odata.queuePriority = order[OrderFields::queuePriority].getInt();
 	odata.user = order[OrderFields::user];
-	odata.data = order.getRev();
 	po = new Order(odata);
 	return po;
 }
@@ -717,7 +764,24 @@ void QuarkApp::syncWithDb() {
 
 }
 
+bool QuarkApp::blockOnError(ChangesFeed &chfeed) {
 
+	//hakt processing, if there is error object
+	Value errorDoc = ordersDb->get("error", CouchDB::flgNullIfMissing);
+	if (!errorDoc.isNull()) {
+		logError("Error is signaled, engine stopped - please remove error file to continue");
+		chfeed.setFilter(waitfordoc).arg("doc","error")
+			 .since(ordersDb->getLastSeqNumber())
+			  .setTimeout(-1) >> [](ChangedDoc chdoc) {
+				return !chdoc.deleted;
+		};
+		logInfo("Status clear, going on");
+		return !chfeed.wasCanceled();
+	}
+	return true;
+
+
+}
 
 void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 
@@ -727,41 +791,29 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 		chfeed.cancelWait();
 	});
 
+	if (!blockOnError(chfeed)) return;
 
-	//hakt processing, if there is error object
-	Value errorDoc = ordersDb->get("error", CouchDB::flgNullIfMissing);
-	if (!errorDoc.isNull()) {
-		logError("Error is signaled, engine stopped - please remove error file to continue");
-		chfeed.setFilter(waitfordoc).arg("doc","error")
-			 .since(ordersDb->getLastKnownSeqNumber())
-			  .setTimeout(-1) >> [](ChangedDoc chdoc) {
-				if (chdoc.deleted) return false;
-				return true;
-		};
-		if (chfeed.wasCanceled())
-			return;
-	}
+	initialReceiveMarketConfig();
 
-	//receive market config - halt processing, if no market config defined
-	Value marketDoc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
-	if (marketDoc == nullptr) {
-		throw std::runtime_error("No market configuration");
-	}
-	applyMarketConfig(marketDoc);
 
 	auto loopBody = [&](ChangedDoc chdoc) {
+
 
 
 		[=]{
 			if (chdoc.id == marketConfigDocName) {
 				try {
-					applyMarketConfig(chdoc.doc);
-					logInfo("Market configuration updated");
-
+					//validate market config;
+					MarketConfig c(chdoc.doc);
+					if (c.rev != marketCfg->rev) {
+						logInfo("Market configuration updated (restart)");
+						exitCode = true;
+						exitApp();
+					}
 				} catch (std::exception &e) {
 					logError( {	"MarketConfig update failed", e.what()});
 				}
-			} else if (chdoc.id.substr(0,8) != "_design/") {
+			} else if (chdoc.id.substr(0,2) == "o.") {
 				processOrder(chdoc.doc);
 			}
 
@@ -797,9 +849,6 @@ void QuarkApp::initMoneyService() {
 	PCouchDB orders = ordersDb;
 	PCouchDB trades = tradesDb;
 	PMarketConfig mcfg = marketCfg;
-	auto resyncFn = [=](ITradeStream &target, const Value fromTrade, const Value toTrade) {
-		resync(*orders,*trades,target,fromTrade,toTrade,*mcfg);
-	};
 
 
 	Value cfg = marketCfg->moneyService;
@@ -818,11 +867,10 @@ void QuarkApp::initMoneyService() {
 		Value addr = cfg["addr"];
 		bool logTrafic = cfg["logTrafic"].getBool();
 		String firstTradeId ( cfg["firstTradeId"]);
-		sv = new MoneyServerClient2(resyncFn,
+		sv = new MoneyServerClient2(*this,
 						 addr.getString(),
 						 signature,
-						 marketCfg->assetSign,
-						 marketCfg->currencySign,
+						 marketCfg,
 						 firstTradeId,
 						 logTrafic);
 	} else {
@@ -830,7 +878,7 @@ void QuarkApp::initMoneyService() {
 	}
 	moneySrvClient = new MarginTradingSvc(*positionsDb,marketCfg,sv);
 	if (moneyService == nullptr) {
-		moneyService = new MoneyService(moneySrvClient,marketCfg);
+		moneyService = new MoneyService(moneySrvClient,marketCfg,dispatcher);
 	} else {
 		moneyService->setClient(moneySrvClient);
 		moneyService->setMarketConfig(marketCfg);
@@ -853,11 +901,25 @@ void QuarkApp::receiveMarketConfig() {
 	}
 }
 
+void QuarkApp::initialReceiveMarketConfig() {
+	Value doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
+	if (doc != nullptr) {
+		String s (doc["updateUrl"]);
+		if (!s.empty()) {
+			updateConfigFromUrl(s, doc["updateLastModified"], doc["updateETag"]);
+			doc = ordersDb->get(marketConfigDocName, CouchDB::flgNullIfMissing);
+		}
+		applyMarketConfig(doc);
+	} else {
+		throw std::runtime_error("No money service available");
+	}
+}
 
-void QuarkApp::start(Value cfg, String signature)
+bool QuarkApp::start(Value cfg, String signature)
 
 {
 
+	exitCode = false;
 	this->signature = signature;
 
 	setUnhandledExceptionHandler([cfg,signature]{
@@ -888,6 +950,7 @@ void QuarkApp::start(Value cfg, String signature)
 			time(&t);
 			errdoc("time",t);
 			db.put(errdoc);
+			logError({"FATAL ERROR", errdesc});
 		} catch (std::exception &e) {
 			logError({"Fatal error (...and database is not available)",errdesc,e.what()});
 		}
@@ -931,20 +994,57 @@ void QuarkApp::start(Value cfg, String signature)
 	logInfo("[start] Dispatching");
 
 
+	watchdog.start(60000,
+		[=](unsigned int nonce)  {
+			dispatcher << [=]{
+				logInfo({"Watchog test",nonce});
+				watchdog.reply(nonce);
+			};
+			updateConfig();
+		},[=]{
+			try {
+				throw std::runtime_error("Watchdog failure");
+			} catch (...) {
+				unhandledException();
+			}
+		}
+		);
+
 	try {
 		//run dispatcher now
 		dispatcher.run();
 
+
 		logInfo("[start] Exitting queue");
+		//create special thread for dispatching remaining messages
+		//while the thread is busy with cleanup
+		std::thread exitTh ([=]{
+			dispatcher.run();
+		});
+		//send exit to monitor queue
 		exitFn();
+		//clear exit function (no longer needed)
+		exitFn = nullptr;
+		//join monitor thread
 		changesReader.join();
-		moneyService = nullptr;
+		//destroy money service client
 		moneySrvClient = nullptr;
+		//destroy money service
+		moneyService = nullptr;
+		//stop watchdog
+		watchdog.stop();
+		//everything should be clean now, so quit the dispatcher
+		dispatcher.quit();
+		//join exit thread
+		exitTh.join();
+		//clear anything in the dispatcher
+		dispatcher.clear();
 	} catch (...) {
 		unhandledException();
 	}
 	logInfo("[start] Quit ");
 
+	return exitCode;
 }
 
 
@@ -973,20 +1073,6 @@ Value QuarkApp::PendingOrders::unlock(Value id) {
 	return out;
 }
 
-String QuarkApp::createTradeId(const TradeResultTrade &tr) {
-	//because one of orders are always fully executed, it should never generate trade again
-	//so we can use its ID to build unique trade ID
-
-	if (tr.isFullBuy()) {
-		StrViewA revId = tr.getBuyOrder()->getData().getString().split("-")();
-		return String({"t.",tr.getBuyOrder()->getId().getString().substr(2),"_",revId});
-	}
-	if (tr.isFullSell()) {
-		StrViewA revId = tr.getSellOrder()->getData().getString().split("-")();
-		return String({"t.",tr.getSellOrder()->getId().getString().substr(2),"_",revId});
-	}
-	throw std::runtime_error("Reported partial matching for both orders, this should not happen");
-}
 
 
 void QuarkApp::PendingOrders::clear() {
@@ -1018,6 +1104,125 @@ bool QuarkApp::checkOrderRev(Value docId, Value revId) {
 	}
 }
 
+
+void QuarkApp::controlStop(RpcRequest req) {
+	[=] {
+		try {
+			throw std::runtime_error("Stopped on purpose (Control.stop[])");
+		} catch (...) {
+			unhandledException();
+		}
+	} >> dispatcher;
+
+	req.setResult(true);
+}
+
+
+void QuarkApp::updateConfig() {
+
+	PMarketConfig cfg = marketCfg;
+
+	if (cfg == nullptr) return;
+
+	String s = cfg->updateUrl;
+	//no update url specified, skip
+	if (s.empty()) return;
+
+	updateConfigFromUrl(s,cfg->updateLastModified, cfg->updateETag);
+}
+bool QuarkApp::updateConfigFromUrl(String s, Value lastModified, Value etag) {
+	try {
+
+		couchit::HttpClient client;
+		client.setTimeout(10000);
+		client.open(s,"GET",false);
+		Object hdrs;
+		if (lastModified.defined()) {
+			hdrs("If-Modified-Since", lastModified);
+		}
+		if (etag.defined()) {
+			hdrs("If-None-Match", etag);
+		}
+		client.setHeaders(hdrs);
+		int status = client.send();
+		if (status != 304) {
+			logInfo({"[remote_config] Downloading new config",s});
+			if (status == 200) {
+
+				Value data = Value::parse(client.getResponse());
+				auto hash = std::hash<Value>()(data);
+
+				Document settings = ordersDb->get("settings");
+				if (settings["updateHash"].getUInt() != hash) {
+					Document newSettings;
+					newSettings.setBaseObject(data);
+					newSettings.setID(settings.getIDValue());
+					newSettings.setRev(settings.getRevValue());
+					if (!newSettings["updateUrl"].defined()) {
+						newSettings.set("updateUrl", s);
+					}
+					Value headers = client.getHeaders();
+					newSettings.set("updateLastModified",headers["Last-Modified"]);
+					newSettings.set("updateETag",headers["ETag"]);
+					newSettings.set("updateHash", hash);
+					MarketConfig validate(newSettings);
+					ordersDb->put(newSettings);
+					return true;
+				} else {
+					logInfo({"[remote_config] No change detected",s});
+					return false;
+				}
+			} else {
+				logInfo({"[remote_config] Download failed", status});
+				return false;
+			}
+		}
+		return true;
+	} catch (std::exception &e) {
+		logError({"[remote_config] Error reading config", s, e.what()});
+		return false;
+	}
+
+}
+
+void QuarkApp::resync(ITradeStream& target, const Value fromTrade, const Value toTrade) {
+	return quark::resync(*ordersDb,*tradesDb,target,fromTrade,toTrade,*marketCfg);
+}
+
+bool QuarkApp::cancelAllOrders(const json::Array& users) {
+	do {
+		couchit::Query q = ordersDb->createQuery(userActiveOrders);
+		if (users.empty()) return false;
+		q.keys(users);
+
+		couchit::Result res = q.exec();
+		if (res.empty()) {
+			return true;
+		}
+
+		couchit::Changeset chs = ordersDb->createChangeset();
+		for (couchit::Row rw : res) {
+
+			couchit::Document doc(rw.doc);
+			doc(OrderFields::cancelReq,true);
+			chs.update(doc);
+
+		}
+		try {
+			chs.commit();
+		} catch (couchit::UpdateException &e) {
+			//nothing
+		}
+	} while (true);
+}
+
+Dispatcher& QuarkApp::getDispatcher() {
+	return dispatcher;
+}
+
+void QuarkApp::controlDumpState(RpcRequest req) {
+	req.setResult(coreState.toJson());
+}
 
 
 } /* namespace quark */

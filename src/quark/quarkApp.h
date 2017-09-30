@@ -14,6 +14,7 @@
 #include <unordered_set>
 
 #include "../common/dispatcher.h"
+#include "../common/watchdog.h"
 
 
 #include "../quark_lib/core.h"
@@ -22,6 +23,8 @@
 #include "marketConfig.h"
 #include "moneyService.h"
 #include "tradeHelpers.h"
+#include <random>
+#include <imtjson/rpc.h>
 
 namespace quark {
 
@@ -31,19 +34,20 @@ using namespace json;
 
 class OrderErrorException;
 
-class QuarkApp: public RefCntObj {
+class QuarkApp: public RefCntObj, public IMoneySrvClientSupport {
 public:
 	QuarkApp();
 
 	void processOrder(Value cmd);
 	void receiveMarketConfig();
+	void initialReceiveMarketConfig();
 	void applyMarketConfig(Value doc);
 
-	void start(Value cfg, String signature);
+	bool start(Value cfg, String signature);
 
 	void exitApp();
 
-	static String createTradeId(const TradeResultTrade &tr);
+
 
 protected:
 	void monitorQueue(std::promise<Action> &exitFnStore);
@@ -55,8 +59,11 @@ protected:
 	PMoneyService moneyService;
 	PMoneySrvClient moneySrvClient;
 
+
 	PMarketConfig marketCfg;
 	static const StrViewA marketConfigDocName;
+	static const StrViewA errorDocName;
+	static const StrViewA controlDocName;
 	CurrentState coreState;
 
 	typedef std::unordered_map<Value, Document> OrdersToUpdate;
@@ -75,7 +82,6 @@ protected:
 		Value unlock(Value id);
 	};
 
-	PendingOrders pendingOrders;
 
 //	void createOrder(Document order);
 	//Document saveOrder(Document order, Object newItems);
@@ -90,7 +96,6 @@ protected:
 	void rejectOrder(Document order, const OrderErrorException &e, bool update);
 
 	void initMoneyService();
-	void watchDog();
 
 private:
 	POrder docOrder2POrder(const Document& order);
@@ -130,6 +135,8 @@ private:
 
 	double lastPrice;
 
+	bool exitCode;
+
 
 
 
@@ -154,12 +161,24 @@ private:
 	bool checkOrderRev(Value docId, Value revId);
 	bool runOrder(Document order, bool update);
 	void runOrder2(Document order, bool update);
-	void processPendingOrders(Value user);
 	void freeBudget(const Document& order);
+	bool blockOnError(ChangesFeed &chfeed);
+
+	json::RpcServer controlServer;
+	Watchdog watchdog;
+
+	void execControlOrder(Value cmd);
+
+	void controlStop(RpcRequest req);
+	void controlDumpState(RpcRequest req);
 
 
+	void updateConfig();
+	bool updateConfigFromUrl(String url, Value lastModified, Value etag);
 
-
+	virtual void resync(ITradeStream &target, const Value fromTrade, const Value toTrade);
+	virtual bool cancelAllOrders(const json::Array &users);
+	virtual Dispatcher &getDispatcher();
 };
 
 typedef RefCntPtr<QuarkApp> PQuarkApp;

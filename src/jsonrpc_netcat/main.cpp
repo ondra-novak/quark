@@ -57,7 +57,7 @@ public:
 	inline Value parseObject()
 	{
 		std::size_t tmpArrPos = this->tmpArr.size();
-		char c = this->rd.nextWs();
+		int c = this->rd.nextWs();
 		if (c == '}') {
 			this->rd.commit();
 			return Value(object);
@@ -78,8 +78,9 @@ public:
 				name = readField();
 			}
 			try {
-				if (this->rd.nextWs() != ':')
-					throw ParseError("Expected ':'", this->rd.getLastInput());
+				int x = this->rd.nextWs();
+				if (x != ':')
+					throw ParseError("Expected ':'", x);
 				this->rd.commit();
 				Value v = parse();
 				this->tmpArr.push_back(Value(Parser<Fn>::getString(name),v));
@@ -100,7 +101,7 @@ public:
 				c = this->rd.nextWs();
 			}
 			else {
-				throw ParseError("Expected ',' or '}'", this->rd.getLastInput());
+				throw ParseError("Expected ',' or '}'", c);
 			}
 		} while (cont);
 		StringView<Value> data = this->tmpArr;

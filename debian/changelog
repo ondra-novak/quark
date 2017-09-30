@@ -1,3 +1,33 @@
+quark (1.0.6) zesty; urgency=medium
+
+  * fixed bugs and various improvements
+
+ -- root <root@quark>  Mon, 18 Sep 2017 00:18:22 +0000
+
+quark (1.0.4build4) UNRELEASED; urgency=medium
+
+  * fix resync 
+
+ -- root <root@quark>  Wed, 13 Sep 2017 17:35:41 +0000
+
+quark (1.0.4build3) zesty; urgency=medium
+
+  *  fix resync 
+
+ -- root <root@quark>  Wed, 13 Sep 2017 16:13:35 +0000
+
+quark (1.0.4build2) zesty; urgency=medium
+
+  * zmena ID tradu 
+
+ -- root <root@quark>  Wed, 13 Sep 2017 16:08:16 +0000
+
+quark (1.0.4build1) UNRELEASED; urgency=medium
+
+  * hlaseni chyby do logu
+
+ -- root <root@quark>  Mon, 11 Sep 2017 15:13:11 +0000
+
 quark (1.0.4) zesty; urgency=medium
 
   * added log monitor to rpc 

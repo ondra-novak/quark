@@ -47,6 +47,10 @@ protected:
 	void rpcTradesStats(RpcRequest rq);
 	void rpcUserOrders(RpcRequest rq);
 	void rpcUserTrades(RpcRequest rq);
+	void rpcControlStop(RpcRequest rq);
+	void rpcControlPing(RpcRequest rq);
+	void rpcControlDumpState(RpcRequest rq);
+	void rpcOrderCancelAll(RpcRequest rq);
 
 
 	Value getMarketStatus();
@@ -83,8 +87,8 @@ protected:
 	struct ChartData {
 		std::uintptr_t time;
 		std::uintptr_t count;
-		std::uintptr_t open_index;
-		std::uintptr_t close_index;
+		String open_index;
+		String close_index;
 		double open;
 		double close;
 		double high;
@@ -104,6 +108,7 @@ protected:
 	PFeedControl ordersFeed, tradesFeed, posFeed, orderbookFeed;
 	OrderControl orderControl;
 
+	void callDaemonService(String command, Value params, RpcRequest req);
 
 
 

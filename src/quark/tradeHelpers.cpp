@@ -61,12 +61,11 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 		ITradeStream &moneySrvClient, const Value fromTrade, const Value toTrade,
 		const MarketConfig &mcfg) {
 
-	Query q = tradeDB.createQuery(tradesByCounter);
-	q.includeDocs();
-	q.update();
+	Query q = tradeDB.createQuery(View::includeDocs);
 	if (fromTrade != nullptr) {
-		Value cntv = findTradeCounter(tradeDB,fromTrade);
-		q.range(cntv, json::undefined);
+		q.range(fromTrade, "Z");
+	} else {
+	    q.range("A","Z");
 	}
 	Result r = q.exec();
 	Value lastTradeId = fromTrade;
@@ -94,17 +93,4 @@ Value fetchLastTrade(CouchDB& tradeDB) {
 	if (res.empty()) return nullptr;
 	else return Row(res[0]).doc;
 }
-}
-
-quark::MoneySvcSupport::MoneySvcSupport(PCouchDB orderDB, PCouchDB tradeDB,PMarketConfig mcfg, Dispatcher &dispatcher)
-	:orderDB(orderDB),tradeDB(tradeDB),mcfg(mcfg),dispatcher(dispatcher)
-{
-}
-
-void quark::MoneySvcSupport::resync(ITradeStream &target, const Value fromTrade, const Value toTrade) {
-	quark::resync(*orderDB, *tradeDB, target, fromTrade, toTrade, *mcfg);
-}
-
-void quark::MoneySvcSupport::dispatch(Action fn) {
-	fn >> dispatcher;
 }

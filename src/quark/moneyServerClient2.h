@@ -17,11 +17,10 @@ public:
 	typedef std::function<void(ITradeStream &target, const Value fromTrade, const Value toTrade)> ResyncFn;
 
 	MoneyServerClient2(
-				ResyncFn resyncFn,
+				IMoneySrvClientSupport &support,
 				String addr,
 				String signature,
-				String asset,
-				String currency,
+				PMarketConfig mcfg,
 				String firstTradeId,
 				bool logTrafic);
 	~MoneyServerClient2();
@@ -47,6 +46,8 @@ protected:
 		void close() {closed = true;disconnect(true);}
 		bool isClosed() const {return closed;}
 
+		Value lastMMError;
+
 	protected:
 		MoneyServerClient2 &owner;
 		bool closed;
@@ -55,15 +56,13 @@ protected:
 	};
 
 
-	ResyncFn resyncFn;
+	IMoneySrvClientSupport &support;
 	///connect addr
 	const String addr;
 	///signature of the client
 	const String signature;
 
-	const String asset;
-
-	const String currency;
+	PMarketConfig mcfg;
 	const String firstTradeId;
 
 	RefCntPtr<MyClient> client;
@@ -85,8 +84,6 @@ protected:
 	void connectIfNeed();
 
 	static void handleError(MyClient *c, StrViewA method, const RpcResult &res);
-	template<typename Fn>
-	static void callWithRetry(RefCntPtr<MyClient> client, PMoneySvcSupport supp, String methodName, Value params, Fn callback);
 
 	class ResyncStream;
 	void reportTrade2(Value prevTrade, const TradeData &data) ;

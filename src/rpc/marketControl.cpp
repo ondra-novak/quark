@@ -7,11 +7,16 @@
 
 #include "marketControl.h"
 
+#include <couchit/changeset.h>
+
 #include <couchit/couchDB.h>
 #include <couchit/exception.h>
 #include <couchit/query.h>
 #include <imtjson/rpc.h>
+#include <imtjson/stringview.h>
+
 #include "../common/config.h"
+#include "../quark_lib/order.h"
 
 namespace quark {
 
@@ -107,6 +112,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Order.create", me, &MarketControl::rpcOrderCreate);
 	rpcServer.add("Order.modify", me, &MarketControl::rpcOrderUpdate);
 	rpcServer.add("Order.cancel", me, &MarketControl::rpcOrderCancel);
+	rpcServer.add("Order.cancelAll", me, &MarketControl::rpcOrderCancelAll);
 	rpcServer.add("Order.get", me, &MarketControl::rpcOrderGet);
 	rpcServer.add("Stream.orders",  me, &MarketControl::rpcStreamOrders);
 	rpcServer.add("Stream.trades", me, &MarketControl::rpcStreamTrades);
@@ -123,6 +129,9 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Trades.stats",me, &MarketControl::rpcTradesStats);
 	rpcServer.add("User.orders",me, &MarketControl::rpcUserOrders);
 	rpcServer.add("User.trades",me, &MarketControl::rpcUserTrades);
+	rpcServer.add("Control.stop",me, &MarketControl::rpcControlStop);
+	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
+	rpcServer.add("Control.dumpState",me, &MarketControl::rpcControlDumpState);
 
 	return getMarketStatus();
 
@@ -214,6 +223,8 @@ public:
 		feed.setFilter(couchit::Filter("index/stream",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
+		//do not show control orders
+		if (doc["type"].getString() == "control") return;
 		rq.sendNotify(streamName,{seqNum.toString(),OrderControl::normFields(doc)});
 	}
 
@@ -601,7 +612,8 @@ void MarketControl::ChartData::fromDB(json::Value v, std::uintptr_t timeAgr) {
 
 	time = (decodeTime(key)/timeAgr)*timeAgr;
 	count = data[5].getUInt();
-	close_index=open_index = data[9].getUInt();
+	open_index = String(data[9]);
+	close_index = String(data[10]);
 	high = data[1].getNumber();
 	low = data[2].getNumber();
 	open = data[0].getNumber();
@@ -623,7 +635,8 @@ json::Value MarketControl::ChartData::toJson() const {
 			("sum",sum)
 			("sum2",sum2)
 			("time", time)
-			("index",open_index)
+			("firstTrade",open_index)
+			("lastTrade",close_index)
 			("volume2",volume2));
 }
 
@@ -673,7 +686,7 @@ void MarketControl::rpcTradesStats(RpcRequest rq) {
 }
 
 static	couchit::View ordersByUser("_design/index/_view/users", couchit::View::update);
-static	couchit::View tradesByOrder("_design/trades/_view/byOrder", couchit::View::update);
+static	couchit::View tradesByUser("_design/trades/_view/byUser", couchit::View::update);
 
 
 static Value getUserDataArgs = Value(json::array,{
@@ -718,62 +731,132 @@ void MarketControl::rpcUserOrders(RpcRequest rq) {
 void MarketControl::rpcUserTrades(RpcRequest rq) {
 	if (!rq.checkArgs(getUserDataArgs)) return rq.setArgError();
 
-	auto allOrders = ordersDb.createQuery(ordersByUser);
-	setupUserQuery(allOrders,rq.getArgs()[0]);
-
-	couchit::Result res = allOrders.exec();
-	Array xords;
-	xords.reserve(res.size());
-	for (couchit::Row r: res) {
-		xords.push_back(r.id);
-	}
-
-	Value ords = xords;
-
-	auto alltrades = tradesDb.createQuery(tradesByOrder);
-	alltrades.includeDocs().nosort().keys(ords);
+		auto query = tradesDb.createQuery(tradesByUser);
+		query.includeDocs();
+		setupUserQuery(query,rq.getArgs()[0]);
 
 
-	couchit::Result res2 = alltrades.exec();
+		couchit::Result res = query.exec();
+		Array rx;
+		rx.reserve(res.size());
+		for (couchit::Row r: res) {
+			rx.push_back(normTrade(r.doc));
+		}
+		rq.setResult(rx);
+
+}
+
+void MarketControl::rpcControlStop(RpcRequest rq) {
+	callDaemonService("stop",rq.getArgs(),rq);
+}
+
+void MarketControl::rpcControlPing(RpcRequest rq) {
+	callDaemonService("ping",rq.getArgs(),rq);
+}
+
+void MarketControl::rpcOrderCancelAll(RpcRequest rq) {
+	couchit::View userActive("_design/index/_view/active", View::includeDocs|View::update);
+	unsigned int count = 0;
+	do {
+		couchit::Query q = ordersDb.createQuery(userActive);
+		if (!rq.getArgs().empty()) q.keys(rq.getArgs());
+
+		couchit::Result res = q.exec();
+		if (res.empty()) {
+			rq.setResult(Object("count", count)("success",true));
+			return;
+		}
+
+		couchit::Changeset chs = ordersDb.createChangeset();
+		for (couchit::Row rw : res) {
+
+			couchit::Document doc(rw.doc);
+			doc(OrderFields::cancelReq,true);
+			chs.update(doc);
+
+		}
+		try {
+			chs.commit();
+			count += res.size();
+		} catch (couchit::UpdateException &e) {
+			//if there is conflict, we will try again
+			count += res.size() - e.getErrorCnt();
+		}
+	} while (true);
+
+}
+
+void MarketControl::callDaemonService(String command,
+		Value params, RpcRequest req) {
 
 
-	Array trades;
-	trades.reserve(res2.size());
-	unsigned int pos = 0;
-	auto seekToOrder = [&](Value trade) {
-		auto l = ords.size();
-		do {
-			Value ord = ords[pos];
-			if (trade["buyOrder"] == ord) {
-				return "buyer";
-			} else if (trade["sellOrder"] == ord) {
-				return "seller";
+	couchit::Filter docwait("index/waitfordoc",View::includeDocs);
+
+	couchit::Document doc = ordersDb.newDocument("o.");
+	Value id = doc.getIDValue();
+	doc(OrderFields::type, "control");
+	doc(OrderFields::status, Status::strValidating);
+	doc("request", Object("id",req.getId())
+						("jsonrpc","2.0")
+						("method",command)
+						("params",params));
+
+
+	ordersDb.put(doc);
+	req.sendNotify("control",Object("command",command)("params",params)("id",req.getId())("order", doc.getID()));
+	couchit::Query q = ordersDb.createQuery(couchit::View::includeDocs);
+	q.key(id);
+	couchit::Result r = q.exec();
+	couchit::SeqNumber ofs = r.getUpdateSeq();
+	couchit::Row rw = r[0];
+	doc = rw.doc;
+	while (doc[OrderFields::finished].getBool() == false) {
+		couchit::ChangesFeed chf = ordersDb.createChangesFeed();
+		Value chg = chf.since(ofs).includeDocs(true).setFilter(docwait).arg("doc",id).setTimeout(30000).exec().getAllChanges();
+		if (chg.empty()) {
+			doc.setDeleted();
+			try {
+				ordersDb.put(doc);
+				req.setError(502,"Service timeout");
+				return ;
+			} catch (couchit::UpdateException &) {
+				continue;
 			}
-			pos++;
-		} while (pos < l);
-		throw std::runtime_error("Reached unreachable code");
-	};
-
-	for (couchit::Row r: res2) {
-		Value x = normTrade(r.doc).replace("user_dir", seekToOrder(r.doc));
-		trades.push_back(x);
+		}
+		couchit::ChangedDoc chdoc = chg[0];
+		doc = chdoc.doc;
+		ofs = chf.getLastSeq();
 	}
-	json::Value unordered = trades;
-	json::Value ordered = unordered.sort([](const json::Value &a, const json::Value &b) {\
-		std::uintptr_t ta = a["index"].getUInt();
-		std::uintptr_t tb = b["index"].getUInt();
-		if (ta < tb) return -1;
-		else if (ta > tb) return 1;
-		else return 0;
-	});
+	if (doc[OrderFields::status] == Status::strRejected) {
+		req.setError(403,"Service rejected the request", doc[OrderFields::error]);
+	} else if (doc[OrderFields::status] == Status::strExecuted) {
+		Value resp = doc["response"];
+		Value result = resp["result"];
+		Value error = resp["error"];
+		if (result.defined() && !result.isNull()) {
+			req.setResult(result);
+		} else {
+			req.setError(error);
+		}
+	} else {
+		req.setError(500,"Unknown response", doc);
+	}
+	try {
+		doc.setDeleted();
+		ordersDb.put(doc);
+	} catch (couchit::UpdateException &) {
+	}
 
-
-	rq.setResult(trades);
 
 }
 
 
+void MarketControl::rpcControlDumpState(RpcRequest rq) {
+	callDaemonService("dumpState",rq.getArgs(),rq);
 }
+
+}
+
 /* namespace quark */
 
 
