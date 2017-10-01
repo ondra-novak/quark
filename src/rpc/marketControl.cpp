@@ -1011,7 +1011,6 @@ static String getReplicationTarget(CouchDB &db, const String &url, bool singleDB
 	if (auth) buff << auth->username << ":" << auth->password << "@";
 	buff << url.substr(spl+3);
 	if (!singleDB) {
-		if (url.substr(url.length()-1) != "/") buff << "/";
 		buff << db.getCurrentDB();
 	}
 	return buff.str();
@@ -1043,14 +1042,32 @@ static void controlReplication(CouchDB &db, const couchit::Filter &filter, const
 	}
 }
 
+static String removePasswordFromUrl(StrViewA url) {
+	auto p = url.indexOf("://")+3;
+	auto q = url.indexOf("@",p);
+	if (q != url.npos) {
+		return String({url.substr(0,p), url.substr(q+1)});
+	} else {
+		return url;
+	}
+}
+
 static Value getReplicationStatus(CouchDB &db, String url) {
 
 	String repName = getReplicationDocName(db, url);
 	CouchDB repdb(db);
 	repdb.setCurrentDB("_replicator");
 	Value repdoc = repdb.get(repName, CouchDB::flgNullIfMissing);
-	return Object("url", repdoc["target"])
-			     ("state", repdoc["_replication_state"])
+	if (repdoc.isNull()) return repdoc;
+
+	Value state = repdoc["_replication_state"];
+	Value outState;
+	if (!state.defined()) outState ="starting";
+	else if (state.getString() == "triggered") outState ="running";
+	else outState = state;
+
+	return Object("url", removePasswordFromUrl(repdoc["target"].getString()))
+			     ("state",outState )
 			     ("reason", repdoc["_replication_state_reason"])
 			     ("time", repdoc["_replication_state_time"]);
 
