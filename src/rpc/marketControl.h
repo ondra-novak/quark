@@ -51,6 +51,7 @@ protected:
 	void rpcControlPing(RpcRequest rq);
 	void rpcControlDumpState(RpcRequest rq);
 	void rpcOrderCancelAll(RpcRequest rq);
+	void rpcPurgeFunction(RpcRequest rq);
 
 
 	Value getMarketStatus();

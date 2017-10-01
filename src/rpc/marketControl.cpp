@@ -68,6 +68,7 @@ void MarketControl::rpcConfigSet(RpcRequest rq) {
 			   "\"minPrice\": [[\">\",0]],"
 			   "\"minSize\": [[\">\",0]],"
 			   "\"pipSize\":[[\">\",0]],"
+			   "\"updateUrl\":[\"string\",\"optional\"],"
 			   "\"moneyService\": [{"
 				   	   "\"type\":\"'mockup\","
 				   	   "\"latency\":[[\">=\",0,\"integer\"]],"
@@ -132,6 +133,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Control.stop",me, &MarketControl::rpcControlStop);
 	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
 	rpcServer.add("Control.dumpState",me, &MarketControl::rpcControlDumpState);
+	rpcServer.add("Data.deleteOld",me, &MarketControl::rpcPurgeFunction);
 
 	return getMarketStatus();
 
@@ -855,8 +857,137 @@ void MarketControl::rpcControlDumpState(RpcRequest rq) {
 	callDaemonService("dumpState",rq.getArgs(),rq);
 }
 
+template<typename Filter>
+static size_t runPurge2(couchit::CouchDB &admin,
+		const couchit::View &viewRefresh, const Filter &filter) {
+
+	using namespace couchit;
+
+	bool rep;
+
+	size_t cnt = 0;
+
+	do {
+		ChangesFeed feed = admin.createChangesFeed();
+		Changes chs = feed.limit(1000).includeDocs().exec();
+
+		Object docs;
+		Array revs;
+		for (ChangedDoc chdoc : chs) {
+
+			if (filter(chdoc)) {
+
+				revs.clear();
+				for (Value x : chdoc.revisions) {
+					revs.push_back(x["rev"]);
+				}
+
+				docs(chdoc.id,revs);
+				cnt++;
+			}
+		}
+
+		rep = docs.size() != 0;
+		if (rep) {
+			auto conn = admin.getConnection("_purge");
+			bool tryagain = false;
+			do {
+				try {
+					admin.requestPOST(conn, docs, nullptr, 0);
+					tryagain = false;
+				} catch (couchit::RequestError &r) {
+					if (r.getCode() == 500 && r.getExtraInfo()["reason"].getString() == "purge_during_compaction") {
+						std::this_thread::sleep_for(std::chrono::seconds(2));
+						tryagain = true;
+					} else {
+						throw;
+					}
+				}
+			} while (tryagain);
+			admin.updateView(viewRefresh,true);
+		}
+
+	} while (rep);
+	return cnt;
+
 }
 
+template<typename Filter>
+static size_t runPurge(const couchit::Config &cfg,
+		const couchit::View &viewRefres, const Filter &filter) {
+
+
+	CouchDB admin(cfg);
+	auto conn = admin.getConnection("/");
+	Value info = admin.requestGET(conn, nullptr, 0);
+	String version ( info["version"]);
+	if (version.substr(0,2) == "2.") {
+		throw std::runtime_error("Not implemented yet");
+	} else if (version.substr(0,2) == "1.") {
+
+		return runPurge2(admin, viewRefres,filter);
+
+
+	} else {
+		throw std::runtime_error("Unsupported database");
+	}
+
+
+}
+
+
+
+void MarketControl::rpcPurgeFunction(RpcRequest rq) {
+
+	static couchit::View ordersRefresh("_design/index/_view/queue");
+	static couchit::View tradesRefresh("_design/trades/_view/chart");
+
+
+	static Value argscheck = Value::fromString(
+			"[{"
+			   "\"timestamp\": \"integer\","
+			   "\"login\": \"string\","
+			   "\"password\": \"string\""
+			"}]");
+	if (!rq.checkArgs(argscheck)) return rq.setArgError();
+	Value args = rq.getArgs();
+	size_t timestamp = args[0]["timestamp"].getUInt();
+	String login ( args[0]["login"]);
+	String password ( args[0]["password"]);
+
+	couchit::Config ordersCfg =  ordersDb.getConfig();
+	ordersCfg.authInfo.username = login;
+	ordersCfg.authInfo.password = password;
+	couchit::Config tradesCfg =  tradesDb.getConfig();
+	tradesCfg.authInfo.username = login;
+	tradesCfg.authInfo.password = password;
+
+	std::size_t totOrders = couchit::Result(ordersDb.createQuery(0).limit(0).exec()).getTotal();
+	std::size_t totTrades = couchit::Result(tradesDb.createQuery(0).limit(0).exec()).getTotal();
+
+	size_t cntOrders = runPurge(ordersCfg, ordersRefresh,
+			[&](const couchit::ChangedDoc &doc){
+		return doc.id.substr(0,2) == "o." && (doc.doc["finished"].getBool() == true || doc.deleted)
+				&& doc.doc["timeModified"].getUInt() < timestamp;
+	});
+	size_t cntTrades = runPurge(tradesCfg, tradesRefresh,
+			[&](const couchit::ChangedDoc &doc){
+		Value tm = doc.doc["time"];
+		return tm.defined() && (doc.deleted || tm.getUInt() < timestamp);
+	});
+
+	rq.setResult(Object("orders",
+					Object("total", totOrders)
+					      ("deleted", cntOrders)
+					      ("remain", totOrders - cntOrders))
+				 	   ("trades",
+							Object("total", totTrades)
+							      ("deleted", cntTrades)
+							      ("remain", totTrades - cntTrades))
+					   );
+}
+
+}
 /* namespace quark */
 
 
