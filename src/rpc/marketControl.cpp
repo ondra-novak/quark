@@ -7,9 +7,13 @@
 
 #include "marketControl.h"
 
+#include <imtjson/fnv.h>
+
+
 #include <couchit/changeset.h>
 
 #include <couchit/couchDB.h>
+#include <couchit/document.h>
 #include <couchit/exception.h>
 #include <couchit/query.h>
 #include <imtjson/rpc.h>
@@ -20,11 +24,12 @@
 
 namespace quark {
 
-MarketControl::MarketControl(Value cfg, StrViewA dbname)
+MarketControl::MarketControl(Value cfg, String dbname)
 	:ordersDb(initCouchDBConfig(cfg,dbname,"-orders"))
 	,tradesDb(initCouchDBConfig(cfg,dbname,"-trades"))
 	,posDb(initCouchDBConfig(cfg,dbname,"-positions"))
 	,orderControl(ordersDb)
+	,marketId(dbname)
 {
 
 
@@ -134,6 +139,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
 	rpcServer.add("Control.dumpState",me, &MarketControl::rpcControlDumpState);
 	rpcServer.add("Data.deleteOld",me, &MarketControl::rpcPurgeFunction);
+	rpcServer.add("Data.replication",me, &MarketControl::rpcReplication);
 
 	return getMarketStatus();
 
@@ -987,7 +993,116 @@ void MarketControl::rpcPurgeFunction(RpcRequest rq) {
 					   );
 }
 
+static String getReplicationDocName(CouchDB &db, String url) {
+	std::uint32_t hash = 0;
+	{
+		FNV1a32 hcalc(hash);
+		for (auto c : StrViewA(url)) hcalc(c);
+	};
+	std::ostringstream buff;
+	buff << db.getCurrentDB() << "_" << hash;
+	return buff.str();
 }
+
+static String getReplicationTarget(CouchDB &db, const String &url, bool singleDB, const couchit::AuthInfo *auth) {
+	std::ostringstream buff;
+	auto spl = url.indexOf("://");
+	buff << url.substr(0,spl+3);
+	if (auth) buff << auth->username << ":" << auth->password << "@";
+	buff << url.substr(spl+3);
+	if (!singleDB) {
+		if (url.substr(url.length()-1) != "/") buff << "/";
+		buff << db.getCurrentDB();
+	}
+	return buff.str();
+
+}
+
+static void controlReplication(CouchDB &db, const couchit::Filter &filter, const String &url,
+		const couchit::AuthInfo *auth, bool enable, bool singleDB) {
+
+	String repName = getReplicationDocName(db, url);
+	CouchDB repdb(db);
+	repdb.setCurrentDB("_replicator");
+
+	couchit::Document repDoc = repdb.get(repName,CouchDB::flgCreateNew);
+	if (!enable) {
+		if (!repDoc.getRevValue().defined()) return;
+		repDoc.setDeleted(StringView<StrViewA>(), false);
+		repdb.put(repDoc);
+	} else {
+		repDoc.setContent(Object
+				("source",db.getCurrentDB())
+				("target",getReplicationTarget(db,url, singleDB, auth))
+				("continuous",true)
+				("create_target",true)
+				("filter",filter.viewPath)
+				("user_ctx",Object("name",db.getConfig().authInfo.username)
+								("roles",Value(json::array,{"quark_rpc"}))));
+		repdb.put(repDoc);
+	}
+}
+
+static Value getReplicationStatus(CouchDB &db, String url) {
+
+	String repName = getReplicationDocName(db, url);
+	CouchDB repdb(db);
+	repdb.setCurrentDB("_replicator");
+	Value repdoc = repdb.get(repName, CouchDB::flgNullIfMissing);
+	return Object("url", repdoc["target"])
+			     ("state", repdoc["_replication_state"])
+			     ("reason", repdoc["_replication_state_reason"])
+			     ("time", repdoc["_replication_state_time"]);
+
+}
+
+void quark::MarketControl::rpcReplication(RpcRequest rq) {
+
+	static Value argscheck = Value::fromString(
+			"[{"
+			   "\"enable\": [\"boolean\",\"optional\"],"
+			   "\"url\": \"string\","
+			   "\"auth\": [\"optional\",{\"username\":\"string\",\"password\":\"string\"}],"
+			   "\"singleDB\":[\"optional\",\"boolean\"]"
+			"}]");
+
+	if (!rq.checkArgs(argscheck)) return rq.setArgError();
+	Value args = rq.getArgs()[0];
+	String url ( args["url"]);
+	if (!args["enable"].defined()) {
+		//get replication status
+		Value orders = getReplicationStatus(ordersDb, url);
+		Value pos = getReplicationStatus(posDb, url);
+		Value trades = getReplicationStatus(tradesDb, url);
+		rq.setResult(Object("orders",orders)
+				("positions",pos)
+				("trades",trades));
+	} else {
+		bool enable = args["enable"].getBool();
+		bool singleDB = args["singleDB"].getBool();
+		couchit::AuthInfo auth;
+		Value authVal = args["auth"];
+		bool hasAuth = authVal.defined();
+		if (hasAuth) {
+			auth.username = String(authVal["username"]);
+			auth.password = String(authVal["password"]);
+		}
+
+
+		if (url.substr(0,7) != "http://" && url.substr(0,8) != "https://") {
+			return rq.setError(400,"Url incorrect format", url);
+		}
+		const couchit::AuthInfo *authPtr = hasAuth?&auth:nullptr;
+		controlReplication(ordersDb,  couchit::Filter("index/replication"), url, authPtr, enable, singleDB);
+		controlReplication(posDb, couchit::Filter("positions/replication"), url, authPtr, enable, singleDB);
+		controlReplication(tradesDb, couchit::Filter("trades/replication"), url, authPtr, enable, singleDB);
+		rq.setResult(true);
+	}
+}
+
+
+}
+
 /* namespace quark */
 
 

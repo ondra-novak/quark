@@ -16,7 +16,7 @@ using namespace json;
 
 class MarketControl: public RefCntObj {
 public:
-	MarketControl(Value cfg, StrViewA dbname);
+	MarketControl(Value cfg, String dbname);
 
 	Value initRpc(RpcServer &rpcServer);
 	bool testDatabase();
@@ -52,6 +52,7 @@ protected:
 	void rpcControlDumpState(RpcRequest rq);
 	void rpcOrderCancelAll(RpcRequest rq);
 	void rpcPurgeFunction(RpcRequest rq);
+	void rpcReplication(RpcRequest rq);
 
 
 	Value getMarketStatus();
@@ -108,6 +109,7 @@ protected:
 
 	PFeedControl ordersFeed, tradesFeed, posFeed, orderbookFeed;
 	OrderControl orderControl;
+	String marketId;
 
 	void callDaemonService(String command, Value params, RpcRequest req);
 
