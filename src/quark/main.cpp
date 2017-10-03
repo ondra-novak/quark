@@ -33,34 +33,52 @@ bool mandatoryField(const json::Value &v, json::StrViewA name) {
 
 int main(int c, char **args) {
 
-
-
 	using namespace quark;
 	using namespace couchit;
 	using namespace json;
+
+	int pos = 1;
+	auto getNextArg = [&]() -> const char * {
+		if (pos < c) return args[pos++];
+		else return nullptr;
+	};
+
+
+	bool quitAfterInit = false;
+
+
+	if (c < 3) {
+		std::cerr << "Usage:" << std::endl << std::endl
+			      << args[0] << " [--initdb] <signature> <conf-file>" << std::endl << std::endl
+			      << "--initdb          Just initialize database and exit. This is useful to" << std::endl
+			      << "                    to bootstrap replicated database without starting" << std::endl
+			      << "                    the matching daemon" << std::endl
+			      << std::endl
+			      << "<signature>       signature of the market (prefix) " << std::endl
+			      << "<conf-file>       configuration file" << std::endl;
+			      return 1;
+	}
+
+	const char *s = getNextArg();
+	if (StrViewA(s) == "--initdb") {quitAfterInit = true; s = getNextArg();}
+	const char *signature = s;
+	s = getNextArg();
+	const char *cfgpath = s;
+
+
 
 	json::maxPrecisionDigits=9;
 	CouchDB::fldTimestamp = OrderFields::timeModified;
 
 	CouchDBLogProvider logProvider;
 
-json::maxPrecisionDigits=9;
+	json::maxPrecisionDigits=9;
 
 
 
 	setLogProvider(&logProvider);
 
-	logInfo("==== START ====");
 
-
-	if (c != 3) {
-
-		logError("failed to start. Required arguments: <signature>, <path to configuration>");
-		return 1;
-	}
-
-	const char *signature = args[1];
-	const char *cfgpath = args[2];
 
 	couchit::Config cfg;
 	Value cfgjson;
@@ -84,38 +102,45 @@ json::maxPrecisionDigits=9;
 
 
 	}
+	if (!quitAfterInit) {
+		logInfo("==== START ====");
 
-	//sleep for two seconds at start-up
-	//this is required as the CouchDB can be still in initialization phase
-	std::this_thread::sleep_for(std::chrono::seconds(2));
+		//sleep for two seconds at start-up
+		//this is required as the CouchDB can be still in initialization phase
+		std::this_thread::sleep_for(std::chrono::seconds(2));
+	}
 
 	PQuarkApp app = new QuarkApp;
-	std::mutex lock;
-	bool finish = false;
-	std::thread thr([&]{
-		try {
+	if (quitAfterInit) {
+		app->initDb(cfgjson, signature);
+	} else {
+		std::mutex lock;
+		bool finish = false;
+		std::thread thr([&]{
+			try {
 
-			while (app->start(cfgjson, signature) == true) {
-				std::lock_guard<std::mutex> _(lock);
-				if (finish) break;
-				//restart here
-				app = new QuarkApp;
+				while (app->start(cfgjson, signature) == true) {
+					std::lock_guard<std::mutex> _(lock);
+					if (finish) break;
+					//restart here
+					app = new QuarkApp;
+				}
+			} catch (std::exception &e) {
+				logError({"Quark exited with unhandled exception",e.what()});
+				exit(1);
 			}
-		} catch (std::exception &e) {
-			logError({"Quark exited with unhandled exception",e.what()});
-			exit(1);
+		});
+		while (!std::cin.eof()) {
+			char c = std::cin.get();;
+			if (c == 'x') break;
 		}
-	});
-	while (!std::cin.eof()) {
-		char c = std::cin.get();;
-		if (c == 'x') break;
+		{
+			std::lock_guard<std::mutex> _(lock);
+			app->exitApp();
+			finish = true;
+		}
+		thr.join();
 	}
-	{
-		std::lock_guard<std::mutex> _(lock);
-		app->exitApp();
-		finish = true;
-	}
-	thr.join();
 
 }
 

@@ -915,6 +915,20 @@ void QuarkApp::initialReceiveMarketConfig() {
 	}
 }
 
+bool QuarkApp::initDb(Value cfg, String signature) {
+
+	ordersDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg, signature,"-orders"));
+	initOrdersDB(*ordersDb);
+
+	tradesDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg, signature,"-trades"));
+	initTradesDB(*tradesDb);
+
+	positionsDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg,signature, "-positions"));
+	initPositionsDB(*positionsDb);
+
+}
+
+
 bool QuarkApp::start(Value cfg, String signature)
 
 {
@@ -959,15 +973,7 @@ bool QuarkApp::start(Value cfg, String signature)
 	});
 
 	logInfo("[start] updating database");
-
-	ordersDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg, signature,"-orders"));
-	initOrdersDB(*ordersDb);
-
-	tradesDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg, signature,"-trades"));
-	initTradesDB(*tradesDb);
-
-	positionsDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg,signature, "-positions"));
-	initPositionsDB(*positionsDb);
+	initDb(cfg,signature);
 
 	logInfo("[start] Syncing... (can take long time)");
 
@@ -1016,17 +1022,20 @@ bool QuarkApp::start(Value cfg, String signature)
 
 
 		logInfo("[start] Exitting queue");
-		//create special thread for dispatching remaining messages
-		//while the thread is busy with cleanup
-		std::thread exitTh ([=]{
-			dispatcher.run();
-		});
 		//send exit to monitor queue
 		exitFn();
 		//clear exit function (no longer needed)
 		exitFn = nullptr;
 		//join monitor thread
 		changesReader.join();
+		//clear anything in the dispatcher (old orders)
+		dispatcher.clear();
+		//create special thread for dispatching remaining messages
+		//while the thread is busy with cleanup
+		std::thread exitTh ([=]{
+			dispatcher.run();
+		});
+
 		//destroy money service client
 		moneySrvClient = nullptr;
 		//destroy money service

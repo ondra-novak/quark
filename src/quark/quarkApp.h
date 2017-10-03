@@ -44,6 +44,8 @@ public:
 	void applyMarketConfig(Value doc);
 
 	bool start(Value cfg, String signature);
+	bool initDb(Value cfg, String signature);
+
 
 	void exitApp();
 

@@ -1018,7 +1018,7 @@ static String getReplicationTarget(CouchDB &db, const String &url, bool singleDB
 }
 
 static void controlReplication(CouchDB &db, const couchit::Filter &filter, const String &url,
-		const couchit::AuthInfo *auth, bool enable, bool singleDB) {
+		const couchit::AuthInfo *auth, bool enable, bool singleDB, bool live) {
 
 	String repName = getReplicationDocName(db, url);
 	CouchDB repdb(db);
@@ -1035,7 +1035,7 @@ static void controlReplication(CouchDB &db, const couchit::Filter &filter, const
 				("target",getReplicationTarget(db,url, singleDB, auth))
 				("continuous",true)
 				("create_target",true)
-				("filter",filter.viewPath)
+				("filter",live?Value():Value(filter.viewPath))
 				("user_ctx",Object("name",db.getConfig().authInfo.username)
 								("roles",Value(json::array,{"quark_rpc"}))));
 		repdb.put(repDoc);
@@ -1080,7 +1080,8 @@ void quark::MarketControl::rpcReplication(RpcRequest rq) {
 			   "\"enable\": [\"boolean\",\"optional\"],"
 			   "\"url\": \"string\","
 			   "\"auth\": [\"optional\",{\"username\":\"string\",\"password\":\"string\"}],"
-			   "\"singleDB\":[\"optional\",\"boolean\"]"
+			   "\"singleDB\":[\"optional\",\"boolean\"],"
+			   "\"mode\":[\"'backup\",\"'live\",\"optional\"]"
 			"}]");
 
 	if (!rq.checkArgs(argscheck)) return rq.setArgError();
@@ -1100,6 +1101,7 @@ void quark::MarketControl::rpcReplication(RpcRequest rq) {
 		couchit::AuthInfo auth;
 		Value authVal = args["auth"];
 		bool hasAuth = authVal.defined();
+		bool modeLive = args["mode"].getString() == "live";
 		if (hasAuth) {
 			auth.username = String(authVal["username"]);
 			auth.password = String(authVal["password"]);
@@ -1110,9 +1112,9 @@ void quark::MarketControl::rpcReplication(RpcRequest rq) {
 			return rq.setError(400,"Url incorrect format", url);
 		}
 		const couchit::AuthInfo *authPtr = hasAuth?&auth:nullptr;
-		controlReplication(ordersDb,  couchit::Filter("index/replication"), url, authPtr, enable, singleDB);
-		controlReplication(posDb, couchit::Filter("positions/replication"), url, authPtr, enable, singleDB);
-		controlReplication(tradesDb, couchit::Filter("trades/replication"), url, authPtr, enable, singleDB);
+		controlReplication(ordersDb,  couchit::Filter("index/replication"), url, authPtr, enable, singleDB,modeLive);
+		controlReplication(posDb, couchit::Filter("positions/replication"), url, authPtr, enable, singleDB,modeLive);
+		controlReplication(tradesDb, couchit::Filter("trades/replication"), url, authPtr, enable, singleDB,modeLive);
 		rq.setResult(true);
 	}
 }
