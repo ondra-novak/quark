@@ -55,13 +55,9 @@ void RpcApp::streamLog(RpcRequest req) {
 
 void RpcApp::sendResponse(const Value& response, std::ostream& output) {
 	std::lock_guard<std::mutex> _(streamLock);
-	if (binaryMode) {
-		binaryMode->serialize(response);
-		std::cout.flush();
-	} else {
+
 		response.toStream(output);
 		output << std::endl;
-	}
 }
 
 void RpcApp::run(std::istream& input, std::ostream& output) {
@@ -72,7 +68,6 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 	rpcServer.add_ping("ping");
 	rpcServer.add_multicall("multicall");
 	rpcServer.add("init", me, &RpcApp::rpcInit);
-	rpcServer.add("binaryMode", [&](RpcRequest req){rpcEnableBinary(req,input,output);});
 	rpcServer.add("delay",[] (RpcRequest req) {
 		if (!req.checkArgs(Value(json::array,{"number"}))) return req.setArgError();
 		std::this_thread::sleep_for(std::chrono::seconds(req.getArgs()[0].getUInt()));
@@ -103,9 +98,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 		do {
 			int c = input.get();
 			Value v;
-			if (binaryMode != nullptr) {
-				v = binaryMode->parse();
-			} else {
+			{
 				while (c != EOF && isspace(c)) {
 					c = input.get();
 				}
@@ -151,14 +144,6 @@ void RpcApp::rpcInit(RpcRequest req) {
 
 }
 
-void RpcApp::rpcEnableBinary(RpcRequest req,std::istream &input, std::ostream &output) {
-	if (!req.checkArgs(Value(json::array,{"boolean"}))) return req.setArgError();
-	req.setResult(true);
-	if (req.getArgs()[0].getBool())
-		binaryMode = std::unique_ptr<BinaryIO>(new BinaryIO(input, output));
-	else
-		binaryMode = nullptr;
-}
 
 void RpcApp::goInteractiveMode(std::istream& input) {
 	std::cerr << "# Interactive mode is enabled" << std::endl;

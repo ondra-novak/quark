@@ -6,7 +6,8 @@
 #include <mutex>
 #include <queue>
 #include "../common/msgqueue.h"
-#include "../common/binaryJsonHelper.h"
+
+
 
 
 #include "marketControl.h"
@@ -42,7 +43,7 @@ protected:
 	std::thread executor;
 
 	MsgQueue<Value> msgQueue;
-	std::unique_ptr<BinaryIO> binaryMode;
+
 
 
 
