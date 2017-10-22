@@ -91,7 +91,9 @@ public:
 	void reset();
 	void matching(json::Value txid, const Transaction &tx, Output output);
 
-	OrderQueue &getQueueByState(const POrder &order);
+
+	template<typename Fn>
+	void enumOrderQueues(const POrder &order, const Fn &fn);
 
 
 	void cancelOrder(POrder order);

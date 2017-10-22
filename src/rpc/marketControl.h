@@ -64,9 +64,10 @@ protected:
 		const View *initialView = nullptr;
 		Value since;
 		CouchDB &db;
+		Value filter;
 		bool stopped;
 
-		FeedControl(CouchDB &db, Value since);
+		FeedControl(CouchDB &db, Value since, Value filter);
 		virtual ~FeedControl() {stop();}
 
 		virtual void init() = 0;

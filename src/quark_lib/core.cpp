@@ -324,37 +324,59 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 
 }
 
-CurrentState::OrderQueue &CurrentState::getQueueByState(const POrder &order) {
+template<typename Fn>
+void CurrentState::enumOrderQueues(const POrder &order, const Fn &fn) {
 	switch (order->getState())
 	{
 	case Order::orderbook:
-		if (order->getDir() == OrderDir::buy) return orderbook_bid;
-		else if (order->getDir() == OrderDir::sell) return orderbook_ask;
+		if (order->getDir() == OrderDir::buy) fn(orderbook_bid);
+		else if (order->getDir() == OrderDir::sell) fn(orderbook_ask);
 		else throw std::runtime_error("corrupted order direction");
+		break;
 	case Order::stopQueue:
-		if (order->getDir() == OrderDir::buy) return stop_above;
-		else if (order->getDir() == OrderDir::sell) return stop_below;
+		if (order->getDir() == OrderDir::buy) fn(stop_above);
+		else if (order->getDir() == OrderDir::sell) fn(stop_below);
 		else throw std::runtime_error("corrupted order direction");
+		break;
 	case Order::marketQueue:
-		return market;
+		fn(market);
+		break;
+	case Order::oco:
+		if (order->getDir() == OrderDir::buy) {
+			fn(orderbook_bid);
+			fn(stop_above);
+		}
+		else if (order->getDir() == OrderDir::sell) {
+			fn(orderbook_ask);
+			fn(stop_below);
+		}
+		else throw std::runtime_error("corrupted order direction");
+		break;
+	default:
+		throw std::runtime_error("corrupted order state");
 	}
-	throw std::runtime_error("corrupted order state");
+
 }
+
 
 void CurrentState::cancelOrder(POrder order) {
 
 	if (order->getState() != Order::prepared) {
-		OrderQueue &q = getQueueByState(order);
-		q.erase(order);
+		enumOrderQueues(order, [=](OrderQueue &q){
+			q.erase(order);
+		});
 	}
 	updateOrder(order->getId(), nullptr);
 }
 
 void CurrentState::updateOrderInQueues(POrder oldOrder, POrder newOrder) {
 
-	OrderQueue &q = getQueueByState(oldOrder);
-	q.erase(oldOrder);
-	q.insert(updateOrder(newOrder->getId(), newOrder));
+	if (oldOrder->getState() != Order::prepared) {
+		enumOrderQueues(oldOrder, [=](OrderQueue &q){
+			q.erase(oldOrder);
+			q.insert(updateOrder(newOrder->getId(), newOrder));
+		});
+	}
 }
 
 void CurrentState::matchNewOrder(POrder order, Output out) {

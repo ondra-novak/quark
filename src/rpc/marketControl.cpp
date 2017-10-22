@@ -207,8 +207,9 @@ public:
 	BasicFeed(couchit::CouchDB &db,
 			  Value since,
 			  RpcRequest rq,
-			  String streamName)
-				:FeedControl(db,since),rq(rq),streamName(streamName) {
+			  String streamName,
+			  Value filter)
+				:FeedControl(db,since,filter),rq(rq),streamName(streamName) {
 
 	}
 	virtual void init() override {
@@ -233,6 +234,7 @@ public:
 	virtual void onEvent(Value seqNum, Value doc) override {
 		//do not show control orders
 		if (doc["type"].getString() == "control") return;
+		if (filter.defined() && doc["user"]!=filter["user"]) return;
 		rq.sendNotify(streamName,{seqNum.toString(),OrderControl::normFields(doc)});
 	}
 
@@ -252,6 +254,7 @@ public:
 		feed.setFilter(couchit::Filter("trades/stream",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
+		if (filter.defined() && doc["sellUser"]!=filter["user"] && doc["buyUser"]!=filter["user"]) return;
 		rq.sendNotify(streamName,{seqNum.toString(),normTrade(doc)});
 	}
 
@@ -264,6 +267,7 @@ public:
 		feed.setFilter(couchit::Filter("positions/stream",couchit::Filter::includeDocs));
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
+		if (filter.defined() && doc["_id"].getString().substr(2)!=filter["user"].getString()) return;
 		rq.sendNotify(streamName,{seqNum.toString(),
 				Object(doc)
 				("user",doc["_id"].getString().substr(2))
@@ -292,18 +296,24 @@ public:
 
 };
 
+
+static Value stream_turnOffArgs = Value(json::array,{false});
+static Value stream_turnOnArgs = {true,{"string","optional"},{Object("user",{"any","optional"}),"optional"} };
+
+
 void MarketControl::rpcStreamOrders(RpcRequest rq) {
-	static Value turnOffArgs = Value(json::array,{false});
-	static Value turnOnArgs = {true,{"string","optional"} };
-	if (rq.checkArgs(turnOffArgs)) {
+	if (rq.checkArgs(stream_turnOffArgs)) {
 
 		ordersFeed = nullptr;
 		rq.setResult(true);
 
 
-	} else if (rq.checkArgs(turnOnArgs)) {
-		Value since = rq.getArgs()[1];
-		ordersFeed = new OrderFeed(ordersDb, since, rq, "order");
+	} else if (rq.checkArgs(stream_turnOnArgs)) {
+		Value args = rq.getArgs();
+		Value since = args[1];
+		Value filter;
+		if (args.size()>2) filter = args[2];
+		ordersFeed = new OrderFeed(ordersDb, since, rq, "order", filter);
 		ordersFeed->start();
 		rq.setResult(true);
 
@@ -314,17 +324,18 @@ void MarketControl::rpcStreamOrders(RpcRequest rq) {
 }
 
 void MarketControl::rpcStreamTrades(RpcRequest rq) {
-	static Value turnOffArgs = Value(json::array,{false});
-	static Value turnOnArgs = {true,{"string","optional"} };
-	if (rq.checkArgs(turnOffArgs)) {
+	if (rq.checkArgs(stream_turnOffArgs)) {
 
 		tradesFeed = nullptr;
 		rq.setResult(true);
 
 
-	} else if (rq.checkArgs(turnOnArgs)) {
-		Value since = rq.getArgs()[1];
-		tradesFeed = new TradesFeed(tradesDb, since, rq, "trade");
+	} else if (rq.checkArgs(stream_turnOnArgs)) {
+		Value args = rq.getArgs();
+		Value since = args[1];
+		Value filter;
+		if (args.size()>2) filter = args[2];
+		tradesFeed = new TradesFeed(tradesDb, since, rq, "trade", filter);
 		tradesFeed->start();
 		rq.setResult(true);
 
@@ -335,17 +346,18 @@ void MarketControl::rpcStreamTrades(RpcRequest rq) {
 }
 
 void MarketControl::rpcStreamPositions(RpcRequest rq) {
-	static Value turnOffArgs = Value(json::array,{false});
-	static Value turnOnArgs = {true,{"string","optional"} };
-	if (rq.checkArgs(turnOffArgs)) {
+	if (rq.checkArgs(stream_turnOffArgs)) {
 
 		posFeed = nullptr;
 		rq.setResult(true);
 
 
-	} else if (rq.checkArgs(turnOnArgs)) {
-		Value since = rq.getArgs()[1];
-		posFeed = new PosFeed(posDb, since, rq, "position");
+	} else if (rq.checkArgs(stream_turnOnArgs)) {
+		Value args = rq.getArgs();
+		Value since = args[1];
+		Value filter;
+		if (args.size()>2) filter = args[2];
+		posFeed = new PosFeed(posDb, since, rq, "position", filter);
 		posFeed->start();
 		rq.setResult(true);
 
@@ -366,7 +378,7 @@ void MarketControl::rpcStreamOrderbook(RpcRequest rq) {
 
 	} else if (rq.checkArgs(turnOnArgs)) {
 		Value since = rq.getArgs()[1];
-		orderbookFeed = new OrderbookFeed(ordersDb, since, rq, "orderbook");
+		orderbookFeed = new OrderbookFeed(ordersDb, since, rq, "orderbook",json::undefined);
 		orderbookFeed->start();
 		rq.setResult(true);
 	} else {
@@ -428,8 +440,8 @@ void MarketControl::FeedControl::start() {
 	stopped = false;
 }
 
-MarketControl::FeedControl::FeedControl(CouchDB& db, Value since)
-	:feed(db.createChangesFeed()),  since(since), db(db), stopped(true)
+MarketControl::FeedControl::FeedControl(CouchDB& db, Value since, Value filter)
+	:feed(db.createChangesFeed()),  since(since), db(db), stopped(true), filter(filter)
 {
 	feed.setTimeout(-1);
 	feed.includeDocs(true);

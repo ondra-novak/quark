@@ -65,6 +65,7 @@ namespace OrderFields {
 	extern StrViewA queue;
 	extern StrViewA vendorId;
 	extern StrViewA nextOrder;
+	extern StrViewA prevOrder;
 	extern StrViewA data;
 
 

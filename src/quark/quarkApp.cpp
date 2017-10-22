@@ -190,7 +190,11 @@ void QuarkApp::runOrder2(Document order, bool update) {
 
 		//handle various exceptions
 	 }catch (OrderRangeError &e) {
-			 rejectOrder(order, e, update);
+		 rejectOrder(order, e, update);
+	 } catch (OrderErrorException &e) {
+		 rejectOrder(order,e,update);
+	 }catch (std::exception &e) {
+		 rejectOrder(order, OrderErrorException(order.getIDValue(),OrderErrorException::internalError,e.what()),update);
 	 }
 
 }
@@ -1287,7 +1291,7 @@ void QuarkApp::createNextOrder(Value originOrder, Value nextOrder) {
 			if (tg > 0) limit = lastPrice + tg;
 			if (sl > 0) stop = lastPrice - sl;
 
-		} else if (dir == OrderDir::str[OrderDir::sell] ) {
+		} else if (dir == strsell ) {
 
 			dir = strbuy;
 			if (tg > 0) limit = lastPrice - tg;
@@ -1303,11 +1307,16 @@ void QuarkApp::createNextOrder(Value originOrder, Value nextOrder) {
 		else if (limit.defined()) orderType = OrderType::str[OrderType::limit];
 		else {
 			logWarn({"Failed to create nextOrder, need either stoploss or target or both", originOrder[OrderFields::orderId]});
+			return;
 		}
+
+		time_t now;
+		time(&now);
 
 		Document newOrder;
 		newOrder.set(OrderFields::orderId, newId)
 				(OrderFields::context, context)
+				(OrderFields::type, orderType)
 				(OrderFields::dir, dir)
 				(OrderFields::user, user)
 				(OrderFields::size, size)
@@ -1317,7 +1326,12 @@ void QuarkApp::createNextOrder(Value originOrder, Value nextOrder) {
 				(OrderFields::trailingDistance, trailing)
 				(OrderFields::data, data)
 				(OrderFields::nextOrder, next)
-				(OrderFields::status, Status::strValidating);
+				(OrderFields::status, Status::strValidating)
+				(OrderFields::prevOrder, originOrder[OrderFields::orderId])
+				(OrderFields::timeCreated, std::size_t(now));
+
+
+		newOrder.enableTimestamp();
 
 		try {
 			ordersDb->put(newOrder);

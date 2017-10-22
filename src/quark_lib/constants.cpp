@@ -61,6 +61,7 @@ STRCONST(timeCreated);
 STRCONST(timeModified);
 STRCONST(queue);
 STRCONST(nextOrder);
+STRCONST(prevOrder);
 STRCONST(data);
 }
 
