@@ -178,6 +178,8 @@ private:
 	void updateConfig();
 	bool updateConfigFromUrl(String url, Value lastModified, Value etag);
 
+	void createNextOrder(Value originOrder, Value nextOrder);
+
 	virtual void resync(ITradeStream &target, const Value fromTrade, const Value toTrade);
 	virtual bool cancelAllOrders(const json::Array &users);
 	virtual Dispatcher &getDispatcher();

@@ -64,9 +64,24 @@ namespace OrderFields {
 	extern StrViewA timeModified;
 	extern StrViewA queue;
 	extern StrViewA vendorId;
+	extern StrViewA nextOrder;
+	extern StrViewA data;
 
-	static const int takerFee = 1;
-	static const int makerFee = 0;
+
+}
+
+namespace NextOrderFields {
+
+
+using json::StrViewA;
+
+	extern StrViewA target;
+	extern StrViewA stoploss;
+	extern StrViewA orderId;
+	extern StrViewA size;
+	extern StrViewA absolute;
+
+
 }
 
 namespace Status {

@@ -36,19 +36,6 @@ void extractTrade(const couchit::Value& trade,
 }
 
 
-static double calcFee(const Document &order, double total, bool taker) {
-
-	Value f = order[OrderFields::fees];
-	if (f.type() == number) {
-		return total * f.getNumber();
-	} else if (f.type() == array) {
-		int idx = taker?OrderFields::takerFee:OrderFields::makerFee;
-		return total * f[idx].getNumber();
-	} else {
-		return 0;
-	}
-
-}
 
 
 Value findTradeCounter(couchit::CouchDB& tradeDB, Value trade) {

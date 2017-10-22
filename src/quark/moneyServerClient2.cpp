@@ -248,4 +248,14 @@ void MoneyServerClient2::handleError(MyClient *c, StrViewA method, const RpcResu
 	c->disconnect(false);
 }
 
+void MoneyServerClient2::MyClient::logError(const json::Value& details) {
+	Value d = Array(details).insert(0,"RPC Error");
+	quark::logError(d);
+}
+
+void MoneyServerClient2::MyClient::logTrafic(bool received, const json::Value& details) {
+	if (logTraficEnabled)
+		logInfo({received?"RPC receive":"RPC send", details});
+}
+
 }

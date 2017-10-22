@@ -167,6 +167,7 @@ json::Value OrderControl::create(json::Value reqOrder) {
 		if (e.getErrors()[0].isConflict()) {
 			throw ConflictError(normFields(db.get(doc.getID())));
 		}
+		throw;
 	}
 
 }

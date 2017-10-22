@@ -1,8 +1,9 @@
 #pragma once
 
 
-#include "asyncrpcclient.h"
+
 #include "imoneysrvclient.h"
+#include <jsonrpc_client/asyncrpcclient.h>
 
 namespace quark {
 
@@ -36,7 +37,7 @@ public:
 protected:
 
 
-	class MyClient: public RpcClient, public RefCntObj {
+	class MyClient: public jsonrpc_client::RpcClient, public RefCntObj {
 	public:
 		MyClient(String addr, MoneyServerClient2 &owner);
 
@@ -46,11 +47,20 @@ protected:
 		void close() {closed = true;disconnect(true);}
 		bool isClosed() const {return closed;}
 
+		virtual void logError(const json::Value &details);
+		virtual void logTrafic(bool received, const json::Value &details);
+
 		Value lastMMError;
+
+		void enableLogTrafic(bool trafic) {
+			logTraficEnabled = trafic;
+		}
+
 
 	protected:
 		MoneyServerClient2 &owner;
 		bool closed;
+		bool logTraficEnabled = false;
 
 
 	};

@@ -14,12 +14,13 @@
 #include <imtjson/string.h>
 #include <imtjson/parser.h>
 #include <imtjson/validator.h>
-#include "../quark/asyncrpcclient.h"
 #include "../quark/logfile.h"
+#include <jsonrpc_client/asyncrpcclient.h>
 
 using namespace json;
 
 using namespace quark;
+using namespace jsonrpc_client;
 
 /*Config
  *

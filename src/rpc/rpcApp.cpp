@@ -5,6 +5,11 @@
  *      Author: ondra
  */
 
+#ifdef _WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 #include "rpcApp.h"
 
 #include <imtjson/binjson.tcc>
@@ -48,6 +53,17 @@ void RpcApp::streamLog(RpcRequest req) {
 
 }
 
+void RpcApp::sendResponse(const Value& response, std::ostream& output) {
+	std::lock_guard<std::mutex> _(streamLock);
+	if (binaryMode) {
+		binaryMode->serialize(response);
+		std::cout.flush();
+	} else {
+		response.toStream(output);
+		output << std::endl;
+	}
+}
+
 void RpcApp::run(std::istream& input, std::ostream& output) {
 
 
@@ -56,6 +72,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 	rpcServer.add_ping("ping");
 	rpcServer.add_multicall("multicall");
 	rpcServer.add("init", me, &RpcApp::rpcInit);
+	rpcServer.add("binaryMode", [&](RpcRequest req){rpcEnableBinary(req,input,output);});
 	rpcServer.add("delay",[] (RpcRequest req) {
 		if (!req.checkArgs(Value(json::array,{"number"}))) return req.setArgError();
 		std::this_thread::sleep_for(std::chrono::seconds(req.getArgs()[0].getUInt()));
@@ -69,9 +86,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 		Value v = msgQueue.pop();
 		while (v.defined()) {
 			RpcRequest rq = RpcRequest::create(v, [&](Value response) {
-				std::lock_guard<std::mutex> _(streamLock);
-				response.toStream(output);
-				output << std::endl;
+				sendResponse(response, output);
 			},RpcFlags::notify);
 			rpcServer(rq);
 			v = msgQueue.pop();
@@ -79,20 +94,29 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 
 	});
 
+#ifdef _WIN32
+	 _setmode( _fileno( stdout ),  _O_BINARY );
+	 _setmode( _fileno( stdn ),  _O_BINARY );
+#endif
 
 	try {
 		do {
 			int c = input.get();
-			while (c != EOF && isspace(c)) {
-				c = input.get();
+			Value v;
+			if (binaryMode != nullptr) {
+				v = binaryMode->parse();
+			} else {
+				while (c != EOF && isspace(c)) {
+					c = input.get();
+				}
+				if (c == 'i') {
+					goInteractiveMode(input);
+					break;
+				}
+				if (c == EOF) break;
+				input.putback(c);
+				 v = Value::fromStream(input);
 			}
-			if (c == 'i') {
-				goInteractiveMode(input);
-				break;
-			}
-			if (c == EOF) break;
-			input.putback(c);
-			Value v = Value::fromStream(input);
 			msgQueue.push(v);
 
 
@@ -104,10 +128,11 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 		msgQueue.push(json::undefined);
 		executor.join();
 		mcontrol = nullptr;
+
 		Value resp = Object("error",Object("code",-32700)("message","Parse error")("data",e.what()))
 						   ("result",nullptr)
 						   ("id",nullptr);
-		resp.toStream(output);
+		sendResponse(resp,output);
 
 	}
 
@@ -126,6 +151,14 @@ void RpcApp::rpcInit(RpcRequest req) {
 
 }
 
+void RpcApp::rpcEnableBinary(RpcRequest req,std::istream &input, std::ostream &output) {
+	if (!req.checkArgs(Value(json::array,{"boolean"}))) return req.setArgError();
+	req.setResult(true);
+	if (req.getArgs()[0].getBool())
+		binaryMode = std::unique_ptr<BinaryIO>(new BinaryIO(input, output));
+	else
+		binaryMode = nullptr;
+}
 
 void RpcApp::goInteractiveMode(std::istream& input) {
 	std::cerr << "# Interactive mode is enabled" << std::endl;

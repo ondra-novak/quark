@@ -7,3 +7,6 @@
 [submodule "src/couchcpp"]
 	path = src/couchcpp
 	url = https://github.com/ondra-novak/couchcpp.git
+[submodule "src/jsonrpc_client"]
+	path = src/jsonrpc_client
+	url = https://github.com/ondra-novak/jsonrpc_client

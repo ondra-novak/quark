@@ -193,10 +193,28 @@ static void setupDaemonProcess(CouchDB &master) {
 
 }
 
-static void setupDatabase() {
+static void setupDatabase(CouchDB &db) {
+
+
+
 	String daemon_name({"quark-",marketName});
 	String cmdLine({"\"",deamonBinPath,"\" --initdb \"", marketName,"\" \"", quarkCfgPath,"\""});
-	system(cmdLine.c_str());
+	int err = system(cmdLine.c_str());
+	if (err!=0) {
+		std::cout << "Cannot initialize database, process exited with status: " << err;
+		throw std::runtime_error("Init failed");
+	}
+
+
+	Value ddoc = Object("_id","_design/readonly")
+			("validate_doc_update",
+					"function(doc,old_doc,user) "
+					"{"
+						"if (user.roles.indexOf(\"quark_rpc\") != -1 || user.roles.indexOf(\"quark_daemon\") != -1) "
+							"throw ({forbidden:\"Database is readonly (replicated copy)\"}) "
+					"}");
+
+	db.putDesignDocument(ddoc);
 
 }
 
@@ -297,7 +315,7 @@ int main(int argc, char **argv) {
 			setupDaemonProcess(userDB);
 		} else {
 			std::cout<<"Initializing database" << std::endl;
-			setupDatabase();
+			setupDatabase(ordersDB);
 		}
 		std::cout<<"Setup complete." << std::endl;
 		return 0;

@@ -7,12 +7,11 @@ add_custom_target(buildDesigns COMMAND $(MAKE) -C designdocs all  DEPENDS couchc
 add_custom_target(cleanDesigns COMMAND $(MAKE) -C designdocs clean-designs)
 add_executable (quark ${quark_SRC} ${designs})
 add_dependencies(quark buildDesigns)  
-target_link_libraries (quark LINK_PUBLIC quarklib couchit imtjson pthread)
+target_link_libraries (quark LINK_PUBLIC quarklib jsonrpc_client couchit imtjson pthread)
  
 install(TARGETS quark 
         DESTINATION "bin"
         ) 
 
 install(FILES "../../conf/quark.conf" DESTINATION "etc/quark") 
- 
  

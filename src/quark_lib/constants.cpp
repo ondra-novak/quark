@@ -60,7 +60,17 @@ STRCONST(updateStatus);
 STRCONST(timeCreated);
 STRCONST(timeModified);
 STRCONST(queue);
+STRCONST(nextOrder);
+STRCONST(data);
+}
 
+namespace NextOrderFields {
+
+StrViewA orderId("id");
+STRCONST(target);
+STRCONST(stoploss);
+STRCONST(size);
+STRCONST(absolute);
 
 }
 

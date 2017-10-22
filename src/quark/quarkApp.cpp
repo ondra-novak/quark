@@ -557,6 +557,10 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 					moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),OrderBudget(),nullptr);
 				}
 
+
+				if (d[OrderFields::finished].getBool() &&  !d[OrderFields::nextOrder].empty()) {
+					createNextOrder(d, d[OrderFields::nextOrder]);
+				}
 				//put order for update
 				chset.update(d);
 			}
@@ -622,7 +626,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					if (t.isFullBuy()) {
 						if (buyRemain == 0) {
 							buyOrder(OrderFields::finished,true)
-										(OrderFields::status,Status::strExecuted);
+									(OrderFields::status,Status::strExecuted);
 						}
 					}
 
@@ -1234,5 +1238,107 @@ void QuarkApp::controlDumpState(RpcRequest req) {
 }
 
 
+void QuarkApp::createNextOrder(Value originOrder, Value nextOrder) {
+
+	if (nextOrder.type() == json::array) {
+		for (Value x: nextOrder) {
+			createNextOrder(originOrder, x);
+		}
+	} else if (nextOrder.type() == json::object) {
+		Value newId = nextOrder[NextOrderFields::orderId];
+		Value target =  nextOrder[NextOrderFields::target];
+		Value stoploss =  nextOrder[NextOrderFields::stoploss];
+		Value size =  nextOrder[NextOrderFields::size];
+
+		if (size.getInt() < 0) {
+			logWarn({"Failed to create nextOrder, invalid size", originOrder[OrderFields::orderId]});
+			return;
+		}
+
+		if (!newId.defined() || newId.getString().substr(0,2) != "o.") {
+			newId = ordersDb->genUIDValue("o.");
+		}
+
+
+		Value dir = originOrder[OrderFields::dir];
+		Value context = originOrder[OrderFields::context];
+		Value user = originOrder[OrderFields::user];
+		Value data = nextOrder[OrderFields::data];
+		Value trailing = nextOrder[OrderFields::trailingDistance];
+		Value absolute = nextOrder[NextOrderFields::absolute];
+		Value next = nextOrder[OrderFields::nextOrder];
+
+		Value strbuy = OrderDir::str[OrderDir::buy];
+		Value strsell = OrderDir::str[OrderDir::sell];
+		Value limit;
+		Value stop;
+		double tg = target.getNumber();
+		double sl = stoploss.getNumber();
+
+		if (absolute.getBool()) {
+
+			if (dir==strbuy) dir = strsell; else dir = strbuy;
+			if (tg > 0) limit = target;
+			if (sl > 0) stop = stoploss;
+
+		} else if (dir == strbuy ) {
+
+			dir = strsell;
+			if (tg > 0) limit = lastPrice + tg;
+			if (sl > 0) stop = lastPrice - sl;
+
+		} else if (dir == OrderDir::str[OrderDir::sell] ) {
+
+			dir = strbuy;
+			if (tg > 0) limit = lastPrice - tg;
+			if (sl > 0)	stop = lastPrice + tg;
+		} else {
+			//unreachable code
+			return;
+		}
+
+		Value orderType;
+		if (stop.defined() && limit.defined()) orderType = OrderType::str[OrderType::oco_limitstop];
+		else if (stop.defined()) orderType = OrderType::str[OrderType::stop];
+		else if (limit.defined()) orderType = OrderType::str[OrderType::limit];
+		else {
+			logWarn({"Failed to create nextOrder, need either stoploss or target or both", originOrder[OrderFields::orderId]});
+		}
+
+		Document newOrder;
+		newOrder.set(OrderFields::orderId, newId)
+				(OrderFields::context, context)
+				(OrderFields::dir, dir)
+				(OrderFields::user, user)
+				(OrderFields::size, size)
+				(OrderFields::origSize, size)
+				(OrderFields::stopPrice, stop)
+				(OrderFields::limitPrice, limit)
+				(OrderFields::trailingDistance, trailing)
+				(OrderFields::data, data)
+				(OrderFields::nextOrder, next)
+				(OrderFields::status, Status::strValidating);
+
+		try {
+			ordersDb->put(newOrder);
+		} catch (std::exception &e) {
+			logError({"Failed to create next order", e.what()});
+		}
+
+
+
+
+
+
+
+	}
+
+
+
+
+}
+
+
 } /* namespace quark */
+
 
