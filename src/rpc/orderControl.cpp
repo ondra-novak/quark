@@ -137,6 +137,18 @@ json::Value OrderControl::create(json::Value reqOrder) {
 		if (x.type() != json::number)
 			return validationError(OrderFields::domPriority,"must be number");
 	}
+	x = reqOrder[OrderFields::expireTime];
+	if (x.defined()) {
+		if (x.type()!= json::number)
+			return validationError(OrderFields::expireTime,"must be number");
+
+		x = reqOrder[OrderFields::expireAction];
+		if (x.defined()){
+			if (x.getString() != "cancel" && x.getString() != "market")
+				return validationError(OrderFields::expireTime,"must contain either 'cancel' or 'market'");
+		}
+	}
+
 
 	time_t ct;
 	time(&ct);

@@ -63,6 +63,12 @@ STRCONST(queue);
 STRCONST(nextOrder);
 STRCONST(prevOrder);
 STRCONST(data);
+STRCONST(expireTime);
+STRCONST(expireAction);
+STRCONST(expired);
+STRCONST(fs);
+STRCONST(fp);
+
 }
 
 namespace NextOrderFields {

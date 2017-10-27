@@ -124,7 +124,9 @@ private:
 
 	Action exitFn;
 	Dispatcher dispatcher;
+	MsgQueue<bool> schedulerIntr;
 	std::thread changesReader;
+	std::thread scheduler;
 	std::default_random_engine rnd;
 
 
@@ -146,21 +148,8 @@ private:
 	OrdersToUpdate o2u_1, o2u_2, ocache; //prepared maps
 	TradeList tradeList; //buffer for trades
 
-	typedef std::unordered_map<Value, std::size_t> OrderRevisions;
-
-	///Stores revisions of updated orders.
-	/** This prevents to picking an old data up from the queue. Everytime the order is updated in the
-	 * database, its revision is recorded here. Once the order is picked from the queue, if could be
-	 * accepted only if its revision is above. Once the revision is above or equal, the record is
-	 * removed from the map as well
-	 */
-	OrderRevisions orderRevisions;
 
 
-
-	void recordRevision(Value docId, Value revId);
-	void recordRevisions(const Changeset& chset);
-	bool checkOrderRev(Value docId, Value revId);
 	bool runOrder(Document order, bool update);
 	void runOrder2(Document order, bool update);
 	void freeBudget(const Document& order);
@@ -179,6 +168,9 @@ private:
 	bool updateConfigFromUrl(String url, Value lastModified, Value etag);
 
 	void createNextOrder(Value originOrder, Value nextOrder);
+
+	void schedulerWorker();
+	void schedulerCycle(time_t now);
 
 	virtual void resync(ITradeStream &target, const Value fromTrade, const Value toTrade);
 	virtual bool cancelAllOrders(const json::Array &users);

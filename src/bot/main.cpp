@@ -60,6 +60,7 @@ void checkConfig(Value cfg) {
 					("market","string")
 					("minSize","positive")
 					("maxSize","positive")
+					("expiration",{"positive","optional"})
 			);
 
 	Validator validator(definition);
@@ -74,6 +75,7 @@ struct BotConfig {
 	unsigned int maxOrders;
 	unsigned int delay;
 	unsigned int seed;
+	unsigned int orderExpiration;
 	double range;
 	double minSize;
 	double maxSize;
@@ -240,13 +242,20 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 			direction = "sell";
 		}
 
-		Value order = Object
+		Object order;
+		order
 				("user",user)
 				("dir",direction)
 				("type",orderType)
 				("size",size)
 				("limitPrice",limitPrice)
 				("context","exchange");
+		if (cfg.orderExpiration) {
+			time_t t;
+			time(&t);
+			t += cfg.orderExpiration;
+			order("expireTime", t);
+		}
 
 		RpcResult r = rpc("Order.create", order);
 		if (r.isError()) {
@@ -299,6 +308,7 @@ int main(int argc, char **argv) {
 		bcfg.minSize = cfg["minSize"].getNumber();
 		bcfg.maxSize = cfg["maxSize"].getNumber();
 		bcfg.source = String(cfg["source"]);
+		bcfg.orderExpiration = cfg["expiration"].defined()?cfg["expiration"].getUInt():bcfg.maxOrders*bcfg.delay;
 
 		runBot(rpc, bcfg);
 

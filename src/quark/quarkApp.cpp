@@ -123,7 +123,6 @@ void QuarkApp::rejectOrder(Document order, const OrderErrorException &e, bool up
 								("message",e.getMessage())
 								("rangeValue",rangeValue));
 		ordersDb->put(order);
-		recordRevision(order.getIDValue(),order.getRevValue());
 	} catch (UpdateException &e) {
 		if (e.getErrors()[0].isConflict()) {
 			logInfo({"Order was not rejected because has been changed", e.getErrors()[0].document});
@@ -172,7 +171,11 @@ void QuarkApp::runOrder2(Document order, bool update) {
 				order.set(OrderFields::status, Status::strActive);
 
 				ordersDb->put(order);
-				recordRevision(order.getIDValue(),order.getRevValue());
+				//when order is put with expireTime
+				if (order[OrderFields::expireTime].defined()) {
+					//wake-up scheduler to reschedule
+					schedulerIntr.push(true);
+				}
 			} catch (const UpdateException &e) {
 				//in case of conflict...
 				if (e.getErrors()[0].isConflict()) {
@@ -268,10 +271,6 @@ bool QuarkApp::isCanceled(const Document &order) {
 bool QuarkApp::processOrder2(Value cmd) {
 	Document order(cmd);
 
-	if (!checkOrderRev(order.getIDValue(), order.getRevValue())) {
-		LOGDEBUG3("Discard order (old version)", order.getIDValue(), order.getRevValue());
-		return true;
-	}
 
 
 	LOGDEBUG2("Pop order", order.getIDValue());
@@ -282,7 +281,6 @@ bool QuarkApp::processOrder2(Value cmd) {
 		   (OrderFields::error,Object("message","market is not opened yet"))
 		   (OrderFields::finished,true);
 		ordersDb->put(order);
-		recordRevision(order.getIDValue(),order.getRevValue());
 		return true;
 	}
 
@@ -316,7 +314,6 @@ void QuarkApp::cancelOrder(Document order) {
 
 	try {
 		ordersDb->put(order);
-		recordRevision(order.getIDValue(),order.getRevValue());
 	} catch (UpdateException &e) {
 		if (e.getErrors()[0].isConflict()) {
 			logInfo({"Order was not canceled because it changed",e.getErrors()[0].document});
@@ -352,7 +349,6 @@ bool QuarkApp::updateOrder(Document order) {
 
 	try {
 		ordersDb->put(order);
-		recordRevision(order.getIDValue(),order.getRevValue());
 	} catch (const UpdateException &e) {
 		if (e.getErrors()[0].isConflict()) {
 			logWarn({"Order update conflict, waiting for fresh data", order.getIDValue()});
@@ -414,12 +410,6 @@ void QuarkApp::exitApp() {
 }
 
 
-
-void QuarkApp::recordRevisions(const Changeset& chset) {
-	for (auto x : chset.getCommitedDocs()) {
-		recordRevision(x.doc["_id"], Value(x.newRev));
-	}
-}
 
 void QuarkApp::runTransaction(const TxItem& txitm) {
 	transactionCounter++;
@@ -574,11 +564,8 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 				//in case of all success, we end here
 				rep = false;
 
-				recordRevisions(chset);
 
 			} catch (UpdateException &e) {
-				//record stored documents
-				recordRevisions(chset);
 				//there can be conflicts
 				keys.clear();
 				//because changes fron trading has highest priority
@@ -801,6 +788,7 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 
 	if (!blockOnError(chfeed)) return;
 
+
 	initialReceiveMarketConfig();
 
 
@@ -838,6 +826,8 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 	}
 
 	logInfo("[Queue] Processing new orders");
+
+	schedulerIntr.push(true);
 
 
 	chfeed.setFilter(queueFilter).since(res.getUpdateSeq()).setTimeout(-1)
@@ -987,6 +977,17 @@ bool QuarkApp::start(Value cfg, String signature)
 
 	syncWithDb();
 
+	logInfo("[start] Starting scheduler");
+
+	scheduler = std::thread([&]{
+		try {
+			schedulerWorker();
+		} catch (...) {
+			unhandledException();
+		}
+	});
+
+
 	logInfo("[start] Starting queue");
 
 	{
@@ -1036,6 +1037,10 @@ bool QuarkApp::start(Value cfg, String signature)
 		exitFn = nullptr;
 		//join monitor thread
 		changesReader.join();
+		//stop scheduler
+		schedulerIntr.push(false);
+		//join scheduler
+		scheduler.join();
 		//clear anything in the dispatcher (old orders)
 		dispatcher.clear();
 		//create special thread for dispatching remaining messages
@@ -1098,28 +1103,7 @@ void QuarkApp::PendingOrders::clear() {
 }
 
 
-void QuarkApp::recordRevision(Value docId, Value revId) {
-	LOGDEBUG3("Order updated ", docId, revId);
-	Revision rev(revId);
-	orderRevisions[docId] = rev.getRevId();
-}
 
-bool QuarkApp::checkOrderRev(Value docId, Value revId) {
-	Revision rev(revId);
-	auto it = orderRevisions.find(docId);
-	if (it == orderRevisions.end()) {
-		return true;
-	}
-	if (it->second > rev.getRevId()) {
-		return false;
-	}else if (it->second == rev.getRevId()) {
-		orderRevisions.erase(it);
-		return false;
-	} else {
-		orderRevisions.erase(it);
-		return true;
-	}
-}
 
 
 void QuarkApp::controlStop(RpcRequest req) {
@@ -1352,7 +1336,67 @@ void QuarkApp::createNextOrder(Value originOrder, Value nextOrder) {
 
 }
 
+void QuarkApp::schedulerCycle(time_t now) {
+
+
+	Query q = ordersDb->createQuery(schedulerView);
+	q.range(0,now,0);
+	q.includeDocs();
+	Result res = q.exec();
+	MTCounter cntr, *cntrp = &cntr;
+	for (Row rw : res) {
+
+		cntrp->inc();
+
+		Value order = rw.doc;
+		if (order[OrderFields::expireAction].getString() == "market") {
+			[=]{
+				Document chorder(order);
+				chorder.set(OrderFields::type,OrderType::str[OrderType::market]);
+				chorder.set(OrderFields::expired, true);
+				chorder.set(OrderFields::status,Status::strExecuted);
+				runOrder(chorder,true);
+				cntrp->dec();
+			} >> dispatcher;
+		} else {
+			[=]{
+				cancelOrder(order);
+				cntrp->dec();
+			} >> dispatcher;
+		}
+	}
+cntrp->zeroWait();
+}
+
+void QuarkApp::schedulerWorker() {
+	//initial start - scheduler must start after the queue
+	bool cont = schedulerIntr.pop();
+	while (cont) {
+		time_t now;
+		time(&now);
+
+		Query q = ordersDb->createQuery(schedulerView);
+		q.limit(1);
+		Result res = q.exec();
+		std::size_t delay;
+		for (Row r: res) {
+			size_t nx = r.key.getUInt();
+			if (nx < now) {
+				schedulerCycle(now);
+				delay = 0;
+			} else {
+				delay = nx - now;
+			}
+		}
+
+		schedulerIntr.pump_for(std::chrono::seconds(delay),[&](bool r){
+			cont = r;
+		});
+	}
+
+}
+
+
 
 } /* namespace quark */
-
 

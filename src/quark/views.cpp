@@ -8,5 +8,6 @@ Filter waitfordoc("index/waitfordoc");
 Filter queueFilter("index/queue",View::includeDocs);
 View userTrades("_design/trades/_view/byUser", View::update);
 View userActiveOrders("_design/index/_view/active", View::includeDocs|View::update);
+View schedulerView("_design/index/_view/scheduler", View::update);
 
 }
