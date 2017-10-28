@@ -37,11 +37,13 @@ protected:
 	void rpcStreamOrderbook(RpcRequest rq);
 	void rpcStreamTrades(RpcRequest rq);
 	void rpcStreamPositions(RpcRequest rq);
+	void rpcStreamStatus(RpcRequest rq);
 	void rpcStreamLastId(RpcRequest rq);
 	void rpcStatusGet(RpcRequest rq);
 	void rpcStatusClear(RpcRequest rq);
 	void rpcOrderbookGet(RpcRequest rq);
 	void rpcConfigGet(RpcRequest rq);
+	void rpcConfigUpdateFrom(RpcRequest rq);
 	void rpcConfigSet(RpcRequest rq);
 	void rpcChartGet(RpcRequest rq);
 	void rpcTradesStats(RpcRequest rq);
@@ -56,6 +58,7 @@ protected:
 
 
 	Value getMarketStatus();
+	static Value getMarketStatus(Value err);
 
 	class FeedControl: public RefCntObj {
 	public:
@@ -72,6 +75,7 @@ protected:
 
 		virtual void init() = 0;
 		virtual void onEvent(Value seqNum, Value doc) = 0;
+		virtual void onError() = 0;
 		void stop();
 		void start();
 
@@ -83,6 +87,7 @@ protected:
 	class TradesFeed;
 	class PosFeed;
 	class OrderbookFeed;
+	class StatusFeed;
 
 	typedef RefCntPtr<FeedControl> PFeedControl;
 
@@ -108,7 +113,7 @@ protected:
 
 	};
 
-	PFeedControl ordersFeed, tradesFeed, posFeed, orderbookFeed;
+	PFeedControl ordersFeed, tradesFeed, posFeed, orderbookFeed, statusFeed;
 	OrderControl orderControl;
 	String marketId;
 

@@ -35,6 +35,12 @@ MarketControl::MarketControl(Value cfg, String dbname)
 
 }
 
+static json::Value removeServiceMembers(json::Value doc) {
+	return 	Object(doc)
+			("_id",undefined)
+			("_rev",undefined);
+}
+
 
 static void notImpl(RpcRequest req) {
 	req.setError(501,"Not implemented yet!");
@@ -62,28 +68,7 @@ void MarketControl::rpcConfigSet(RpcRequest rq) {
 	static Value args = Value::fromString(
 
 			"[{"
-			   "\"assetSign\": \"string\","
-			   "\"currencySign\": \"string\","
-			   "\"granuality\": [[\">\",0]],"
-			   "\"maxBudget\": [[\">\",0]],"
-			   "\"maxPrice\": [[\">\",0]],"
-			   "\"maxSize\": [[\">\",0]],"
-			   "\"maxSlippagePct\": [[\">=\",0]],"
-			   "\"maxSpreadPct\": [[\">=\",0]],"
-			   "\"minPrice\": [[\">\",0]],"
-			   "\"minSize\": [[\">\",0]],"
-			   "\"pipSize\":[[\">\",0]],"
-			   "\"updateUrl\":[\"string\",\"optional\"],"
-			   "\"moneyService\": [{"
-				   	   "\"type\":\"'mockup\","
-				   	   "\"latency\":[[\">=\",0,\"integer\"]],"
-				   	   "\"maxBudget\": {"
-				   			   "\"asset\":[[\">=\",0]],"
-				   			   "\"currency\":[[\">=\",0]],"
-				   			   "\"marginLong\":[[\">=\",0]],"
-				   			   "\"marginShort\":[[\">=\",0]]"
-				   	   "}"
-			   "}]"
+			   "\"%\":{\"any\",\"optional\"}"
 			"},\"string\"]");
 
 	if (!rq.checkArgs(args)) return rq.setArgError();
@@ -93,20 +78,30 @@ void MarketControl::rpcConfigSet(RpcRequest rq) {
 	newDoc.setRev(rq.getArgs()[1]);
 	ordersDb.put(newDoc);
 	rq.setResult(newDoc.getRevValue());
+}
 
-
-
+void MarketControl::rpcConfigUpdateFrom(RpcRequest rq) {
+	static Value args(json::array,{"string"});
+	if (!rq.checkArgs(args)) return rq.setArgError();
+	couchit::Document cfg = ordersDb.get("settings");
+	cfg.set("updateUrl", rq.getArgs()[0]);
+	ordersDb.put(cfg);
+	rq.setResult(cfg.getRevValue());
 }
 
 
 Value MarketControl::getMarketStatus()  {
 
 	Value err = ordersDb.get("error",CouchDB::flgNullIfMissing);
+	return getMarketStatus(err);
+
+}
+Value MarketControl::getMarketStatus(Value err)  {
 	if (err == nullptr) {
 		return Object("marketStatus","ok");
 	} else {
 		return Object("marketStatus","stopped")
-				("reason",err);
+				("reason",removeServiceMembers(err));
 	}
 
 }
@@ -125,11 +120,13 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Stream.orderbook", me, &MarketControl::rpcStreamOrderbook);
 	rpcServer.add("Stream.positions", me, &MarketControl::rpcStreamPositions);
 	rpcServer.add("Stream.lastId", me, &MarketControl::rpcStreamLastId);
+	rpcServer.add("Stream.status", me, &MarketControl::rpcStreamStatus);
 	rpcServer.add("Status.get", me, &MarketControl::rpcStatusGet);
 	rpcServer.add("Status.clear", me, &MarketControl::rpcStatusClear);
 	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
 	rpcServer.add("Config.get",me, &MarketControl::rpcConfigGet);
 	rpcServer.add("Config.set",me, &MarketControl::rpcConfigSet);
+	rpcServer.add("Config.updateFrom",me, &MarketControl::rpcConfigUpdateFrom);
 	rpcServer.add("Chart.get",me, &MarketControl::rpcChartGet);
 	rpcServer.add("Trades.chart",me, &MarketControl::rpcChartGet);
 	rpcServer.add("Trades.stats",me, &MarketControl::rpcTradesStats);
@@ -214,6 +211,20 @@ public:
 	}
 	virtual void init() override {
 	}
+
+	void streamError(Value x) {
+		rq.sendNotify(streamName, {nullptr,Object("error", x)});
+	}
+
+	virtual void onError() override {
+		try {
+			throw;
+		} catch (std::exception &e) {
+			streamError(e.what());
+		} catch (...) {
+			streamError("unspecified error");
+		}
+	}
 	~BasicFeed() {
 		stop();
 	}
@@ -246,6 +257,7 @@ static json::Value normTrade(json::Value doc) {
 			("_id",undefined)
 			("_rev",undefined);
 }
+
 
 class MarketControl::TradesFeed: public BasicFeed {
 public:
@@ -297,8 +309,33 @@ public:
 };
 
 
+class MarketControl::StatusFeed: public BasicFeed {
+public:
+	using BasicFeed::BasicFeed;
+	virtual void init() override {
+		feed.forDocs({"error","warning"});
+	}
+	virtual void onEvent(Value seqNum, Value doc) override {
+		Value out;
+		if (doc["_id"] == "error") {
+			if (doc["_deleted"].getBool()) {
+				out = getMarketStatus(nullptr);
+			} else {
+				out = getMarketStatus(removeServiceMembers(doc));
+			}
+		} else if (doc["_id"] == "warning") {
+			out = Object("warning",removeServiceMembers(doc));
+		}
+
+		rq.sendNotify(streamName, {seqNum, out});
+
+	}
+
+};
+
 static Value stream_turnOffArgs = Value(json::array,{false});
 static Value stream_turnOnArgs = {true,{"string","optional"},{Object("user",{"any","optional"}),"optional"} };
+static Value stream_turnOnSimple = Value(json::array,{true});
 
 
 void MarketControl::rpcStreamOrders(RpcRequest rq) {
@@ -367,6 +404,35 @@ void MarketControl::rpcStreamPositions(RpcRequest rq) {
 	}
 }
 
+void MarketControl::rpcStreamStatus(RpcRequest rq) {
+	if (rq.checkArgs(stream_turnOffArgs)) {
+
+		statusFeed = nullptr;
+		rq.setResult(true);
+
+
+	} else if (rq.checkArgs(stream_turnOnSimple)) {
+
+		couchit::Query q = ordersDb.createQuery(View::includeDocs);
+		couchit::Result r = q.key("error").exec();
+		Value errdoc = nullptr;
+		if (!r.empty()) {
+			errdoc = couchit::Row(r[0]).doc;
+		}
+		rq.setResult(true);
+		Value since = r.getUpdateSeq();
+		rq.sendNotify("status",{since,getMarketStatus(errdoc)});
+
+		statusFeed = new StatusFeed(ordersDb, since, rq, "status", Value());
+		statusFeed->start();
+
+
+
+	} else {
+		rq.setArgError();
+	}
+}
+
 void MarketControl::rpcStreamOrderbook(RpcRequest rq) {
 	static Value turnOffArgs = Value(json::array,{false});
 	static Value turnOnArgs = {true,{"string","optional"} };
@@ -404,35 +470,39 @@ void MarketControl::FeedControl::start() {
 
 	thr = std::thread([&]{
 
-		init();
+		try {
+			init();
 
-		{
-		std::unique_lock<std::mutex> _(lock);
-		initWait = true;
-		initWaitCond.notify_all();
-		}
-
-		Value lastDoc;
-		if (!since.defined() && initialView != nullptr)
-		{
-			Query q = db.createQuery(*initialView);
-			Result r = q.exec();
-			for (Row rw : r) {
-				onEvent(r.getUpdateSeq(),rw.doc);
-				lastDoc = rw.doc;
+			{
+			std::unique_lock<std::mutex> _(lock);
+			initWait = true;
+			initWaitCond.notify_all();
 			}
-			since = r.getUpdateSeq();
+
+			Value lastDoc;
+			if (!since.defined() && initialView != nullptr)
+			{
+				Query q = db.createQuery(*initialView);
+				Result r = q.exec();
+				for (Row rw : r) {
+					onEvent(r.getUpdateSeq(),rw.doc);
+					lastDoc = rw.doc;
+				}
+				since = r.getUpdateSeq();
+			}
+
+			if (since.defined())
+				feed.since(since);
+
+			feed >> [&](ChangedDoc x) {
+				if (x.doc == lastDoc) return true;
+				lastDoc = json::undefined;
+				onEvent(x.seqId, x.doc);
+				return true;
+			};
+		} catch (...) {
+			onError();
 		}
-
-		if (since.defined())
-			feed.since(since);
-
-		feed >> [&](ChangedDoc x) {
-			if (x.doc == lastDoc) return true;
-			lastDoc = json::undefined;
-			onEvent(x.seqId, x.doc);
-			return true;
-		};
 	});
 
 	std::unique_lock<std::mutex> _(lock);
