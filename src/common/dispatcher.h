@@ -19,6 +19,7 @@ public:
 	typedef std::function<void()> Msg;
 protected:
 	MsgQueue<std::function<void()> > queue;
+	bool closed = false;
 
 public:
 	///starts message loop. Function processes messages
@@ -54,7 +55,8 @@ public:
 
 	///dispatch function
 	void operator<<(const Msg &msg) {
-		queue.push(msg);
+		if (!closed)
+			queue.push(msg);
 	}
 
 	///clear the queue
@@ -62,6 +64,15 @@ public:
 	 * dispatched messages are cleared by the destructor
 	 */
 	void clear() {
+		queue.clear();
+	}
+
+	void close() {
+		closed = true;
+		//at this point, messages should be discarded
+		//however operation is not serialized
+		//it would be after clear
+		//so clear will discard any pending messages
 		queue.clear();
 	}
 

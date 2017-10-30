@@ -50,6 +50,12 @@ ILogProviderFactory *setLogProvider(ILogProviderFactory* provider) {
 	return x;
 }
 
+PLogProvider setLogProvider(PLogProvider provider) {
+	PLogProvider x = curLogProvider;
+	curLogProvider = provider;
+	return x;
+}
+
 void logError(json::Value v) {
 	ILogProvider::globSendLog(ILogProvider::error, v);
 }

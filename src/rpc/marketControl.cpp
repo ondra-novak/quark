@@ -316,19 +316,32 @@ public:
 		feed.forDocs({"error","warning"});
 	}
 	virtual void onEvent(Value seqNum, Value doc) override {
+		sendNotify(rq, streamName, doc, seqNum.toString());
+	}
+	static void sendNotify(RpcRequest &rq, StrViewA streamName, Value doc, Value seq) {
 		Value out;
-		if (doc["_id"] == "error") {
+		if (doc.isNull()) {
+			Object v;
+			v.set("type","status_update");
+			v.set("ok", true);
+			out = v;
+		}
+		else if (doc["_id"] == "error") {
+			Object v;
+			v.set("type","status_update");
 			if (doc["_deleted"].getBool()) {
-				out = getMarketStatus(nullptr);
+				v.set("ok", true);
 			} else {
-				out = getMarketStatus(removeServiceMembers(doc));
+				v.set("ok", false);
+				v.set("reason",removeServiceMembers(doc));
 			}
+			out = v;
+
 		} else if (doc["_id"] == "warning") {
-			out = Object("warning",removeServiceMembers(doc));
+			out = removeServiceMembers(doc);
 		}
 
-		rq.sendNotify(streamName, {seqNum, out});
-
+		rq.sendNotify(streamName, {seq, out});
 	}
 
 };
@@ -421,7 +434,7 @@ void MarketControl::rpcStreamStatus(RpcRequest rq) {
 		}
 		rq.setResult(true);
 		Value since = r.getUpdateSeq();
-		rq.sendNotify("status",{since,getMarketStatus(errdoc)});
+		StatusFeed::sendNotify(rq,"status",errdoc,since);
 
 		statusFeed = new StatusFeed(ordersDb, since, rq, "status", Value());
 		statusFeed->start();
@@ -850,6 +863,7 @@ void MarketControl::rpcOrderCancelAll(RpcRequest rq) {
 	do {
 		couchit::Query q = ordersDb.createQuery(userActive);
 		if (!rq.getArgs().empty()) q.keys(rq.getArgs());
+		q.limit(2000); //cancel max 2000 orders per one cycle
 
 		couchit::Result res = q.exec();
 		if (res.empty()) {

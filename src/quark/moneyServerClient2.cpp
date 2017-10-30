@@ -243,8 +243,10 @@ void MoneyServerClient2::connectIfNeed() {
 
 void MoneyServerClient2::handleError(MyClient *c, StrViewA method, const RpcResult& res)
 {
-	logError({method, "Money server error, dropping connection", c->getAddr(), Value(res)});
-	c->lastMMError = res;
+	if (res.defined()) {
+		logError({method, "Money server error, dropping connection", c->getAddr(), Value(res)});
+		c->lastMMError = res;
+	}
 	c->disconnect(false);
 }
 

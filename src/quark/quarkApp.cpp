@@ -15,6 +15,7 @@
 #include <couchit/couchDB.h>
 #include "../common/config.h"
 #include "../common/runtime_error.h"
+#include "../common/semaphore.h"
 
 #include "error.h"
 
@@ -28,6 +29,7 @@
 #include "tradeHelpers.h"
 #include "views.h"
 #include "../common/lexid.h"
+
 
 namespace quark {
 
@@ -780,10 +782,12 @@ bool QuarkApp::blockOnError(ChangesFeed &chfeed) {
 
 void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 
+	bool canceled = false;
 
 	ChangesFeed chfeed = ordersDb->createChangesFeed();
 	exitFnStore.set_value( [&] {
 		chfeed.cancelWait();
+		canceled = true;
 	});
 
 	if (!blockOnError(chfeed)) return;
@@ -791,12 +795,18 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 
 	initialReceiveMarketConfig();
 
+	Semaphore limitQueued(8);
+
 
 	auto loopBody = [&](ChangedDoc chdoc) {
 
 
+		limitQueued.lock();
 
-		[=]{
+		logDebug({"queue-Dispatch", chdoc.id});
+
+		[chdoc,this,&limitQueued]{
+			limitQueued.unlock();
 			if (chdoc.id == marketConfigDocName) {
 				try {
 					//validate market config;
@@ -812,7 +822,6 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 			} else if (chdoc.id.substr(0,2) == "o.") {
 				processOrder(chdoc.doc);
 			}
-
 		} >> dispatcher;
 		return true;
 	};
@@ -823,17 +832,22 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 	Result res = q.exec();
 	for (Value v : res) {
 		loopBody(v);
+		if (canceled) break;
 	}
 
-	logInfo("[Queue] Processing new orders");
+	if (!canceled) {
+		logInfo("[Queue] Processing new orders");
 
-	schedulerIntr.push(true);
+		schedulerIntr.push(true);
 
 
-	chfeed.setFilter(queueFilter).since(res.getUpdateSeq()).setTimeout(-1)
-				>> 	loopBody;
+		chfeed.setFilter(queueFilter).since(res.getUpdateSeq()).setTimeout(-1)
+					>> 	loopBody;
+	}
 
 	logInfo("[Queue] Quitting");
+
+	limitQueued.lock_n(8);
 
 	return;
 
@@ -927,6 +941,54 @@ bool QuarkApp::initDb(Value cfg, String signature) {
 }
 
 
+class LogErrors: public ILogProviderFactory {
+public:
+	LogErrors(PCouchDB db):db(db) {
+		prevProvider = setLogProvider(this);
+		setLogProvider(createLogProvider());
+
+	}
+	~LogErrors() {
+		setLogProvider(prevProvider);
+	}
+
+	class Provider: public ILogProvider {
+		public:
+			Provider(PCouchDB db, PLogProvider nx):db(db),nx(nx) {}
+			virtual void sendLog(LogType type, json::Value message) {
+				nx->sendLog(type,message);
+				if (type == error || type == warning) {
+					do {
+						Document doc = db->get("warning", CouchDB::flgCreateNew);
+						doc.set("type",type==warning?"warning":"error")
+						   .set("desc",message);
+						try {
+							db->put(doc);
+							break;
+						} catch (UpdateException &e) {
+							// empty
+						} catch(...) {
+							//giveup
+							break;
+						}
+					} while (true);
+				}
+			}
+
+		protected:
+			PLogProvider nx;
+			PCouchDB db;
+		};
+
+	virtual PLogProvider createLogProvider() {
+		return new Provider(db, prevProvider->createLogProvider());
+	}
+
+protected:
+	PCouchDB db;
+	ILogProviderFactory *prevProvider;
+};
+
 bool QuarkApp::start(Value cfg, String signature)
 
 {
@@ -972,6 +1034,8 @@ bool QuarkApp::start(Value cfg, String signature)
 
 	logInfo("[start] updating database");
 	initDb(cfg,signature);
+
+	LogErrors logErrors(ordersDb);
 
 	logInfo("[start] Syncing... (can take long time)");
 
@@ -1026,28 +1090,35 @@ bool QuarkApp::start(Value cfg, String signature)
 		);
 
 	try {
+
 		//run dispatcher now
 		dispatcher.run();
 
 
 		logInfo("[start] Exitting queue");
+
+		//this flag sets to true when everything is ready for exit
+		bool exitFlag = false;
+
+		//thread runs dispatcher to finish any pending messages created during exit
+		std::thread exitTh([&]{
+			//we can exit only when exit flag is set to true
+			while (exitFlag == false) {
+				//otherwise continue in dispatch
+				dispatcher.run();
+			}
+		});
+
 		//send exit to monitor queue
 		exitFn();
 		//clear exit function (no longer needed)
 		exitFn = nullptr;
-		//join monitor thread
-		changesReader.join();
 		//stop scheduler
 		schedulerIntr.push(false);
 		//join scheduler
 		scheduler.join();
-		//clear anything in the dispatcher (old orders)
-		dispatcher.clear();
-		//create special thread for dispatching remaining messages
-		//while the thread is busy with cleanup
-		std::thread exitTh ([=]{
-			dispatcher.run();
-		});
+		//join monitor thread
+		changesReader.join();
 
 		//destroy money service client
 		moneySrvClient = nullptr;
@@ -1055,12 +1126,13 @@ bool QuarkApp::start(Value cfg, String signature)
 		moneyService = nullptr;
 		//stop watchdog
 		watchdog.stop();
-		//everything should be clean now, so quit the dispatcher
+		//now everything is ready to exit
+		//raise exit flag (through the dispatcher, to ensure, that this is last message)
+		[&]{exitFlag = true;} >> dispatcher;
+		//stop dispatcher
 		dispatcher.quit();
 		//join exit thread
 		exitTh.join();
-		//clear anything in the dispatcher
-		dispatcher.clear();
 	} catch (...) {
 		unhandledException();
 	}
@@ -1343,29 +1415,29 @@ void QuarkApp::schedulerCycle(time_t now) {
 	q.range(0,now,0);
 	q.includeDocs();
 	Result res = q.exec();
-	MTCounter cntr, *cntrp = &cntr;
+	Semaphore cntr(1);
 	for (Row rw : res) {
 
-		cntrp->inc();
+		cntr.lock();
 
 		Value order = rw.doc;
 		if (order[OrderFields::expireAction].getString() == "market") {
-			[=]{
+			[&cntr,order,this]{
 				Document chorder(order);
 				chorder.set(OrderFields::type,OrderType::str[OrderType::market]);
 				chorder.set(OrderFields::expired, true);
 				chorder.set(OrderFields::status,Status::strExecuted);
 				runOrder(chorder,true);
-				cntrp->dec();
+				cntr.unlock();
 			} >> dispatcher;
 		} else {
-			[=]{
+			[&cntr,order,this]{
 				cancelOrder(order);
-				cntrp->dec();
+				cntr.unlock();
 			} >> dispatcher;
 		}
 	}
-cntrp->zeroWait();
+	cntr.lock_n(1);
 }
 
 void QuarkApp::schedulerWorker() {

@@ -153,9 +153,23 @@ bool checkCommand(StrViewA lastId, RpcClient &rpc) {
 
 }
 
+bool checkMarketCommand(StrViewA lastId, RpcClient &rpc) {
+	if (lastId.empty()) return true;
+	RpcResult res = rpc("Order.get", {lastId});
+	if (res.isError()) {
+		logError(res);
+		return true;
+	} else {
+		Value v = res;
+		return v["finished"].getBool();
+	}
+
+}
+
 void runBot(RpcClient &rpc, const BotConfig &cfg) {
 
 	String lastId;
+	String lastMarketId;
 
 
 	std::default_random_engine rnd(cfg.seed);
@@ -217,6 +231,11 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 		Value user;
 		bool dirBuy;
 
+		if (marketCommand && !lastMarketId.empty()) {
+			if (!checkMarketCommand(lastMarketId, rpc))
+				marketCommand = false;
+		}
+
 
 		if (marketCommand) {
 
@@ -262,6 +281,7 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 			logError({"Error creating request", order, Value(r)});
 		} else {
 			lastId = String(Value(r)[0]);
+			if (marketCommand) lastMarketId = lastId;
 			logInfo({"Order created", order, lastId});
 		}
 

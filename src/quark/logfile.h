@@ -33,6 +33,7 @@ public:
 };
 
 ILogProviderFactory *setLogProvider(ILogProviderFactory *provider);
+PLogProvider setLogProvider(PLogProvider p);
 
 
 void logError(json::Value v);
