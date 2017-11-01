@@ -5,7 +5,7 @@
 
 
 #include "imoneysrvclient.h"
-#include "../common/dispatcher.h"
+//#include "../common/dispatcher.h"
 
 namespace quark {
 

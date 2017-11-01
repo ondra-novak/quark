@@ -17,12 +17,16 @@
 #include "orderBudget.h"
 #include "marketConfig.h"
 #include "imoneysrvclient.h"
-#include <common/mtcounter.h>
+#include "shared/mtcounter.h"
+#include "shared/dispatcher.h"
 
-class Dispatcher;
+
 
 
 namespace quark {
+
+using ondra_shared::MTCounter;
+using ondra_shared::Dispatcher;
 
 
 ///Contains in-memory map of all active orders and their budget

@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "../common/dispatcher.h"
+#include "shared/dispatcher.h"
 #include "../common/watchdog.h"
 
 
@@ -30,6 +30,8 @@ namespace quark {
 
 using namespace couchit;
 using namespace json;
+using ondra_shared::Dispatcher;
+using ondra_shared::MsgQueue;
 
 
 class OrderErrorException;

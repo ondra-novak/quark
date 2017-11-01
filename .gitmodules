@@ -10,3 +10,6 @@
 [submodule "src/jsonrpc_client"]
 	path = src/jsonrpc_client
 	url = https://github.com/ondra-novak/jsonrpc_client
+[submodule "src/shared"]
+	path = src/shared
+	url = https://github.com/ondra-novak/ondra_shared.git

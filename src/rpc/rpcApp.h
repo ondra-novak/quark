@@ -5,7 +5,7 @@
 #include <iosfwd>
 #include <mutex>
 #include <queue>
-#include "../common/msgqueue.h"
+#include "shared/msgqueue.h"
 
 
 
@@ -16,6 +16,7 @@ namespace quark {
 
 using namespace json;
 using namespace couchit;
+using ondra_shared::MsgQueue;
 
 
 

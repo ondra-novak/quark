@@ -5,11 +5,14 @@
 #include "../quark_lib/constants.h"
 #include "marketConfig.h"
 
-class Dispatcher;
+namespace ondra_shared {
+	class Dispatcher;
+}
 
 namespace quark {
 
 using namespace json;
+using ondra_shared::Dispatcher;
 
 
 class OrderBudget;

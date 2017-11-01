@@ -5,7 +5,7 @@
  *      Author: ondra
  */
 
-#include <common/dispatcher.h>
+#include "shared/dispatcher.h"
 #include "moneyService.h"
 
 

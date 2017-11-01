@@ -5,12 +5,13 @@
 #include <queue>
 #include <condition_variable>
 
-#include "../common/msgqueue.h"
+#include "shared/msgqueue.h"
 #include "orderBudget.h"
 #include "imoneysrvclient.h"
 
 
 namespace quark {
+using ondra_shared::MsgQueue;
 
 
 class MockupMoneyService: public IMoneySrvClient {
