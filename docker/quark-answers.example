@@ -1,0 +1,11 @@
+daemon
+btcdash
+http://172.17.0.1:3480/btcdash.conf
+http://localhost:5984/
+admin
+admin
+/etc/quark/quark.conf
+/etc/quark/rpc.conf
+/usr/local/bin/quark
+y
+
