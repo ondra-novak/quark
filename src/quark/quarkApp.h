@@ -51,6 +51,7 @@ public:
 
 	void exitApp();
 
+	void syncTS(Value cfg, String signature);
 
 
 protected:

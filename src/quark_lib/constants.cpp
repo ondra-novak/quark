@@ -104,9 +104,13 @@ json::NamedEnum<Type> str({
 }
 
 namespace OrderContext {
+
+StrViewA strExchange("exchange");
+StrViewA strMargin("margin");
+
 json::NamedEnum<Type> str({
-		ENUMDEF(exchange),
-		ENUMDEF(margin)
+	{exchange, strExchange},
+	{margin, strMargin}
 	});
 }
 

@@ -78,4 +78,9 @@ void MockupMoneyService::reportTrade(Value prevTrade, const TradeData &data) {
 
 }
 
-void quark::MockupMoneyService::adjustBudget(json::Value , OrderBudget& ) {}
+void quark::MockupMoneyService::adjustBudget(json::Value, OrderBudget&) {
+}
+
+void quark::MockupMoneyService::resync() {
+	logError("Mockup moneyServer doesn't support resync()");
+}

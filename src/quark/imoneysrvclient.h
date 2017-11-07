@@ -39,6 +39,7 @@ public:
 
 	virtual void reportTrade(Value prevTrade, const TradeData &data) = 0;
 
+
 	virtual ~ITradeStream() {}
 };
 
@@ -84,6 +85,9 @@ public:
 	 *
 	 */
 	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) = 0;
+
+	///Initializes resync if required
+	virtual void resync() = 0;
 
 };
 

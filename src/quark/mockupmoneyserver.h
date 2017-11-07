@@ -29,6 +29,7 @@ public:
 	virtual void adjustBudget(json::Value user, OrderBudget &budget) override ;
 	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) override ;
 	virtual void reportTrade(Value prevTrade, const TradeData &data) override ;
+	virtual void resync() override;
 
 protected:
 

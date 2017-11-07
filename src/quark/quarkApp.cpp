@@ -434,80 +434,36 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		return;
 	}
 
-	//commit all trades into DB
-	//build list of trades to commit
-	for (auto && v: tradeList) {
-		chset.update(v);
-	}
-	//commit in one call (any possible conflicts are thrown here before orders are
-	//sent to the money server
-	chset.commit();
-	if (!chset.getCommitedDocs().empty())
-		tradesDb->updateView(userTrades,false);
 	Array keys;
 
 	if (!tradeList.empty())
 	{
-		//now we need to send changes to money server(s)
-		//first get all orders appears in all trades
-		//some orders can appear multiple times
-		//we can use not-yet updated version, because we only need some
-		//attibutes, such a context or user,
 
-		Query q = ordersDb->createQuery(View::includeDocs);
-
-		keys.reserve(o2u.size());
-		//prepare list of keys
-		for (auto && v : tradeList) {
-			//put orderIds as keys
-			keys.push_back(v["buyOrder"]);
-			keys.push_back(v["sellOrder"]);
+		//commit all trades into DB
+		//build list of trades to commit
+		for (auto && v: tradeList) {
+			chset.update(v);
 		}
-		//now create ordered list and remove duplicates, and setup the query
-		Value k = Value(keys).sort(&Value::compare).uniq();
-		q.keys(k);
-		//execute query
-		Result res = q.exec();
-		//result must have exact same values as keys
-		if (res.size() != k.size())
-			throw std::runtime_error("Some trades refer to no-existing order - sanity check");
+		//commit in one call (any possible conflicts are thrown here before orders are
+		//sent to the money server
+		chset.commit();
 
-		//result is also ordered. We need to build ordering function
-		//cmpRes allows to ask with orderId even if orders are objects.
-		//orderId is eqaul to order with given id
-		auto cmpRes = [](const Value &a, const Value &b) {
-			if (a.type() == json::object) {
-				if (b.type() == json::object)
-					return Value::compare(a["id"],b["id"]) < 0;
-				else
-					return Value::compare(a["id"],b) < 0;
-			} else {
-				return Value::compare(a,b["id"]) < 0;
-			}
-		};
+		tradesDb->updateView(userTrades,false);
 
-		//sends reports to money server(s)
+
+		//send trades to the transaction module
 		for (auto && v : tradeList) {
 			IMoneySrvClient::TradeData td;
-			//first report trade
-			//get order for buyOrder and sellOrder
-			Value buyOrderId = v["buyOrder"];
-			Value sellOrderId = v["sellOrder"];
-			//we don't need to check, whether order were found, above sanity check is enough
-			Value buyOrder = (*std::lower_bound(res.begin(), res.end(),buyOrderId, cmpRes))["doc"];
-			Value sellOrder = (*std::lower_bound(res.begin(), res.end(),sellOrderId, cmpRes))["doc"];
-			LOGDEBUG2("buyOrder", buyOrder);
-			LOGDEBUG2("sellOrder", sellOrder);
 
-			extractTrade(v, buyOrder, sellOrder,  td);
-			moneySrvClient->reportTrade(lastTradeId, td); //TODO: check return value!
+			extractTrade2(v, td);
+			moneySrvClient->reportTrade(lastTradeId, td);
 
 			//update last tradeId
 			lastTradeId = td.id;
 			//update last price
 			lastPrice = td.price;
-		}
 
+		}
 	}
 	//update all affected orders
 	keys.clear();
@@ -570,8 +526,8 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 			} catch (UpdateException &e) {
 				//there can be conflicts
 				keys.clear();
-				//because changes fron trading has highest priority
-				//we have to reapply changes to new version of order
+				//because changes from trading have highest priority
+				//we have to reapply changes to new version of the order
 				for (auto err : e.getErrors()) {
 					if (err.isConflict()) {
 						//collect conflicts
@@ -612,10 +568,14 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					std::size_t buyRemain;
 					std::size_t sellRemain;
 					Value dir = OrderDir::str[t.getDir()];
-					Document &buyOrder = o2u[t.getBuyOrder()->getId()];
-					Document &sellOrder = o2u[t.getSellOrder()->getId()];
-					buyOrder(OrderFields::size,marketCfg->sizeToAmount(buyRemain = t.getBuyOrder()->getSize()-t.getSize()));
-					sellOrder(OrderFields::size,marketCfg->sizeToAmount(sellRemain = t.getSellOrder()->getSize()-t.getSize()));
+
+					auto tbo = t.getBuyOrder();
+					auto tso = t.getSellOrder();
+
+					Document &buyOrder = o2u[tbo->getId()];
+					Document &sellOrder = o2u[tso->getId()];
+					buyOrder(OrderFields::size,marketCfg->sizeToAmount(buyRemain = tbo->getSize()-t.getSize()));
+					sellOrder(OrderFields::size,marketCfg->sizeToAmount(sellRemain = tso->getSize()-t.getSize()));
 					if (t.isFullBuy()) {
 						if (buyRemain == 0) {
 							buyOrder(OrderFields::finished,true)
@@ -636,12 +596,11 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					tradeCounter += uniform_dist(rnd);
 					logInfo({"Trade",dir,price,amount,tradeId});
 
+
 					trade("_id",tradeId)
 						 ("price",price)
-						 ("buyOrder",t.getBuyOrder()->getId())
-						 ("sellOrder",t.getSellOrder()->getId())
-						 ("buyUser", t.getBuyOrder()->getUser())
-						 ("sellUser", t.getSellOrder()->getUser())
+						 ("buy",{tbo->getId(),tbo->getUser(),tbo->getData()})
+						 ("sell",{tso->getId(),tso->getUser(),tso->getData()})
 						 ("size",amount)
 						 ("dir",dir)
 						 ("time",(std::size_t)now);
@@ -742,6 +701,7 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	odata.domPriority = order[OrderFields::domPriority].getInt();
 	odata.queuePriority = order[OrderFields::queuePriority].getInt();
 	odata.user = order[OrderFields::user];
+	odata.data = order[OrderFields::context].getString() == OrderContext::strMargin;
 	po = new Order(odata);
 	return po;
 }
@@ -1076,7 +1036,7 @@ bool QuarkApp::start(Value cfg, String signature)
 	watchdog.start(60000,
 		[=](unsigned int nonce)  {
 			dispatcher << [=]{
-				logInfo({"Watchog test",nonce});
+				logInfo({"Watchdog test",nonce});
 				watchdog.reply(nonce);
 			};
 			updateConfig();
@@ -1259,7 +1219,7 @@ bool QuarkApp::updateConfigFromUrl(String s, Value lastModified, Value etag) {
 }
 
 void QuarkApp::resync(ITradeStream& target, const Value fromTrade, const Value toTrade) {
-	return quark::resync(*ordersDb,*tradesDb,target,fromTrade,toTrade,*marketCfg);
+	quark::resync(*ordersDb,*tradesDb,target,fromTrade,toTrade,*marketCfg);
 }
 
 bool QuarkApp::cancelAllOrders(const json::Array& users) {
@@ -1468,6 +1428,35 @@ void QuarkApp::schedulerWorker() {
 
 }
 
+void QuarkApp::syncTS(Value cfg, String signature) {
+	logInfo("[start] updating database");
+	this->signature = signature;
+
+	std::exception_ptr storedException;
+
+	setUnhandledExceptionHandler([&]{
+		storedException = std::current_exception();
+	});
+
+	initDb(cfg,signature);
+
+	initialReceiveMarketConfig();
+
+
+
+	moneySrvClient->resync();
+	MTCounter lk(1);
+
+	moneySrvClient->allocBudget("dummy",OrderBudget(),[&](IMoneySrvClient::AllocResult){lk.dec();});
+	lk.zeroWait();
+	moneyService = nullptr;
+	moneySrvClient = nullptr;
+
+
+	if (storedException != nullptr) {
+		 std::rethrow_exception(storedException);
+	}
+}
 
 
 } /* namespace quark */

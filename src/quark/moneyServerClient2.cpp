@@ -41,9 +41,13 @@ MoneyServerClient2::MoneyServerClient2(
 {
 	client->enableLogTrafic(logTrafic);
 	client->setRecvTimeout(30000);
+
+	workThr = std::thread([=]{dispatcher.run();});
 }
 
 MoneyServerClient2::~MoneyServerClient2() {
+	dispatcher.quit();
+	workThr.join();
 	client->close();
 }
 
@@ -56,39 +60,41 @@ void MoneyServerClient2::adjustBudget(json::Value ,
 bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 		Callback callback) {
 
-	connectIfNeed();
-	RefCntPtr<MyClient> c(client);
-	Value params = Object
-			("user_id",user)
-			("currency",total.currency)
-			("asset",total.asset)
-			("marginLong",total.marginLong)
-			("marginShort",total.marginShort)
-			("posLong",total.posLong)
-			("posShort",total.posShort);
+	[=] {
+
+		connectIfNeed();
+		RefCntPtr<MyClient> c(client);
+		Value params = Object
+				("user_id",user)
+				("currency",total.currency)
+				("asset",total.asset)
+				("marginLong",total.marginLong)
+				("marginShort",total.marginShort)
+				("posLong",total.posLong)
+				("posShort",total.posShort);
 
 
-	(*client)("CurrencyBalance.block_money", params)
-			>> [c,callback](const RpcResult &res) {
+		(*client)("CurrencyBalance.block_money", params)
+				>> [c,callback](const RpcResult &res) {
 
 
-		if (res.isError()) {
-			if (res.defined())
-				handleError(c,"CurrencyBalance.block_money", res);
-			callback(allocTryAgain);
-		} else {
-			if (Value(res)["success"].getBool()) {
-				callback(allocOk);
+			if (res.isError()) {
+				if (res.defined())
+					handleError(c,"CurrencyBalance.block_money", res);
+				callback(allocTryAgain);
 			} else {
-				callback(allocReject);
+				if (Value(res)["success"].getBool()) {
+					callback(allocOk);
+				} else {
+					callback(allocReject);
+				}
 			}
-		}
 
 
-	};
+		};
+	} >> dispatcher;
+
 	return false;
-
-
 
 }
 
@@ -96,12 +102,14 @@ class CancelException {};
 
 void MoneyServerClient2::reportTrade(Value prevTrade, const TradeData& data) {
 
-	 connectIfNeed();
-	 try {
-		 reportTrade2(prevTrade, data);
-	 } catch (CancelException &e) {
-		 //ignore here - we cannot do anything with it
-	 }
+	[=] {
+		 connectIfNeed();
+		 try {
+			 reportTrade2(prevTrade, data);
+		 } catch (CancelException &e) {
+			 //ignore here - we cannot do anything with it
+		 }
+	} >> dispatcher;
 
 }
 void MoneyServerClient2::reportTrade2(Value prevTrade, const TradeData& data) {
@@ -176,7 +184,7 @@ void MoneyServerClient2::connectIfNeed() {
 				retryCounter++;
 				if (retryCounter == 10) {
 					try {
-						String msg({"MoneyServer client - too many connection drops, this is fatal - ", client->lastMMError.toString()});
+						String msg({"Transaction module error - too many connection drops, this is fatal - ", client->lastMMError.toString()});
 						throw std::runtime_error(msg.c_str());
 					} catch(...) {
 						unhandledException();
@@ -244,7 +252,7 @@ void MoneyServerClient2::connectIfNeed() {
 void MoneyServerClient2::handleError(MyClient *c, StrViewA method, const RpcResult& res)
 {
 	if (res.defined()) {
-		logError({method, "Money server error, dropping connection", c->getAddr(), Value(res)});
+		logError({method, "Transaction module error, dropping connection", c->getAddr(), Value(res)});
 		c->lastMMError = res;
 	}
 	c->disconnect(false);
@@ -260,4 +268,11 @@ void MoneyServerClient2::MyClient::logTrafic(bool received, const json::Value& d
 		logInfo({received?"RPC receive":"RPC send", details});
 }
 
+void quark::MoneyServerClient2::resync() {
+	[=] {
+		connectIfNeed();
+	} >> dispatcher;
 }
+
+}
+

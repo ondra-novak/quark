@@ -16,14 +16,26 @@
 			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
 				<configuration buildProperties="" description="" id="cdt.managedbuild.toolchain.gnu.base.1147553630" name="Default" parent="org.eclipse.cdt.build.core.emptycfg">
 					<folderInfo id="cdt.managedbuild.toolchain.gnu.base.1147553630.769377568" name="/" resourcePath="">
-						<toolChain id="cdt.managedbuild.toolchain.gnu.base.1450723640" name="cdt.managedbuild.toolchain.gnu.base" superClass="cdt.managedbuild.toolchain.gnu.base">
+						<toolChain id="cdt.managedbuild.toolchain.gnu.base.1450723640" name="cdt.managedbuild.toolchain.gnu.base" resourceTypeBasedDiscovery="true" superClass="cdt.managedbuild.toolchain.gnu.base">
 							<targetPlatform archList="all" binaryParser="org.eclipse.cdt.core.ELF" id="cdt.managedbuild.target.gnu.platform.base.344670571" name="Debug Platform" osList="linux,hpux,aix,qnx" superClass="cdt.managedbuild.target.gnu.platform.base"/>
 							<builder enableAutoBuild="true" id="cdt.managedbuild.target.gnu.builder.base.836659080" keepEnvironmentInBuildfile="false" managedBuildOn="false" name="Gnu Make Builder" parallelBuildOn="true" parallelizationNumber="optimal" superClass="cdt.managedbuild.target.gnu.builder.base"/>
 							<tool id="cdt.managedbuild.tool.gnu.archiver.base.376357166" name="GCC Archiver" superClass="cdt.managedbuild.tool.gnu.archiver.base"/>
 							<tool id="cdt.managedbuild.tool.gnu.cpp.compiler.base.1961992051" name="GCC C++ Compiler" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.base">
+								<option id="gnu.cpp.compiler.option.include.paths.905421406" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/couchit/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/imtjson/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/jsonrpc_client/src}&quot;"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.2038988866" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.compiler.base.237991632" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.base">
+								<option id="gnu.c.compiler.option.include.paths.694422714" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/couchit/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/imtjson/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/jsonrpc_client/src}&quot;"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.159989219" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.c.linker.base.1918533879" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.base"/>
@@ -34,6 +46,12 @@
 								</inputType>
 							</tool>
 							<tool id="cdt.managedbuild.tool.gnu.assembler.base.2142094043" name="GCC Assembler" superClass="cdt.managedbuild.tool.gnu.assembler.base">
+								<option id="gnu.both.asm.option.include.paths.739237082" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" valueType="includePath">
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/couchit/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/imtjson/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/quark/src/jsonrpc_client/src}&quot;"/>
+								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.896508863" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
 						</toolChain>
@@ -46,13 +64,29 @@
 	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
 		<project id="quark.null.1836746754" name="quark"/>
 	</storageModule>
-	<storageModule moduleId="scannerConfiguration">
-		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-	</storageModule>
 	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
 	<storageModule moduleId="refreshScope" versionNumber="2">
 		<configuration configurationName="Default">
 			<resource resourceType="PROJECT" workspacePath="/quark"/>
 		</configuration>
+	</storageModule>
+	<storageModule moduleId="scannerConfiguration">
+		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.toolchain.gnu.base.1147553630;cdt.managedbuild.toolchain.gnu.base.1147553630.769377568;cdt.managedbuild.tool.gnu.c.compiler.base.237991632;cdt.managedbuild.tool.gnu.c.compiler.input.159989219">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
+		</scannerConfigBuildInfo>
+		<scannerConfigBuildInfo instanceId="cdt.managedbuild.toolchain.gnu.base.1147553630;cdt.managedbuild.toolchain.gnu.base.1147553630.769377568;cdt.managedbuild.tool.gnu.cpp.compiler.base.1961992051;cdt.managedbuild.tool.gnu.cpp.compiler.input.2038988866">
+			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
+			<profile id="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP">
+				<buildOutputProvider>
+					<openAction enabled="true" filePath=""/>
+					<parser enabled="true"/>
+				</buildOutputProvider>
+				<scannerInfoProvider id="specsFile">
+					<runAction arguments="-E -P -v -dD -std=c++11  &quot;${plugin_state_location}/specs.cpp&quot;" command="g++" useDefault="true"/>
+					<parser enabled="true"/>
+				</scannerInfoProvider>
+			</profile>
+		</scannerConfigBuildInfo>
 	</storageModule>
 </cproject>

@@ -1,3 +1,3 @@
 function(doc) {
-	return doc.buyOrder && doc.sellOrder && !doc._deleted;
+	return (doc.buyOrder || doc.buy) && (doc.sellOrder || doc.sell) && !doc._deleted;
 }

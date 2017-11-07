@@ -21,6 +21,7 @@
 
 #include "../common/config.h"
 #include "../quark_lib/order.h"
+#include "../version.h"
 
 namespace quark {
 
@@ -122,6 +123,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Stream.lastId", me, &MarketControl::rpcStreamLastId);
 	rpcServer.add("Stream.status", me, &MarketControl::rpcStreamStatus);
 	rpcServer.add("Status.get", me, &MarketControl::rpcStatusGet);
+	rpcServer.add("Status.queue", me, &MarketControl::rpcStatusQueue);
 	rpcServer.add("Status.clear", me, &MarketControl::rpcStatusClear);
 	rpcServer.add("Orderbook.get",me, &MarketControl::rpcOrderbookGet);
 	rpcServer.add("Config.get",me, &MarketControl::rpcConfigGet);
@@ -137,6 +139,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Control.dumpState",me, &MarketControl::rpcControlDumpState);
 	rpcServer.add("Data.deleteOld",me, &MarketControl::rpcPurgeFunction);
 	rpcServer.add("Data.replication",me, &MarketControl::rpcReplication);
+	rpcServer.add("Version.get",me, &MarketControl::rpcVersion);
 
 	return getMarketStatus();
 
@@ -252,10 +255,29 @@ public:
 };
 
 static json::Value normTrade(json::Value doc) {
-	return 	Object(doc)
-			("id",doc["_id"])
-			("_id",undefined)
-			("_rev",undefined);
+	if (doc["buy"].defined()) {
+		//novy format
+		Object t;
+		t("id",doc["_id"])
+		 ("buyOrder",doc["buy"][0])
+		 ("sellOrder",doc["sell"][0])
+		 ("buyUser",doc["buy"][1])
+		 ("sellUser",doc["sell"][1])
+		 ("dir",doc["dir"])
+		 ("price",doc["price"])
+		 ("size",doc["size"])
+		 ("time",doc["time"]);
+		return t;
+
+	} else {
+		//stary format
+		return 	Object(doc)
+				("id",doc["_id"])
+				("_id",undefined)
+				("_rev",undefined);
+	}
+
+
 }
 
 
@@ -1215,6 +1237,20 @@ void quark::MarketControl::rpcReplication(RpcRequest rq) {
 	}
 }
 
+void MarketControl::rpcVersion(RpcRequest rq) {
+	couchit::Document ver = ordersDb.get("version");
+	Object res;
+	res("daemon",ver["version"])
+		("rpc",QUARK_VERSION);
+	rq.setResult(res);
+}
+
+void MarketControl::rpcStatusQueue(RpcRequest rq) {
+	couchit::Query q = ordersDb.createQuery(View("_design/index/_view/queue"));
+	q.limit(1);
+	couchit::Result res =q.exec();
+	rq.setResult(res.getTotal());
+}
 
 }
 

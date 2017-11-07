@@ -45,14 +45,18 @@ int main(int c, char **args) {
 
 
 	bool quitAfterInit = false;
+	bool syncTrades = false;
 
 
 	if (c < 3) {
 		std::cerr << "Usage:" << std::endl << std::endl
-			      << args[0] << " [--initdb] <signature> <conf-file>" << std::endl << std::endl
+			      << args[0] << " [--initdb] [--sync-trades] <signature> <conf-file>" << std::endl << std::endl
 			      << "--initdb          Just initialize database and exit. This is useful to" << std::endl
 			      << "                    to bootstrap replicated database without starting" << std::endl
 			      << "                    the matching daemon" << std::endl
+			      << std::endl
+			      << "--sync-trades     Synchronize trades with transaction module" << std::endl
+			      << "                    (run only  when engine is stopped)" << std::endl
 			      << std::endl
 			      << "<signature>       signature of the market (prefix) " << std::endl
 			      << "<conf-file>       configuration file" << std::endl;
@@ -61,6 +65,7 @@ int main(int c, char **args) {
 
 	const char *s = getNextArg();
 	if (StrViewA(s) == "--initdb") {quitAfterInit = true; s = getNextArg();}
+	if (StrViewA(s) == "--sync-trades") {syncTrades = true; s = getNextArg();}
 	const char *signature = s;
 	s = getNextArg();
 	const char *cfgpath = s;
@@ -113,6 +118,12 @@ int main(int c, char **args) {
 	PQuarkApp app = new QuarkApp;
 	if (quitAfterInit) {
 		app->initDb(cfgjson, signature);
+	} else if (syncTrades) {
+		try {
+			app->syncTS(cfgjson, signature);
+		} catch (std::exception &e) {
+			std::cerr << "ERROR: " << e.what();
+		}
 	} else {
 		std::mutex lock;
 		bool finish = false;

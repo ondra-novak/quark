@@ -1,3 +1,4 @@
+#include <unordered_map>
 #include "tradeHelpers.h"
 
 
@@ -35,6 +36,22 @@ void extractTrade(const couchit::Value& trade,
 	tdata.seller.userId= sellorder[OrderFields::user];
 }
 
+void extractTrade2(const couchit::Value& trade,
+		IMoneySrvClient::TradeData& tdata) {
+
+	tdata.dir = OrderDir::str[trade["dir"].getString()];
+	tdata.id = trade["_id"];
+	tdata.price = trade["price"].getNumber();
+	tdata.size = trade["size"].getNumber();
+	tdata.timestamp = trade["time"].getUInt();
+	Value buy = trade["buy"];
+	tdata.buyer.context = buy[2].getBool()?OrderContext::strMargin:OrderContext::strExchange;
+	tdata.buyer.userId = buy[1];
+	Value sell = trade["sell"];
+	tdata.seller.context= sell[2].getBool()?OrderContext::strMargin:OrderContext::strExchange;
+	tdata.seller.userId= sell[1];
+}
+
 
 
 
@@ -45,33 +62,81 @@ Value findTradeCounter(couchit::CouchDB& tradeDB, Value trade) {
 
 
 void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
-		ITradeStream &moneySrvClient, const Value fromTrade, const Value toTrade,
+		ITradeStream &moneySrvClient, Value fromTrade, Value toTrade,
 		const MarketConfig &mcfg) {
 
-	Query q = tradeDB.createQuery(View::includeDocs);
-	if (fromTrade != nullptr) {
-		q.range(fromTrade, "Z");
-	} else {
-	    q.range("A","Z");
-	}
-	Result r = q.exec();
-	Value lastTradeId = fromTrade;
-	//sends reports to money server(s)
-	for (Row v : r) {
-		if (v.id == fromTrade) continue;
-		Value t = v.doc;
-		IMoneySrvClient::TradeData td;
-		Query q = ordersDB.createQuery(View::includeDocs);
-		q.keys({t["buyOrder"],t["sellOrder"]}).update();
-		Result ores = q.exec();
-		if (ores.size() != 2) {
-			throw std::runtime_error(String({"Order not found for trade:" , v.id.getString(),}).c_str());
+	bool rep;
+	Array orders;
+	do {
+		Query q = tradeDB.createQuery(View::includeDocs);
+		if (fromTrade != nullptr) {
+			q.range(fromTrade, "Z");
+		} else {
+			q.range("A","Z");
 		}
-		extractTrade(t, Row(ores[0]).doc, Row(ores[1]).doc, td);
-		moneySrvClient.reportTrade(lastTradeId, td);
-		if (v.id == toTrade) break;
-		lastTradeId = td.id;
-	}
+		q.limit(10000);
+		Result r = q.exec();
+
+		logInfo({"SYNC: loaded trades", r.size()});
+
+		Query qo = ordersDB.createQuery(View::includeDocs);
+		orders.clear();
+		std::unordered_map<Value, Value> orderMap;
+		for (Row v : r) {
+			if (v.doc["buy"].defined()) continue;
+
+			Value t = v.doc["buyOrder"];
+			if (orderMap.insert(std::make_pair(t,Value())).second == true) {
+				orders.push_back(t);
+			}
+			t = v.doc["sellOrder"];
+			if (orderMap.insert(std::make_pair(t,Value())).second == true) {
+				orders.push_back(t);
+			}
+		}
+		if (!orders.empty()) {
+			Result ro = qo.keys(orders).exec();
+
+			logInfo({"SYNC: loaded orders", ro.size()});
+
+			for (Row v : ro) {
+				orderMap[v.id] = v.doc;
+			}
+		}
+
+
+		Value lastTradeId = fromTrade;
+		rep = false;
+		//sends reports to money server(s)
+		for (Row v : r) {
+			if (v.id == fromTrade) continue;
+			if (v.id == toTrade) break;
+			rep = true;
+			Value t = v.doc;
+			IMoneySrvClient::TradeData td;
+			if (t["buy"].defined()) {//new format
+				extractTrade2(t, td);
+			} else {
+				Value buyOrder = t["buyOrder"];
+				Value sellOrder = t["sellOrder"];
+				buyOrder = orderMap[buyOrder];
+				sellOrder = orderMap[sellOrder];
+				if (!buyOrder.defined()) {
+					logError(String({"Sync reference integrity error: Buy order ",String(t["buyOrder"])," was not found in the database. Trade: " , v.id.getString()}).c_str());
+					continue;
+				}
+				if (!sellOrder.defined()) {
+					logError(String({"Sync reference integrity error: Sell order ",String(t["sellOrder"])," was not found in the database. Trade: " , v.id.getString()}).c_str());
+					continue;
+				}
+				extractTrade(t, buyOrder,sellOrder, td);
+			}
+			moneySrvClient.reportTrade(lastTradeId, td);
+			if (v.id == toTrade) break;
+			lastTradeId = td.id;
+		}
+		fromTrade = lastTradeId;
+	} while (rep);
 }
 
 Value fetchLastTrade(CouchDB& tradeDB) {

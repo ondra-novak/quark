@@ -119,6 +119,11 @@ extern json::NamedEnum<Type> str;
 
 
 namespace OrderContext {
+using json::StrViewA;
+
+extern StrViewA strExchange;
+extern StrViewA strMargin;
+
 enum Type {
 	exchange,
 	margin

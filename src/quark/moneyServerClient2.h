@@ -4,6 +4,8 @@
 
 #include "imoneysrvclient.h"
 #include <jsonrpc_client/asyncrpcclient.h>
+#include "shared/dispatcher.h"
+
 
 namespace quark {
 
@@ -30,7 +32,7 @@ public:
 	virtual void adjustBudget(json::Value user, OrderBudget &budget) override;
 	virtual bool allocBudget(json::Value user, OrderBudget total, Callback callback) override;
 	virtual void reportTrade(Value prevTrade, const TradeData &data) override;
-
+	virtual void resync() override;
 
 
 
@@ -86,6 +88,9 @@ protected:
 
 	int retryCounter = 0;
 	time_t lastDropTime = 0;
+
+	Dispatcher dispatcher;
+	std::thread workThr;
 
 public:
 

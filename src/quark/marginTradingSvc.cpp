@@ -74,10 +74,12 @@ void MarginTradingSvc::reportTrade(Value prevTrade, const TradeData &data) {
 	Changeset wrtx = posDB.createChangeset();
 	target->reportTrade(prevTrade, data);
 
+	Guard _(lock);
+
 	lastPrice = data.price;
 
 	auto balanceChange = [&](const UserInfo &user, double multp){
-		if (OrderContext::str[user.context.getString()] == OrderContext::margin) {
+		if (user.context.getString() == OrderContext::strMargin) {
 			String docUserId  = user2docid(user.userId);
 			Document doc = positionMap[Value(docUserId)];
 			doc.setID(Value(docUserId));
@@ -111,6 +113,8 @@ void MarginTradingSvc::reportTrade(Value prevTrade, const TradeData &data) {
 
 
 void MarginTradingSvc::syncPositions() {
+	Guard _(lock);
+
 	positionMap.clear();
 	Query q = posDB.createQuery(View::includeDocs);
 	q.prefixString("p.");
@@ -120,8 +124,11 @@ void MarginTradingSvc::syncPositions() {
 	}
 }
 
+void MarginTradingSvc::resync() {
+	target->resync();
+	syncPositions();
 
-
+}
 
 void MarginTradingSvc::updatePosition(Document doc) {
 	posDB.put(doc);
