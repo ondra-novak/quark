@@ -102,10 +102,11 @@ class CancelException {};
 
 void MoneyServerClient2::reportTrade(Value prevTrade, const TradeData& data) {
 
+	TradeData td(data);
 	[=] {
 		 connectIfNeed();
 		 try {
-			 reportTrade2(prevTrade, data);
+			 reportTrade2(prevTrade, td);
 		 } catch (CancelException &e) {
 			 //ignore here - we cannot do anything with it
 		 }

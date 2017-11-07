@@ -72,21 +72,5 @@
 	</storageModule>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		<scannerConfigBuildInfo instanceId="cdt.managedbuild.toolchain.gnu.base.1147553630;cdt.managedbuild.toolchain.gnu.base.1147553630.769377568;cdt.managedbuild.tool.gnu.c.compiler.base.237991632;cdt.managedbuild.tool.gnu.c.compiler.input.159989219">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
-		</scannerConfigBuildInfo>
-		<scannerConfigBuildInfo instanceId="cdt.managedbuild.toolchain.gnu.base.1147553630;cdt.managedbuild.toolchain.gnu.base.1147553630.769377568;cdt.managedbuild.tool.gnu.cpp.compiler.base.1961992051;cdt.managedbuild.tool.gnu.cpp.compiler.input.2038988866">
-			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP"/>
-			<profile id="org.eclipse.cdt.managedbuilder.core.GCCManagedMakePerProjectProfileCPP">
-				<buildOutputProvider>
-					<openAction enabled="true" filePath=""/>
-					<parser enabled="true"/>
-				</buildOutputProvider>
-				<scannerInfoProvider id="specsFile">
-					<runAction arguments="-E -P -v -dD -std=c++11  &quot;${plugin_state_location}/specs.cpp&quot;" command="g++" useDefault="true"/>
-					<parser enabled="true"/>
-				</scannerInfoProvider>
-			</profile>
-		</scannerConfigBuildInfo>
 	</storageModule>
 </cproject>
