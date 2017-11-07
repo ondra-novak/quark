@@ -110,7 +110,6 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 		//sends reports to money server(s)
 		for (Row v : r) {
 			if (v.id == fromTrade) continue;
-			if (v.id == toTrade) break;
 			rep = true;
 			Value t = v.doc;
 			IMoneySrvClient::TradeData td;
@@ -123,17 +122,19 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 				sellOrder = orderMap[sellOrder];
 				if (!buyOrder.defined()) {
 					logError(String({"Sync reference integrity error: Buy order ",String(t["buyOrder"])," was not found in the database. Trade: " , v.id.getString()}).c_str());
+					if (v.id == toTrade) break;
 					continue;
 				}
 				if (!sellOrder.defined()) {
 					logError(String({"Sync reference integrity error: Sell order ",String(t["sellOrder"])," was not found in the database. Trade: " , v.id.getString()}).c_str());
+					if (v.id == toTrade) break;
 					continue;
 				}
 				extractTrade(t, buyOrder,sellOrder, td);
 			}
 			moneySrvClient.reportTrade(lastTradeId, td);
-			if (v.id == toTrade) break;
 			lastTradeId = td.id;
+			if (v.id == toTrade) break;
 		}
 		fromTrade = lastTradeId;
 	} while (rep);
