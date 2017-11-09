@@ -1403,14 +1403,17 @@ void QuarkApp::schedulerCycle(time_t now) {
 void QuarkApp::schedulerWorker() {
 	//initial start - scheduler must start after the queue
 	bool cont = schedulerIntr.pop();
+
 	while (cont) {
+
+
 		time_t now;
 		time(&now);
 
 		Query q = ordersDb->createQuery(schedulerView);
 		q.limit(1);
 		Result res = q.exec();
-		std::size_t delay;
+		std::size_t delay = 3600;
 		for (Row r: res) {
 			size_t nx = r.key.getUInt();
 			if (nx < now) {
@@ -1420,10 +1423,18 @@ void QuarkApp::schedulerWorker() {
 				delay = nx - now;
 			}
 		}
-
+		//always wait 1 second to prevent load when many reschedulering
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+		//wait specified count of seconds or until the reschedule request arrives
 		schedulerIntr.pump_for(std::chrono::seconds(delay),[&](bool r){
 			cont = r;
 		});
+		//collect all requests (only if cont true is signaled)
+		while (cont && schedulerIntr.try_pump([&](bool r){
+			cont = r;
+		})) {}
+
+
 	}
 
 }
