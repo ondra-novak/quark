@@ -276,6 +276,8 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 					if (it->second->isSimpleUpdate(*txi.order)) {
 						updateOrderInQueues(it->second,it->second->doSimpleUpdate(*txi.order));
 					} else {
+						//state is known, (requested change) no need to track active
+						it->second->makeInactive();
 						cancelOrder(it->second);
 						matchNewOrder(txi.order,output);
 					}
@@ -287,6 +289,8 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 			case actionRemoveOrder: {
 				auto it = orders.find(txi.orderId);
 				if (it != orders.end()) {
+					//state is known, (requested) no need to track active
+					it->second->makeInactive();
 					cancelOrder(it->second);
 				} else{
 					throw OrderErrorException(txi.orderId, OrderErrorException::orderNotFound,
@@ -400,7 +404,7 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 			break;
 		case OrderType::limit:
 			if (!pairInQueue(orderbook, o, out)) {
-				if (willOrderPairNoSpreadCheck(orderbook,o)) {
+				if (willOrderPairNoSpreadCheck(orderbook,o) && flashcrashDir == o->getDir()) {
 					market.insert(updateOrder(o->changeState(Order::marketQueue)));
 				} else {
 					POrder newOrder = updateOrder(o->changeState(Order::orderbook));
@@ -488,7 +492,7 @@ bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order, OrderQu
 			//calculate spread in percent
 			std::intptr_t spreadpct = (spread*10000)/center;
 			//compare with required spread
-			if (spreadpct > maxSpread100Pct) {
+			if (spreadpct > (std::intptr_t)maxSpread100Pct) {
 
 				//std::cerr << "Spread reached: " << askval << "," << bidval << "," << spreadpct << ">" << maxSpread100Pct << std::endl;
 				//prevent execution when spread test did not pass
@@ -565,7 +569,10 @@ bool CurrentState::pairInQueue(OrderQueue &queue, const  POrder &order, Output o
 			//update maker order
 			updateOrder(maker->getId(), newMaker);
 			//note that newMaker can be null (fully executed), only if non-null is put to the orderbook
-			if (newMaker != nullptr) queue.insert(newMaker);
+			if (newMaker != nullptr)
+				queue.insert(newMaker);
+			else//remember direction of liquidity reduction - it may be detected as flashcrash
+				flashcrashDir = taker->getDir();
 
 			//update taker order
 			updateOrder(taker->getId(), newTaker);

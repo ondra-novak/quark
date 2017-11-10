@@ -70,6 +70,8 @@ public:
 
 	///maximum spread in 0.01% (150 = 1.5%)
 	std::size_t maxSpread100Pct = 0;
+	///when flashcrash is detected, which dir?
+	OrderDir::Type flashcrashDir;
 
 	///maximum spread in 0.01% (150 = 1.5%)
 	void setMaxSpread(std::size_t maxSpr) {

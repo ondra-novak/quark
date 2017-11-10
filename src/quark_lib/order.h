@@ -41,7 +41,7 @@ class Order: public RefCntObj {
 public:
 	Order();
 	Order(const OrderJsonData &data);
-
+	~Order();
 
 
 
@@ -127,6 +127,10 @@ public:
 	}
 
 
+	void makeInactive() {
+		active = false;
+	}
+
 	Value toJson() const;
 
 protected:
@@ -145,6 +149,7 @@ protected:
 	OrderDir::Type dir;
 	OrderType::Type type;
 	State state;
+	mutable bool active;
 
 
 };

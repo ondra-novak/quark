@@ -577,6 +577,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					buyOrder(OrderFields::size,marketCfg->sizeToAmount(buyRemain = tbo->getSize()-t.getSize()));
 					sellOrder(OrderFields::size,marketCfg->sizeToAmount(sellRemain = tso->getSize()-t.getSize()));
 					if (t.isFullBuy()) {
+						tbo->makeInactive();
 						if (buyRemain == 0) {
 							buyOrder(OrderFields::finished,true)
 									(OrderFields::status,Status::strExecuted);
@@ -584,6 +585,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					}
 
 					if (t.isFullSell()) {
+						tso->makeInactive();
 						if (sellRemain == 0) {
 							sellOrder(OrderFields::finished,true)
 										(OrderFields::status,Status::strExecuted);
@@ -622,6 +624,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					o(OrderFields::status,"canceled")
 					 (OrderFields::finished,true)
 					 ("cancel_code",t.getCode());
+					t.getOrder()->makeInactive();
 				}break;
 			case quark::trOrderTrigger: {
 					const quark::TradeResultOrderTrigger &t = dynamic_cast<const quark::TradeResultOrderTrigger &>(r);

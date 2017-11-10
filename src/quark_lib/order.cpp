@@ -14,11 +14,22 @@ namespace quark {
 
 static std::size_t pos_counter = 0;
 
-Order::Order() {
+Order::Order():active(false) {
 	queuePos = pos_counter++;
 }
 
+void unhandledException();
 
+Order::~Order() {
+	if (active) {
+		try {
+			throw std::runtime_error(json::String({"Destroing active/lost order: ", this->id.toString()}).c_str());
+		} catch (...) {
+			unhandledException();
+		}
+	}
+
+}
 
 
 OrderJsonData::OrderJsonData(json::Value data) {
@@ -38,7 +49,7 @@ OrderJsonData::OrderJsonData(json::Value data) {
 
 }
 
-Order::Order(const OrderJsonData &data) {
+Order::Order(const OrderJsonData &data):active(true) {
 
 
 	using namespace json;
@@ -99,6 +110,7 @@ POrder quark::Order::changeState(State newState) const {
 	Order *x = new Order(*this);
 	x->state = newState;
 	x->queuePos = pos_counter++;
+	active = false;
 	return x;
 }
 
@@ -115,6 +127,7 @@ POrder Order::updateAfterTrade(std::size_t price, std::size_t size) {
 	Order *x = new Order(*this);
 	x->size -= size;
 	x->budget -= total;
+	active = false;
 	return x;
 }
 
@@ -129,6 +142,7 @@ POrder Order::changeType(OrderType::Type newType) const {
 	Order *x = new Order(*this);
 	x->type= newType;
 	x->queuePos = pos_counter++;
+	active = false;
 	return x;
 }
 
@@ -151,6 +165,7 @@ POrder Order::doSimpleUpdate(const Order& other) const {
 	x->budget = other.budget;
 	x->data = other.data;
 	x->trailingDistance = other.trailingDistance;	
+	active = false;
 	return x;
 }
 
@@ -194,15 +209,18 @@ POrder Order::updateTrailing(std::size_t newPrice) const {
 	case OrderType::stop:
 	case OrderType::oco_limitstop:
 		newOrder = new Order(*this);
+		active = false;
 		newOrder->triggerPrice += calcTrailingMove(triggerPrice, newPrice, false);
 		break;
 	case OrderType::stoplimit:
 		newOrder = new Order(*this);
+		active = false;
 		diff = calcTrailingMove(triggerPrice, newPrice, false);
 		newOrder->triggerPrice+= diff;
 		newOrder->limitPrice+=diff;
 	case OrderType::limit:
 		newOrder = new Order(*this);
+		active = false;
 		diff = calcTrailingMove(triggerPrice, newPrice, true);
 		newOrder->limitPrice+=diff;
 		break;
