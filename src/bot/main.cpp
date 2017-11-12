@@ -106,19 +106,40 @@ bool connectRpc(RpcClient &rpc, const String &addr, const String &market) {
 
 }
 
-static std::pair<unsigned int,bool> getCountOfCommands(RpcClient &rpc) {
+struct MState {
+	std::size_t sz;
+	bool sell;
+	double p1,p2;
+};
+
+static MState getCountOfCommands(RpcClient &rpc) {
+	MState st;
+	st.p1 = 1, st.p2 = 1;
+	st.sell = false;
+	st.sz = 0;
 	RpcResult res = rpc("Orderbook.get", {});
 	if (res.isError()) {
 		logError(res);
-		return std::make_pair(0,false);
+		return st;
 	} else {
 		std::uintptr_t sz = res.size();
 		std::uintptr_t sells = 0;
+		Value prevCmd = nullptr;
 		for (Value v : res) {
-			if (v[1].getString() == "sell")
+			if (v[1].getString() == "sell") {
 				sells++;
+				if (prevCmd[1].getString() == "buy") {
+					st.p1 = v[2].getNumber();
+					st.p2 = prevCmd[2].getNumber();
+					if (st.p1 > st.p2) std::swap(st.p1, st.p2);
+				}
+			}
+			prevCmd = v;
+
 		}
-		return std::make_pair(sz, sells < sz/2);
+		st.sz = sz;
+		st.sell = sells < sz/2;
+		return st;
 	}
 }
 
@@ -205,8 +226,10 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 
 	});
 
+	bool alternate = false;
 	for(;;) {
 
+		alternate = !alternate;
 		std::this_thread::sleep_for(std::chrono::milliseconds(cfg.delay));
 		if (curPrice == 0) continue;
 
@@ -220,9 +243,9 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 			logError("Market is not running, skipping this cycle...");
 			continue;
 		}
-		auto cmdCount = getCountOfCommands(rpc);
+		MState cmdCount = getCountOfCommands(rpc);
 		double rndsize = powf(randomSize(rnd),4)+ cfg.minSize;
-		bool marketCommand = cmdCount.first >= cfg.maxOrders;
+		bool marketCommand = cmdCount.sz >= cfg.maxOrders;
 
 		Value orderType;
 		Value limitPrice;
@@ -230,17 +253,25 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 		Value size = rndsize;
 		Value user;
 		bool dirBuy;
+		bool probablyFlashcrash = false;
 
 		if (marketCommand && !lastMarketId.empty()) {
-			if (!checkMarketCommand(lastMarketId, rpc))
-				marketCommand = false;
+			if (!checkMarketCommand(lastMarketId, rpc)) {
+				probablyFlashcrash = true;
+			logWarn({"Market order delayed", lastMarketId});
+			}
 		}
 
 
-		if (marketCommand) {
+		if (probablyFlashcrash) {
+			orderType = "limit";
+			dirBuy = alternate;
+			std::uniform_real_distribution<> pp(cmdCount.p1, cmdCount.p2);
+			limitPrice = pp(rnd);
+		} else if (marketCommand) {
 
 			orderType = "market";
-			dirBuy = !cmdCount.second;
+			dirBuy = !cmdCount.sell;
 		} else {
 			double rhalf = curPrice*cfg.range/200;
 			std::normal_distribution<> randomSize(curPrice, rhalf);
@@ -281,8 +312,9 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 			logError({"Error creating request", order, Value(r)});
 		} else {
 			lastId = String(Value(r)[0]);
-			if (marketCommand) lastMarketId = lastId;
 			logInfo({"Order created", order, lastId});
+			if (marketCommand && !probablyFlashcrash)
+					lastMarketId = lastId;
 		}
 
 

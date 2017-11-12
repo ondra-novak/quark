@@ -37,6 +37,9 @@ public:
 	typedef std::priority_queue<POrder, std::vector<POrder>, OrderCompare> Queue;
 
 
+	///starts pairing after all orders are loaded
+	void startPairing();
+
 
 
 	Orders orders;
@@ -86,6 +89,7 @@ public:
 
 
 
+	bool checkSpread();
 
 	void rebuildQueues();
 	void reset();
@@ -101,9 +105,21 @@ public:
 	void matchNewOrder(POrder order, Output out);
 
 
-	bool willOrderPair(OrderQueue &queue, const POrder &order, OrderQueue::iterator *outIter = nullptr);
-	static bool willOrderPairNoSpreadCheck(OrderQueue& queue, const POrder& order, OrderQueue::iterator *outIter = nullptr);
-	static bool willOrderPairNoSpreadCheck(OrderQueue& queue, const OrderQueue::iterator &b, const POrder& order, OrderQueue::iterator *outIter = nullptr);
+	enum PairResult {
+		///no match found
+		pairNoMatch,
+		///cannot pair because spread is too large
+		pairLargeSpread,
+		///matched
+		pairMatch
+	};
+
+
+	PairResult willOrderPair(OrderQueue &queue, const POrder &order);
+
+
+
+
 	///Core function - performs pairng the order agains to orderbook
 	/**
 	 *
@@ -116,7 +132,12 @@ public:
 	 * @retval false pairing was not executed, arguments are untocuhed
 	 *
 	 */
-	bool pairInQueue(OrderQueue &queue,  const POrder &order, Output out);
+	PairResult pairInQueue(OrderQueue &queue,  const POrder &order, Output out);
+
+	void pairInMarketQueue(const POrder &order, Output out);
+
+	template<typename Queue>
+	void pairOneStep(Queue &queue, const POrder &maker, const POrder &taker, std::size_t price, Output out);
 
 	template<typename Cmp>
 	void runTriggers(OrderQueue &queue, std::size_t price, Cmp cmp, Output out);
@@ -138,6 +159,14 @@ public:
 	bool isKnownOrder(const OrderId &orderId) const;
 
 	json::Value toJson() const;
+
+
+	///true if market is stopped for initial phase
+	bool stopped = true;
+
+
+	std::size_t centerOfSpread;
+
 
 protected:
 	void resetCurrentState();

@@ -247,6 +247,10 @@ bool CurrentState::checkMaxSpreadCond() const {
 
 }
 
+void CurrentState::startPairing() {
+	stopped = false;
+}
+
 void CurrentState::startTransaction(const json::Value& txid) {
 	changes = new EngineState(txid, changes);
 	clearHistory();
@@ -296,15 +300,16 @@ void CurrentState::matching(json::Value txid, const Transaction& tx, Output outp
 			break;
 			}
 
-			if (!market.empty()) {
-				OrderQueue oldMarket((OrderCompare(&sortMarketPriority)));
-				market.swap(oldMarket);
-				for (POrder item: oldMarket) {
-					//execute orders from stopped marked queue
-					matchNewOrder(item, output);
-				}
-			}
 
+		}
+
+		if (!market.empty() && checkSpread() == false) {
+			OrderQueue oldMarket((OrderCompare(&sortMarketPriority)));
+			market.swap(oldMarket);
+			for (POrder item: oldMarket) {
+				//execute orders from stopped marked queue
+				matchNewOrder(item, output);
+			}
 		}
 
 		std::size_t endPrice = changes->getLastPrice();
@@ -380,6 +385,8 @@ void CurrentState::updateOrderInQueues(POrder oldOrder, POrder newOrder) {
 }
 
 void CurrentState::matchNewOrder(POrder order, Output out) {
+	PairResult pres;
+	POrder newOrder;
 
 
 	curQueue.push(order);
@@ -391,52 +398,77 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 		OrderQueue &stopQueue = order->getDir() == OrderDir::buy?stop_above:stop_below;
 		curQueue.pop();
 		switch (o->getType()) {
+
 		case OrderType::oco_limitstop:
-			if (!pairInQueue(orderbook, o, out)) {
-				POrder newOrder = updateOrder(o->changeState(Order::oco));
-				insorderbook.insert(newOrder);
-				stopQueue.insert(newOrder);
-			}
-			break;
-		case OrderType::limit:
-			if (!pairInQueue(orderbook, o, out)) {
-				if (willOrderPairNoSpreadCheck(orderbook,o)) {
-					market.insert(updateOrder(o->changeState(Order::marketQueue)));
-				} else {
-					POrder newOrder = updateOrder(o->changeState(Order::orderbook));
+			pres = pairInQueue(orderbook, o, out);
+			switch (pres) {
+				case pairMatch:break;
+				case pairNoMatch:
+					newOrder = updateOrder(o->changeState(Order::oco));
+					stopQueue.insert(newOrder);
 					insorderbook.insert(newOrder);
-				}
+					break;
+				case pairLargeSpread:
+					pairInMarketQueue(updateOrder(o->changeState(Order::marketQueue)),out);
+					break;
 			}
 			break;
+
+		case OrderType::limit:
+			pres = pairInQueue(orderbook, o, out);
+			switch (pres) {
+				case pairMatch:break;
+				case pairNoMatch:
+					newOrder = updateOrder(o->changeState(Order::orderbook));
+					insorderbook.insert(newOrder);
+					break;
+				case pairLargeSpread:
+					pairInMarketQueue(updateOrder(o->changeState(Order::marketQueue)),out);
+					break;
+			}
+			break;
+
 		case OrderType::maker:
-			if (willOrderPairNoSpreadCheck(orderbook, o)) {
-				cancelOrder(o);
-				out(TradeResultOrderCancel(o,OrderErrorException::orderPostLimitConflict));
-			} else {
-				POrder newOrder = updateOrder(o->changeState(Order::orderbook)->changeType(OrderType::limit));
+			pres = willOrderPair(orderbook, o);
+			if (pres == pairNoMatch) {
+				newOrder = updateOrder(o->changeState(Order::orderbook)->changeType(OrderType::limit));
 				insorderbook.insert(newOrder);
 				out(TradeResultOrderTrigger(newOrder));
+			} else {
+				cancelOrder(o);
+				out(TradeResultOrderCancel(o,OrderErrorException::orderPostLimitConflict));
 			}
 			break;
+
 		case OrderType::stop:
 		case OrderType::stoplimit:
 			stopQueue.insert(
 					updateOrder(o->changeState(Order::stopQueue)));
 			break;
+
 		case OrderType::fok:
-			if (!pairInQueue(orderbook, o, out)) {
+			if (pairInQueue(orderbook, o, out) != pairMatch) {
 				throw OrderErrorException(o->getId(), OrderErrorException::orderFOKFailed, "FOK failed");
 			}
 			break;
+
 		case OrderType::market:
-			if (!pairInQueue(orderbook, o, out)) {
-				market.insert(updateOrder(o->changeState(Order::marketQueue)));
+			if (pairInQueue(orderbook, o, out) != pairMatch) {
+				pairInMarketQueue(updateOrder(o->changeState(Order::marketQueue)),out);
 			}
 			break;
+
 		case OrderType::ioc:
-			if (!pairInQueue(orderbook, o, out)) {
-				cancelOrder(o);
-				out(TradeResultOrderCancel(o, OrderErrorException::orderIOCCanceled));
+			pres = pairInQueue(orderbook, o, out);
+			switch (pres) {
+				case pairMatch:break;
+				case pairLargeSpread:
+					pairInMarketQueue(updateOrder(o->changeState(Order::marketQueue)),out);
+					break;
+				case pairNoMatch:
+					cancelOrder(o);
+					out(TradeResultOrderCancel(o, OrderErrorException::orderIOCCanceled));
+					break;
 			}
 			break;
 
@@ -447,37 +479,17 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 
 }
 
+bool CurrentState::checkSpread() {
 
-bool CurrentState::willOrderPairNoSpreadCheck(OrderQueue& queue, const POrder& order, OrderQueue::iterator *outIter) {
-	//pick begin of orderbook
-	auto b = queue.begin();
+	//get ask pointer
+	auto ask = orderbook_ask.begin();
+	//get bid pointer
+	auto bid = orderbook_bid.begin();
 
-	return willOrderPairNoSpreadCheck(queue,b,order,outIter);
-}
+	//both pointers are defined
+	if (ask != orderbook_ask.end() && bid != orderbook_bid.end()) {
 
-bool CurrentState::willOrderPairNoSpreadCheck(OrderQueue& queue, const OrderQueue::iterator &b, const POrder& order, OrderQueue::iterator *outIter) {
-	//if there is no order, exit and prevent pair
-	if (b == queue.end()) return false;
-	//store iterator
-	if (outIter) *outIter = b;
-	//market order can be executed immediately
-	if (order->getType() == OrderType::market) return true;
-	//otherwise, check, whether order cross other other in the orderbook queue
-	//first part means that order will executed, if there is order before the current order in the orderbook
-	//however, we still can perform execution in case that order is after the current order but at the same price
-	return queue.inOrder(*b, order) || (*b)->getLimitPrice() == order->getLimitPrice();
-}
-
-bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order, OrderQueue::iterator *outIter) {
-
-	if (maxSpread100Pct) {
-		//get ask pointer
-		auto ask = orderbook_ask.begin();
-		//get bid pointer
-		auto bid = orderbook_bid.begin();
-
-		//both pointers are defined
-		if (ask != orderbook_ask.end() && bid != orderbook_bid.end()) {
+		if (maxSpread100Pct) {
 			std::intptr_t askval = (*ask)->getLimitPrice();
 
 			std::intptr_t bidval = (*bid)->getLimitPrice();
@@ -487,117 +499,167 @@ bool CurrentState::willOrderPair(OrderQueue& queue, const POrder& order, OrderQu
 			std::intptr_t center = (askval + bidval)/2;
 			//calculate spread in percent
 			std::intptr_t spreadpct = (spread*10000)/center;
+
+
+			centerOfSpread = center;
+
 			//compare with required spread
-			if (spreadpct > maxSpread100Pct) {
+			return spreadpct > maxSpread100Pct;
+		} else {
+			return false;
+		}
+	} else {
+		return true;
+	}
 
-				//std::cerr << "Spread reached: " << askval << "," << bidval << "," << spreadpct << ">" << maxSpread100Pct << std::endl;
-				//prevent execution when spread test did not pass
-				return false;
-			}
-			//prepare space for iterator
-			OrderQueue::iterator b;
-			//depend on required queue pick correct iterator
-			if (&orderbook_ask == &queue) {
+}
 
-				return willOrderPairNoSpreadCheck(queue,ask,order,outIter);
+CurrentState::PairResult CurrentState::willOrderPair(OrderQueue& queue, const POrder& order) {
 
-			}else if (&orderbook_bid == &queue) {
+	//pick begin of orderbook
+	auto b = queue.begin();
 
-				return willOrderPairNoSpreadCheck(queue,bid,order,outIter);
+	//if there is no order, exit and prevent pair
+	if (b == queue.end()) return pairNoMatch;
 
-			} else {
-				//this should not happen, however run fallback function
-				return willOrderPairNoSpreadCheck(queue,order,outIter);
-			}
+	//market order can be executed immediately
+	if (order->getType() != OrderType::market) {
+
+		const POrder &a = *b;
+		//check for matching order
+		if (!queue.inOrder(a, order) &&  a->getLimitPrice() != order->getLimitPrice())
+
+			//nothing found, no match
+			return pairNoMatch;
+	}
+
+	if (stopped) {
+		return pairLargeSpread;
+	}
+
+	//so match can be found
+	//check spread now
+	return checkSpread()?pairLargeSpread:pairMatch;
+
+
+}
+
+template<typename Q>
+void CurrentState::pairOneStep(Q &queue, const POrder &maker, const POrder &taker, std::size_t curPrice, Output out) {
+	//matching size
+	std::size_t commonSize = std::min(maker->getSizeAtPrice(curPrice), taker->getSizeAtPrice(curPrice));
+
+	//we need pair orders of different users
+	if (maker->getUser() != taker->getUser()) {
+
+
+		//update maker command
+		POrder newMaker = maker->updateAfterTrade(curPrice, commonSize);
+		//update taker command
+		POrder newTaker = taker->updateAfterTrade(curPrice, commonSize);
+
+		POrder buy, sell;
+		bool fullBuy, fullSell;
+		if (taker->getDir() == OrderDir::buy) {
+			buy = taker;
+			sell = maker;
+			fullBuy = newTaker == nullptr;
+			fullSell = newMaker == nullptr;
+		} else {
+			buy = maker;
+			sell = taker;
+			fullBuy = newMaker == nullptr;
+			fullSell = newTaker == nullptr;
+
+		}
+
+		//report trade (exception can be thrown here)
+		out(TradeResultTrade(buy, sell, fullBuy, fullSell,
+							 commonSize,
+							 curPrice,
+							 taker->getDir()));
+
+		//erase this order from the orderbook
+		queue.erase(maker);
+
+		//update maker order
+		updateOrder(maker->getId(), newMaker);
+		//note that newMaker can be null (fully executed), only if non-null is put to the orderbook
+		if (newMaker != nullptr) queue.insert(newMaker);
+
+		//update taker order
+		updateOrder(taker->getId(), newTaker);
+		//only non-null orders are put back to the market queue
+		if (newTaker != nullptr) curQueue.push(newTaker);
+
+		changes->setLastPrice(curPrice);
+
+		//run stop triggers
+		runTriggers(stop_above,curPrice, std::greater<std::size_t>(),out);
+		runTriggers(stop_below,curPrice, std::less<std::size_t>(),out);
+
+
+	} else {
+		//self trading is not allowed
+		//larger order cancels smaller
+		if (maker->getSize() >= taker->getSize()) {
+			updateOrder(taker->getId(), nullptr);
+			out(TradeResultOrderCancel(taker, OrderErrorException::orderSelfTradingCanceled));
+		}
+		if (maker->getSize() <= taker->getSize()) {
+			queue.erase(maker);
+			updateOrder(maker->getId(), nullptr);
+			out(TradeResultOrderCancel(maker, OrderErrorException::orderSelfTradingCanceled));
 		}
 	}
 
-	return willOrderPairNoSpreadCheck(queue,order,outIter);
 }
 
 
-bool CurrentState::pairInQueue(OrderQueue &queue, const  POrder &order, Output out) {
-	OrderQueue::iterator b;
-	if (willOrderPair(queue, order, &b)) {
+void CurrentState::pairInMarketQueue(const POrder& order, Output out) {
 
-		POrder maker = *b;
-		POrder taker = order;
-
-		//determine trading parameters
-		//price
-		std::size_t curPrice = maker->getLimitPrice();
-		//matching size
-		std::size_t commonSize = std::min(maker->getSizeAtPrice(curPrice), taker->getSizeAtPrice(curPrice));
-
-		//we need pair orders of different users
-		if (maker->getUser() != taker->getUser()) {
-
-
-			//update maker command
-			POrder newMaker = maker->updateAfterTrade(curPrice, commonSize);
-			//update taker command
-			POrder newTaker = taker->updateAfterTrade(curPrice, commonSize);
-
-			POrder buy, sell;
-			bool fullBuy, fullSell;
-			if (taker->getDir() == OrderDir::buy) {
-				buy = taker;
-				sell = maker;
-				fullBuy = newTaker == nullptr;
-				fullSell = newMaker == nullptr;
-			} else {
-				buy = maker;
-				sell = taker;
-				fullBuy = newMaker == nullptr;
-				fullSell = newTaker == nullptr;
-
-			}
-
-			//report trade (exception can be thrown here)
-			out(TradeResultTrade(buy, sell, fullBuy, fullSell,
-								 commonSize,
-								 maker->getLimitPrice(),
-								 taker->getDir()));
-
-			//erase this order from the orderbook
-			queue.erase(b);
-
-			//update maker order
-			updateOrder(maker->getId(), newMaker);
-			//note that newMaker can be null (fully executed), only if non-null is put to the orderbook
-			if (newMaker != nullptr) queue.insert(newMaker);
-
-			//update taker order
-			updateOrder(taker->getId(), newTaker);
-			//only non-null orders are put back to the market queue
-			if (newTaker != nullptr) curQueue.push(newTaker);
-
-			//run stop triggers
-			runTriggers(stop_above,curPrice, std::greater<std::size_t>(),out);
-			runTriggers(stop_below,curPrice, std::less<std::size_t>(),out);
-
-
-			//pairing successful
-			return true;
+		auto iter = market.begin();
+		if (iter == market.end() || stopped) {
+			market.insert(order);
+			return;
 		} else {
-			//self trading is not allowed
-			//larger order cancels smaller
-			if (maker->getSize() >= taker->getSize()) {
-				updateOrder(taker->getId(), nullptr);
-				out(TradeResultOrderCancel(taker, OrderErrorException::orderSelfTradingCanceled));
+			const POrder &a = *iter;
+			if (a->getDir() == order->getDir()) {
+				market.insert(order);
+				return;
 			}
-			if (maker->getSize() <= taker->getSize()) {
-				queue.erase(b);
-				updateOrder(maker->getId(), nullptr);
-				out(TradeResultOrderCancel(maker, OrderErrorException::orderSelfTradingCanceled));
+			else {
+
+
+				POrder maker = *iter;
+				POrder taker = order;
+
+				pairOneStep(market, maker, taker, centerOfSpread, out);
 			}
 		}
-	} else {
-		//no pairing is possible at this cointion
-		return false;
-	}
+
+}
 
 
+CurrentState::PairResult CurrentState::pairInQueue(OrderQueue &queue, const  POrder &order, Output out) {
+
+	CurrentState::PairResult r = willOrderPair(queue, order);
+
+	if (r != pairMatch) return r;
+
+	OrderQueue::iterator b = queue.begin();
+
+	POrder maker = *b;
+	POrder taker = order;
+
+	//determine trading parameters
+	//price
+	std::size_t curPrice = maker->getLimitPrice();
+
+	pairOneStep(queue, maker, taker, curPrice, out);
+
+	//pairing successful
+	return pairMatch;
 
 
 }

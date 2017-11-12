@@ -251,6 +251,7 @@ public:
 		if (filter.defined() && doc["user"]!=filter["user"]) return;
 		rq.sendNotify(streamName,{seqNum.toString(),OrderControl::normFields(doc)});
 	}
+	~OrderFeed() {stop();}
 
 };
 
@@ -292,6 +293,7 @@ public:
 		rq.sendNotify(streamName,{seqNum.toString(),normTrade(doc)});
 	}
 
+	~TradesFeed() {stop();}
 };
 
 class MarketControl::PosFeed: public BasicFeed {
@@ -309,6 +311,7 @@ public:
 				("_rev",undefined)
 		});
 	}
+	~PosFeed() {stop();}
 };
 
 class MarketControl::OrderbookFeed: public BasicFeed {
@@ -327,6 +330,7 @@ public:
 		bool finished = doc["finished"].getBool();
 		rq.sendNotify(streamName,{seq,{doc["_id"],doc["dir"],doc["limitPrice"],finished?Value(0):doc["size"]}});
 	}
+	~OrderbookFeed() {stop();}
 
 };
 
@@ -365,7 +369,7 @@ public:
 
 		rq.sendNotify(streamName, {seq, out});
 	}
-
+	~StatusFeed() {stop();}
 };
 
 static Value stream_turnOffArgs = Value(json::array,{false});
@@ -449,7 +453,7 @@ void MarketControl::rpcStreamStatus(RpcRequest rq) {
 	} else if (rq.checkArgs(stream_turnOnSimple)) {
 
 		couchit::Query q = ordersDb.createQuery(View::includeDocs);
-		couchit::Result r = q.key("error").exec();
+		couchit::Result r = q.key("error").needUpdateSeq().exec();
 		Value errdoc = nullptr;
 		if (!r.empty()) {
 			errdoc = couchit::Row(r[0]).doc;
@@ -518,7 +522,7 @@ void MarketControl::FeedControl::start() {
 			if (!since.defined() && initialView != nullptr)
 			{
 				Query q = db.createQuery(*initialView);
-				Result r = q.exec();
+				Result r = q.needUpdateSeq().exec();
 				for (Row rw : r) {
 					onEvent(r.getUpdateSeq(),rw.doc);
 					lastDoc = rw.doc;
@@ -932,7 +936,7 @@ void MarketControl::callDaemonService(String command,
 	req.sendNotify("control",Object("command",command)("params",params)("id",req.getId())("order", doc.getID()));
 	couchit::Query q = ordersDb.createQuery(couchit::View::includeDocs);
 	q.key(id);
-	couchit::Result r = q.exec();
+	couchit::Result r = q.needUpdateSeq().exec();
 	couchit::SeqNumber ofs = r.getUpdateSeq();
 	couchit::Row rw = r[0];
 	doc = rw.doc;

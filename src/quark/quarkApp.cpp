@@ -789,7 +789,8 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 	logInfo("[Queue] Reading orders ... (can take long time)");
 
 	Query q = ordersDb->createQuery(queueView);
-	Result res = q.exec();
+	Result res = q.needUpdateSeq().exec();
+	logInfo({"[Queue] Orders loaded", res.size()});
 	for (Value v : res) {
 		loopBody(v);
 		if (canceled) break;
@@ -799,6 +800,8 @@ void QuarkApp::monitorQueue(std::promise<Action> &exitFnStore) {
 		logInfo("[Queue] Processing new orders");
 
 		schedulerIntr.push(true);
+
+		[=]{coreState.startPairing();} >> dispatcher;
 
 
 		chfeed.setFilter(queueFilter).since(res.getUpdateSeq()).setTimeout(-1)
