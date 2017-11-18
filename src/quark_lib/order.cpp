@@ -242,6 +242,20 @@ json::Value Order::toJson() const {
 			("state", orderStateStr[state]);
 }
 
+bool Order::checkCond(std::size_t curPrice) const {
+	if (type == OrderType::limit || type == OrderType::oco_limitstop || type == OrderType::maker) {
+		switch (dir) {
+		case OrderDir::buy:
+			return limitPrice > curPrice;
+		case OrderDir::sell:
+			return limitPrice < curPrice;
+		default:
+			throw std::runtime_error("Order unknown direction");
+		}
+	} else {
+		return true;
+	}
+}
 
 } /* namespace quark */
 

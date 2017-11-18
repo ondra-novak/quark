@@ -576,18 +576,18 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					Document &sellOrder = o2u[tso->getId()];
 					buyOrder(OrderFields::size,marketCfg->sizeToAmount(buyRemain = tbo->getSize()-t.getSize()));
 					sellOrder(OrderFields::size,marketCfg->sizeToAmount(sellRemain = tso->getSize()-t.getSize()));
-					if (t.isFullBuy()) {
-						if (buyRemain == 0) {
+					if (t.isFullBuy() && buyRemain == 0) {
 							buyOrder(OrderFields::finished,true)
 									(OrderFields::status,Status::strExecuted);
-						}
+					}else {
+							buyOrder(OrderFields::status,Status::strActive);
 					}
 
-					if (t.isFullSell()) {
-						if (sellRemain == 0) {
+					if (t.isFullSell() && sellRemain == 0) {
 							sellOrder(OrderFields::finished,true)
 										(OrderFields::status,Status::strExecuted);
-						}
+					}else {
+						sellOrder(OrderFields::status,Status::strActive);
 					}
 					Document trade;
 
@@ -629,6 +629,11 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					OrderType::Type ty = t.getOrder()->getType();
 					StrViewA st = OrderType::str[ty];
 					o("type", st);
+				}break;
+			case quark::trOrderDelayed: {
+					const quark::TradeResultOrderDelayStatus &t = dynamic_cast<const quark::TradeResultOrderDelayStatus &>(r);
+					Document &o = o2u[t.getOrder()->getId()];
+					o(OrderFields::status, Status::strDelayed);
 				}break;
 			}
 }

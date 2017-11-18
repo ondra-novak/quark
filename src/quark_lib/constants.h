@@ -99,7 +99,8 @@ enum Type {
 	rejected,
 	executed,
 	accepted,
-	canceled
+	canceled,
+	delayed
 };
 
 using json::StrViewA;
@@ -112,6 +113,7 @@ extern StrViewA strExecuted;
 extern StrViewA strRejected;
 extern StrViewA strAccepted;
 extern StrViewA strCanceled;
+extern StrViewA strDelayed;
 
 extern json::NamedEnum<Type> str;
 

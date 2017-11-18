@@ -90,6 +90,7 @@ StrViewA strExecuted("executed");
 StrViewA strRejected("rejected");
 StrViewA strAccepted("accepted");
 StrViewA strCanceled("canceled");
+StrViewA strDelayed("delayed");
 
 
 json::NamedEnum<Type> str({
@@ -99,7 +100,8 @@ json::NamedEnum<Type> str({
 	{executed, strExecuted},
 	{rejected, strRejected},
 	{canceled, strCanceled},
-	{accepted, strAccepted}}
+	{accepted, strAccepted},
+	{delayed, strDelayed}}
 );
 }
 

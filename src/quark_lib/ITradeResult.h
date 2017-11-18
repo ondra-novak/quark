@@ -9,7 +9,8 @@ enum TradeRestType {
 	trOrderMove,
 	trOrderCancel,
 	trOrderTrigger,
-	trOrderOk
+	trOrderOk,
+	trOrderDelayed
 };
 
 class ITradeResult {
@@ -136,6 +137,22 @@ class TradeResultOrderTrigger: public AbstractTradeResult {
 public:
 	TradeResultOrderTrigger(POrder order)
 		:AbstractTradeResult(trOrderTrigger),order(order) {}
+
+
+	const POrder& getOrder() const {
+		return order;
+	}
+
+
+protected:
+	POrder order;
+
+};
+
+class TradeResultOrderDelayStatus: public AbstractTradeResult {
+public:
+	TradeResultOrderDelayStatus(POrder order)
+		:AbstractTradeResult(trOrderDelayed),order(order) {}
 
 
 	const POrder& getOrder() const {

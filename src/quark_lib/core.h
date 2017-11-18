@@ -175,6 +175,8 @@ protected:
 
 private:
 	void startTransaction(const json::Value& txid);
+
+	class FakeQueue;
 };
 
 

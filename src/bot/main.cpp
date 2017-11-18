@@ -182,6 +182,7 @@ bool checkMarketCommand(StrViewA lastId, RpcClient &rpc) {
 		return true;
 	} else {
 		Value v = res;
+		logDebug(v);
 		return v["finished"].getBool();
 	}
 
@@ -266,8 +267,12 @@ void runBot(RpcClient &rpc, const BotConfig &cfg) {
 		if (probablyFlashcrash) {
 			orderType = "limit";
 			dirBuy = alternate;
-			std::uniform_real_distribution<> pp(cmdCount.p1, cmdCount.p2);
-			limitPrice = pp(rnd);
+			if ((cmdCount.p2 - cmdCount.p1)/((cmdCount.p2 + cmdCount.p1)/2) < 0.0001) {
+				orderType = "market";
+			} else {
+				std::uniform_real_distribution<> pp(cmdCount.p1, cmdCount.p2);
+				limitPrice = pp(rnd);
+			}
 		} else if (marketCommand) {
 
 			orderType = "market";

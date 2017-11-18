@@ -357,6 +357,9 @@ void CurrentState::enumOrderQueues(const POrder &order, const Fn &fn) {
 		}
 		else throw std::runtime_error("corrupted order direction");
 		break;
+	case Order::prepared:
+		//nowhere yet
+		break;
 	default:
 		throw std::runtime_error("corrupted order state");
 	}
@@ -366,11 +369,9 @@ void CurrentState::enumOrderQueues(const POrder &order, const Fn &fn) {
 
 void CurrentState::cancelOrder(POrder order) {
 
-	if (order->getState() != Order::prepared) {
-		enumOrderQueues(order, [=](OrderQueue &q){
-			q.erase(order);
-		});
-	}
+	enumOrderQueues(order, [=](OrderQueue &q){
+		q.erase(order);
+	});
 	updateOrder(order->getId(), nullptr);
 }
 
@@ -393,9 +394,9 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 	while (!curQueue.empty()) {
 		POrder o = curQueue.top();
 
-		OrderQueue &orderbook = order->getDir() == OrderDir::buy?orderbook_ask:orderbook_bid;
-		OrderQueue &insorderbook = order->getDir() == OrderDir::buy?orderbook_bid:orderbook_ask;
-		OrderQueue &stopQueue = order->getDir() == OrderDir::buy?stop_above:stop_below;
+		OrderQueue &orderbook = o->getDir() == OrderDir::buy?orderbook_ask:orderbook_bid;
+		OrderQueue &insorderbook = o->getDir() == OrderDir::buy?orderbook_bid:orderbook_ask;
+		OrderQueue &stopQueue = o->getDir() == OrderDir::buy?stop_above:stop_below;
 		curQueue.pop();
 		switch (o->getType()) {
 
@@ -615,17 +616,32 @@ void CurrentState::pairOneStep(Q &queue, const POrder &maker, const POrder &take
 
 }
 
+class CurrentState::FakeQueue {
+public:
+	FakeQueue(CurrentState &owner):owner(owner) {}
+	void erase(const POrder &o) {
+		owner.market.erase(o);
+	}
+	void insert(const POrder &o) {
+		owner.curQueue.push(o);
+	}
+
+private:
+	CurrentState &owner;
+};
 
 void CurrentState::pairInMarketQueue(const POrder& order, Output out) {
 
 		auto iter = market.begin();
 		if (iter == market.end() || stopped) {
 			market.insert(order);
+			out(TradeResultOrderDelayStatus(order));
 			return;
 		} else {
 			const POrder &a = *iter;
 			if (a->getDir() == order->getDir()) {
 				market.insert(order);
+				out(TradeResultOrderDelayStatus(order));
 				return;
 			}
 			else {
@@ -634,7 +650,17 @@ void CurrentState::pairInMarketQueue(const POrder& order, Output out) {
 				POrder maker = *iter;
 				POrder taker = order;
 
-				pairOneStep(market, maker, taker, centerOfSpread, out);
+				checkSpread();
+
+				FakeQueue q(*this);
+
+				if (maker->checkCond(centerOfSpread)) {
+					pairOneStep(q, maker, taker, centerOfSpread, out);
+				} else {
+					matchNewOrder(maker, out);
+					pairInMarketQueue(order,out);
+				}
+
 			}
 		}
 

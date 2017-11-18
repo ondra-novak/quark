@@ -126,6 +126,8 @@ public:
 		return data;
 	}
 
+	bool checkCond(std::size_t curPrice) const;
+
 
 	Value toJson() const;
 
