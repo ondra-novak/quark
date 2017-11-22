@@ -327,7 +327,7 @@ public:
 	}
 	static void sendNotify(RpcRequest &rq, StrViewA streamName, Value doc, Value seq) {
 		Object ntf;
-		bool zerosize = doc["state"].getString() != "active" || doc["finished"].getBool() || doc["_deleted"].getBool();
+		bool zerosize = doc["status"].getString() != "active" || doc["finished"].getBool() || doc["_deleted"].getBool();
 		rq.sendNotify(streamName,{seq,{doc["_id"],doc["dir"],doc["limitPrice"],zerosize?Value(0):doc["size"]}});
 	}
 	~OrderbookFeed() {stop();}
