@@ -619,6 +619,7 @@ void CurrentState::pairOneStep(Q &queue, const POrder &maker, const POrder &take
 			queue.erase(maker);
 			updateOrder(maker->getId(), nullptr);
 			out(TradeResultOrderCancel(maker, OrderErrorException::orderSelfTradingCanceled));
+			curQueue.push(taker);
 		}
 	}
 
