@@ -454,8 +454,16 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 			break;
 
 		case OrderType::market:
-			if (pairInQueue(orderbook, o, out) != pairMatch) {
+			pres = pairInQueue(orderbook, o, out);
+			switch (pres) {
+			case pairMatch:break;
+			case pairLargeSpread:
 				pairInMarketQueue(updateOrder(o->changeState(Order::marketQueue)),out);
+				break;
+			case pairNoMatch:
+				cancelOrder(o);
+				out(TradeResultOrderCancel(o, OrderErrorException::emptyOrderbook));
+				break;
 			}
 			break;
 
@@ -468,7 +476,7 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 					break;
 				case pairNoMatch:
 					cancelOrder(o);
-					out(TradeResultOrderCancel(o, OrderErrorException::orderIOCCanceled));
+					out(TradeResultOrderCancel(o, OrderErrorException::emptyOrderbook));
 					break;
 			}
 			break;
@@ -510,7 +518,7 @@ bool CurrentState::checkSpread() {
 			return false;
 		}
 	} else {
-		return true;
+		return false;
 	}
 
 }
@@ -653,6 +661,7 @@ void CurrentState::pairInMarketQueue(const POrder& order, Output out) {
 				checkSpread();
 
 				FakeQueue q(*this);
+
 
 				if (maker->checkCond(centerOfSpread)) {
 					pairOneStep(q, maker, taker, centerOfSpread, out);
