@@ -476,7 +476,7 @@ void CurrentState::matchNewOrder(POrder order, Output out) {
 					break;
 				case pairNoMatch:
 					cancelOrder(o);
-					out(TradeResultOrderCancel(o, OrderErrorException::emptyOrderbook));
+					out(TradeResultOrderCancel(o, OrderErrorException::orderIOCCanceled));
 					break;
 			}
 			break;
