@@ -8,23 +8,25 @@ namespace quark {
 
 class MarketConfig: public json::RefCntObj {
 public:
+
+
 	MarketConfig(json::Value v);
 
 	/// size of 1 pip (0.01 means that smallest step is 0.01)
-	double pipSize;
+	double currencyStep;
 	/// order size granuality
-	double granuality;
+	double assetStep;
 
 	///minimum price allowed as limit/stop price
-	double minPrice;
+	double currencyMin;
 	///maximum price allowed as limit/stop price
-	double maxPrice;
+	double currencyMax;
 	///minimum order size
-	double minSize;
+	double assetMin;
 	///maximum order size
-	double maxSize;
+	double assetMax;
 	///maximum total budget for the order (maxPrice * maxSize)
-	double maxBudget;
+	double budgetMax;
 
 	///maximum allowed spread in per cents, if spread is larger, market orders are paused
 	double maxSpreadPct;
@@ -32,14 +34,14 @@ public:
 	double maxSlippagePct;
 
 
-	std::size_t priceToPip(double price) const;
-	double pipToPrice(std::size_t pip) const;
+	std::size_t priceToCurrency(double price) const;
+	double currencyToPrice(std::size_t pip) const;
 
-	std::size_t amountToSize(double amount) const;
-	double sizeToAmount(std::size_t size) const;
+	std::size_t assetToSize(double amount) const;
+	double sizeToAsset(std::size_t size) const;
 
-	std::size_t budgetToPip(double budget)const ;
-	double pipToBudget(std::size_t pip)const;
+	std::size_t budgetToFixPt(double budget)const ;
+	double budgetFromFixPt(std::size_t pip)const;
 
 
 	double adjustSize(double size)const;

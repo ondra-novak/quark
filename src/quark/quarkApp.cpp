@@ -563,8 +563,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 	switch (r.getType()) {
 			case quark::trTrade: {
 					const quark::TradeResultTrade &t = dynamic_cast<const quark::TradeResultTrade &>(r);
-					double price = marketCfg->pipToPrice(t.getPrice());
-					double amount = marketCfg->sizeToAmount(t.getSize());
+					double price = marketCfg->currencyToPrice(t.getPrice());
+					double amount = marketCfg->sizeToAsset(t.getSize());
 					std::size_t buyRemain;
 					std::size_t sellRemain;
 					Value dir = OrderDir::str[t.getDir()];
@@ -574,8 +574,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 
 					Document &buyOrder = o2u[tbo->getId()];
 					Document &sellOrder = o2u[tso->getId()];
-					buyOrder(OrderFields::size,marketCfg->sizeToAmount(buyRemain = tbo->getSize()-t.getSize()));
-					sellOrder(OrderFields::size,marketCfg->sizeToAmount(sellRemain = tso->getSize()-t.getSize()));
+					buyOrder(OrderFields::size,marketCfg->sizeToAsset(buyRemain = tbo->getSize()-t.getSize()));
+					sellOrder(OrderFields::size,marketCfg->sizeToAsset(sellRemain = tso->getSize()-t.getSize()));
 					if (t.isFullBuy() && buyRemain == 0) {
 							buyOrder(OrderFields::finished,true)
 									(OrderFields::status,Status::strExecuted);
@@ -611,8 +611,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					const quark::TradeResultOderMove &t = dynamic_cast<const quark::TradeResultOderMove &>(r);
 					POrder o = t.getOrder();
 					Document &changes = o2u[o->getId()];
-					if (o->getLimitPrice()) changes(OrderFields::limitPrice,marketCfg->pipToPrice(o->getLimitPrice()));
-					if (o->getTriggerPrice()) changes(OrderFields::stopPrice,marketCfg->pipToPrice(o->getTriggerPrice()));
+					if (o->getLimitPrice()) changes(OrderFields::limitPrice,marketCfg->currencyToPrice(o->getLimitPrice()));
+					if (o->getTriggerPrice()) changes(OrderFields::stopPrice,marketCfg->currencyToPrice(o->getTriggerPrice()));
 				}break;
 			case quark::trOrderOk: {
 				}break;
@@ -658,50 +658,50 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	odata.dir = String(order["dir"]);
 	odata.type = String(order["type"]);
 	x = order[OrderFields::size].getNumber();
-	if (x < marketCfg->minSize)
+	if (x < marketCfg->assetMin)
 		throw OrderRangeError(odata.id, OrderRangeError::minOrderSize,
-				marketCfg->minSize);
+				marketCfg->assetMin);
 
-	if (x > marketCfg->maxSize)
+	if (x > marketCfg->assetMax)
 		throw OrderRangeError(odata.id, OrderRangeError::maxOrderSize,
-				marketCfg->maxSize);
+				marketCfg->assetMax);
 
-	odata.size = marketCfg->amountToSize(x);
+	odata.size = marketCfg->assetToSize(x);
 	if (odata.size == 0) {
 		throw OrderRangeError(odata.id, OrderRangeError::minOrderSize,0);
 	}
 	if ((v = order[OrderFields::limitPrice]).defined()) {
 		x = v.getNumber();
-		if (x < marketCfg->minPrice)
+		if (x < marketCfg->currencyMin)
 			throw OrderRangeError(odata.id, OrderRangeError::minPrice,
-					marketCfg->minPrice);
+					marketCfg->currencyMin);
 
-		if (x > marketCfg->maxPrice)
+		if (x > marketCfg->currencyMax)
 			throw OrderRangeError(odata.id, OrderRangeError::maxPrice,
-					marketCfg->maxPrice);
+					marketCfg->currencyMax);
 
-		odata.limitPrice = marketCfg->priceToPip(x);
+		odata.limitPrice = marketCfg->priceToCurrency(x);
 	} else {
 		odata.limitPrice = 0;
 	}
 	if ((v = order[OrderFields::stopPrice]).defined()) {
 		x = v.getNumber();
-		if (x < marketCfg->minPrice)
+		if (x < marketCfg->currencyMin)
 			throw OrderRangeError(odata.id, OrderRangeError::minPrice,
-					marketCfg->minPrice);
+					marketCfg->currencyMin);
 
-		if (x > marketCfg->maxPrice)
+		if (x > marketCfg->currencyMax)
 			throw OrderRangeError(odata.id, OrderRangeError::maxPrice,
-					marketCfg->maxPrice);
+					marketCfg->currencyMax);
 
-		odata.stopPrice = marketCfg->priceToPip(x);
+		odata.stopPrice = marketCfg->priceToCurrency(x);
 	} else {
 		odata.stopPrice = 0;
 	}
 
 	double totalBudget = b.marginLong+b.marginShort+b.currency;
-	odata.budget = marketCfg->budgetToPip(totalBudget);
-	odata.trailingDistance = marketCfg->priceToPip(
+	odata.budget = marketCfg->budgetToFixPt(totalBudget);
+	odata.trailingDistance = marketCfg->priceToCurrency(
 			order[OrderFields::trailingDistance].getNumber());
 	odata.domPriority = order[OrderFields::domPriority].getInt();
 	odata.queuePriority = order[OrderFields::queuePriority].getInt();
