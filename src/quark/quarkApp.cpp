@@ -621,7 +621,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					Document &o = o2u[t.getOrder()->getId()];
 					o(OrderFields::status,"canceled")
 					 (OrderFields::finished,true)
-					 ("cancel_code",t.getCode());
+					(OrderFields::error, Object("code",t.getCode()));
 				}break;
 			case quark::trOrderTrigger: {
 					const quark::TradeResultOrderTrigger &t = dynamic_cast<const quark::TradeResultOrderTrigger &>(r);

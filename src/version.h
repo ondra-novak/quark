@@ -1,1 +1,1 @@
-#define QUARK_VERSION "1.1.6"
+#define QUARK_VERSION "1.1.8"

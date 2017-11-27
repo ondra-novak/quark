@@ -87,6 +87,7 @@ Order::Order(const OrderJsonData &data) {
 	domPriority = data.domPriority;
 	queuePriority = data.queuePriority;
 	queuePos = pos_counter++;
+	state = prepared;
 
 
 
