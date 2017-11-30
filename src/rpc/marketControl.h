@@ -33,6 +33,7 @@ protected:
 	void rpcOrderUpdate(RpcRequest rq);
 	void rpcOrderCancel(RpcRequest rq);
 	void rpcOrderGet(RpcRequest rq);
+	void rpcOrderGetHistory(RpcRequest rq);
 	void rpcStreamOrders(RpcRequest rq);
 	void rpcStreamOrderbook(RpcRequest rq);
 	void rpcStreamTrades(RpcRequest rq);

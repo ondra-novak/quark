@@ -182,7 +182,6 @@ bool checkMarketCommand(StrViewA lastId, RpcClient &rpc) {
 		return true;
 	} else {
 		Value v = res;
-		logDebug(v);
 		return v["finished"].getBool();
 	}
 

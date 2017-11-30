@@ -116,6 +116,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Order.cancel", me, &MarketControl::rpcOrderCancel);
 	rpcServer.add("Order.cancelAll", me, &MarketControl::rpcOrderCancelAll);
 	rpcServer.add("Order.get", me, &MarketControl::rpcOrderGet);
+	rpcServer.add("Order.getHistory", me, &MarketControl::rpcOrderGetHistory);
 	rpcServer.add("Stream.orders",  me, &MarketControl::rpcStreamOrders);
 	rpcServer.add("Stream.trades", me, &MarketControl::rpcStreamTrades);
 	rpcServer.add("Stream.orderbook", me, &MarketControl::rpcStreamOrderbook);
@@ -197,6 +198,44 @@ void MarketControl::rpcOrderGet(RpcRequest rq) {
 	Value args = rq.getArgs();
 	try {
 		rq.setResult(orderControl.getOrder(args[0]));
+	} catch (const couchit::RequestError &e) {
+		rq.setError(404,"Order not found");
+	}
+}
+
+void MarketControl::rpcOrderGetHistory(RpcRequest rq) {
+	static Value chkargs (json::array,{"string"});
+	if (!rq.checkArgs(chkargs)) return rq.setArgError();
+	Value args = rq.getArgs();
+	try {
+		StrViewA id = args[0].getString();
+		couchit::Document topOrder = ordersDb.get(id, CouchDB::flgRevisionsInfo);
+		Array result;
+		Array revlist;
+		auto fetchRevs =[&]{
+			Value revs = revlist;
+			CouchDB::PConnection conn = ordersDb.getConnection(id);
+			conn->addJson("open_revs",revs);
+			Value res = ordersDb.requestGET(conn,nullptr,0);
+			for (auto r :res) {
+				Value ok = r["ok"];
+				if (ok.defined()) result.push_back(ok);
+			}
+			revlist.clear();
+		};
+
+		for (auto r : topOrder["_revs_info"]) {
+			if (r["status"] == "available") {
+				revlist.push_back(r["rev"]);
+				if (revlist.size() == 10) fetchRevs();
+			}
+		}
+		if (!revlist.empty()) {
+			fetchRevs();
+		}
+		rq.setResult(result);
+
+
 	} catch (const couchit::RequestError &e) {
 		rq.setError(404,"Order not found");
 	}
