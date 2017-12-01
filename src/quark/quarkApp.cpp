@@ -434,7 +434,6 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		return;
 	}
 
-	Array keys;
 
 	if (!tradeList.empty())
 	{
@@ -466,7 +465,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		}
 	}
 	//update all affected orders
-	keys.clear();
+	queryKeysArray.clear();
 	if (!o2u.empty())
 	{
 		bool rep;
@@ -475,14 +474,14 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 		Query q = ordersDb->createQuery(View::includeDocs);
 		//load all keys to the query
 		for (auto && x: o2u) {
-					keys.push_back(x.first);
+					queryKeysArray.push_back(x.first);
 		}
 
 		do {
 			//query all changed orders
-			q.keys(keys);
+			q.keys(queryKeysArray);
 			Result res = q.exec();
-			if (res.size() != keys.size())
+			if (res.size() != queryKeysArray.size())
 				throw std::runtime_error("Matching engine refers some orders not found in the database - sanity check");
 			//process results
 			for (Row r : res) {
@@ -495,24 +494,44 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 
 				d.optimize();
 
-				//if order is still known for the core (so is still active)
-				if (coreState.isKnownOrder(r.key)) {
-					//calculate budget of final object
-					auto budget = calculateBudget(d);
-					//update order's current budget
-					//this can be perfomed without waiting, because order probably reduced its budget
-					moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),budget,nullptr);
+				//if order is unknown for the core, check what happened
+				if (!coreState.isKnownOrder(r.key)) {
+
+
+					//we run out of budget and budget was not defined...
+					if (d[OrderFields::size].getNumber() != 0 && !d[OrderFields::budget].defined()) {
+						//this enqueues request to download specified order and
+						//process it like by queue.
+						String orderId (r.key);
+						[orderId,this]{
+							Value cmd = ordersDb->get(orderId, CouchDB::flgNullIfMissing);
+							if (cmd != nullptr) {
+								if (cmd[OrderFields::status].getString() == Status::strActive) {
+									processOrder(cmd);
+								}
+							} //send to the dispatcher
+						} >> dispatcher;
+
+
+					} else {
+						//in case that order is no longe in matching
+						//remove order's budget from the money service
+						//in case that order will be requeued, it will ask for budget again later
+						moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),OrderBudget(),nullptr);
+
+						if (d[OrderFields::finished].getBool() &&  !d[OrderFields::nextOrder].empty()) {
+							createNextOrder(d, d[OrderFields::nextOrder]);
+						}
+
+					}
+
+
+
 				} else {
-					//in case that order is no longe in matching
-					//remove order's budget from the money service
-					//in case that order will be requeued, it will ask for budget again later
-					moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),OrderBudget(),nullptr);
+					//order is still in progress, nothing needed
 				}
 
 
-				if (d[OrderFields::finished].getBool() &&  !d[OrderFields::nextOrder].empty()) {
-					createNextOrder(d, d[OrderFields::nextOrder]);
-				}
 				//put order for update
 				chset.update(d);
 			}
@@ -525,7 +544,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 
 			} catch (UpdateException &e) {
 				//there can be conflicts
-				keys.clear();
+				queryKeysArray.clear();
 				//because changes from trading have highest priority
 				//we have to reapply changes to new version of the order
 				for (auto err : e.getErrors()) {
@@ -535,7 +554,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 						LOGDEBUG2("Update order conflict", id);
 						o2u_2[id] = o2u_1[id];
 						//create new query
-						keys.push_back(id);
+						queryKeysArray.push_back(id);
 					} else {
 						//other exceptions are not allowed here
 						throw;

@@ -54,8 +54,8 @@ MarketConfig::MarketConfig(json::Value v) {
 		if (x.defined() && x.getNumber() < budgetTotalMax) budgetMax = x.getNumber(); else budgetMax = budgetTotalMax;
 		x = v["maxSpreadPct"];
 		if (x.defined() && x.getNumber() >0) maxSpreadPct = x.getNumber(); else maxSpreadPct = 5;
-		x = v["maxSplippagePct"];
-		if (x.defined() && x.getNumber() >0) maxSlippagePct = x.getNumber(); else maxSlippagePct = 5;
+		x = v["maxSlippagePct"];
+		if (x.defined() && x.getNumber() >=0 && x.type() == json::number) maxSlippagePct = x.getNumber(); else maxSlippagePct = 5;
 		x = asset["sign"];
 		if (x.defined() && !x.getString().empty()) assetSign = String(x);
 		else throw std::runtime_error("MarketConfig/asset/sign is mandatory");

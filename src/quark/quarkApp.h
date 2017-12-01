@@ -150,6 +150,7 @@ private:
 
 	OrdersToUpdate o2u_1, o2u_2, ocache; //prepared maps
 	TradeList tradeList; //buffer for trades
+	Array queryKeysArray;
 
 
 
