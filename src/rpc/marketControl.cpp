@@ -134,6 +134,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Trades.chart",me, &MarketControl::rpcChartGet);
 	rpcServer.add("Trades.stats",me, &MarketControl::rpcTradesStats);
 	rpcServer.add("User.orders",me, &MarketControl::rpcUserOrders);
+	rpcServer.add("User.activeOrders",me, &MarketControl::rpcUserActiveOrders);
 	rpcServer.add("User.trades",me, &MarketControl::rpcUserTrades);
 	rpcServer.add("Control.stop",me, &MarketControl::rpcControlStop);
 	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
@@ -855,6 +856,7 @@ void MarketControl::rpcTradesStats(RpcRequest rq) {
 
 static	couchit::View ordersByUser("_design/index/_view/users", couchit::View::update);
 static	couchit::View tradesByUser("_design/trades/_view/byUser", couchit::View::update);
+static couchit::View userActive("_design/index/_view/active", View::includeDocs|View::update);
 
 
 static Value getUserDataArgs = Value(json::array,{
@@ -896,6 +898,21 @@ void MarketControl::rpcUserOrders(RpcRequest rq) {
 
 }
 
+void MarketControl::rpcUserActiveOrders(RpcRequest rq) {
+	if (!rq.checkArgs(Value(json::array,{"any"}))) return rq.setArgError();
+
+	couchit::Query q = ordersDb.createQuery(userActive);
+	couchit::Result res = q.key(rq.getArgs()[0]).includeDocs().exec();
+
+	Array rx;
+	rx.reserve(res.size());
+	for (couchit::Row r: res) {
+		rx.push_back(OrderControl::normFields(r.doc));
+	}
+	rq.setResult(rx);
+
+}
+
 void MarketControl::rpcUserTrades(RpcRequest rq) {
 	if (!rq.checkArgs(getUserDataArgs)) return rq.setArgError();
 
@@ -923,7 +940,6 @@ void MarketControl::rpcControlPing(RpcRequest rq) {
 }
 
 void MarketControl::rpcOrderCancelAll(RpcRequest rq) {
-	couchit::View userActive("_design/index/_view/active", View::includeDocs|View::update);
 	unsigned int count = 0;
 	do {
 		couchit::Query q = ordersDb.createQuery(userActive);
