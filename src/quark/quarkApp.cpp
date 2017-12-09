@@ -499,7 +499,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 
 
 					//we run out of budget and budget was not defined...
-					if (d[OrderFields::size].getNumber() != 0 && !d[OrderFields::budget].defined()) {
+					if ( !d[OrderFields::finished].getBool()) {
 						//this enqueues request to download specified order and
 						//process it like by queue.
 						String orderId (r.key);
@@ -590,19 +590,21 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 
 					auto tbo = t.getBuyOrder();
 					auto tso = t.getSellOrder();
+					const Value &tbd = tbo->getData();
+					const Value &tsd = tso->getData();
 
 					Document &buyOrder = o2u[tbo->getId()];
 					Document &sellOrder = o2u[tso->getId()];
 					buyOrder(OrderFields::size,marketCfg->sizeToAsset(buyRemain = tbo->getSize()-t.getSize()));
 					sellOrder(OrderFields::size,marketCfg->sizeToAsset(sellRemain = tso->getSize()-t.getSize()));
-					if (t.isFullBuy() && buyRemain == 0) {
+					if (buyRemain == 0 || tbd[1].getBool()) {
 							buyOrder(OrderFields::finished,true)
 									(OrderFields::status,Status::strExecuted);
 					}else {
 							buyOrder(OrderFields::status,Status::strActive);
 					}
 
-					if (t.isFullSell() && sellRemain == 0) {
+					if (sellRemain == 0 || tsd[1].getBool()) {
 							sellOrder(OrderFields::finished,true)
 										(OrderFields::status,Status::strExecuted);
 					}else {
@@ -618,8 +620,8 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 
 					trade("_id",tradeId)
 						 ("price",price)
-						 ("buy",{tbo->getId(),tbo->getUser(),tbo->getData()})
-						 ("sell",{tso->getId(),tso->getUser(),tso->getData()})
+						 ("buy",{tbo->getId(),tbo->getUser(),tbd[0]})
+						 ("sell",{tso->getId(),tso->getUser(),tsd[0]})
 						 ("size",amount)
 						 ("dir",dir)
 						 ("time",(std::size_t)now);
@@ -725,7 +727,10 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 	odata.domPriority = order[OrderFields::domPriority].getInt();
 	odata.queuePriority = order[OrderFields::queuePriority].getInt();
 	odata.user = order[OrderFields::user];
-	odata.data = order[OrderFields::context].getString() == OrderContext::strMargin;
+	odata.data = {  //[margin_context, budget_limited]
+			order[OrderFields::context].getString() == OrderContext::strMargin,
+			order[OrderFields::budget].defined()
+	};
 	po = new Order(odata);
 	return po;
 }
