@@ -54,6 +54,7 @@ protected:
 	void rpcControlStop(RpcRequest rq);
 	void rpcControlPing(RpcRequest rq);
 	void rpcControlDumpState(RpcRequest rq);
+	void rpcControlDumpBlocked(RpcRequest rq);
 	void rpcOrderCancelAll(RpcRequest rq);
 	void rpcPurgeFunction(RpcRequest rq);
 	void rpcReplication(RpcRequest rq);

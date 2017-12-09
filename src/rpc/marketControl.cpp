@@ -139,6 +139,7 @@ Value MarketControl::initRpc(RpcServer& rpcServer) {
 	rpcServer.add("Control.stop",me, &MarketControl::rpcControlStop);
 	rpcServer.add("Control.ping",me, &MarketControl::rpcControlPing);
 	rpcServer.add("Control.dumpState",me, &MarketControl::rpcControlDumpState);
+	rpcServer.add("Control.dumpBlocked",me, &MarketControl::rpcControlDumpBlocked);
 	rpcServer.add("Data.deleteOld",me, &MarketControl::rpcPurgeFunction);
 	rpcServer.add("Data.replication",me, &MarketControl::rpcReplication);
 	rpcServer.add("Version.get",me, &MarketControl::rpcVersion);
@@ -1038,6 +1039,9 @@ void MarketControl::callDaemonService(String command,
 
 void MarketControl::rpcControlDumpState(RpcRequest rq) {
 	callDaemonService("dumpState",rq.getArgs(),rq);
+}
+void MarketControl::rpcControlDumpBlocked(RpcRequest rq) {
+	callDaemonService("dumpBlocked",rq.getArgs(),rq);
 }
 
 template<typename Filter>

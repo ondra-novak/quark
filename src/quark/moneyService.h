@@ -99,6 +99,8 @@ public:
 	void setClient(PMoneySrvClient client) {this->client = client;}
 	void setMarketConfig(PMarketConfig cfg) {this->mcfg = mcfg;}
 
+	Value toJson() const;
+
 protected:
 
 	PMoneySrvClient client;

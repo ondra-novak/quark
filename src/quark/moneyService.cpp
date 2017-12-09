@@ -5,6 +5,8 @@
  *      Author: ondra
  */
 
+#include <imtjson/array.h>
+#include <imtjson/object.h>
 #include "shared/dispatcher.h"
 #include "moneyService.h"
 
@@ -161,6 +163,35 @@ quark::MoneyService::~MoneyService() {
 	inflight.zeroWait();
 	logDebug("MoneyService destructor");
 }
+
+Value quark::MoneyService::toJson() const {
+	Sync _(lock);
+	Object bmap;
+	for (auto &&x: budgetMap) {
+		auto u = bmap.object(x.first.user.toString());
+		u.set(x.first.command.toString(), x.second.toJson());
+	}
+	Array lusrs;
+	for (auto &&x: lockedUsers) {
+		lusrs.push_back(x);
+	}
+	Array rq;
+	auto q = allocQueue;
+	while (!q.empty()) {
+		auto && z = q.front();
+		rq.push_back(Object
+				("user", z->user)
+				("order", z->order)
+				("budget", z->budget.toJson()));
+		q.pop();
+	}
+
+	return Object ("allocated", bmap)
+			("lockedUsers", lusrs)
+			("queue", rq)
+			("inflight", inflight.getCounter());
+}
+
 
 /*
 OrderBudget MoneyService::getOrderBudget(const json::Value& user, const json::Value& order) const {

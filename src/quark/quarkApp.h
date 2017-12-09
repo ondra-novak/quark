@@ -166,6 +166,7 @@ private:
 
 	void controlStop(RpcRequest req);
 	void controlDumpState(RpcRequest req);
+	void controlDumpBlocked(RpcRequest req);
 
 
 	void updateConfig();

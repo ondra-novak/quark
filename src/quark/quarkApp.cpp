@@ -40,6 +40,7 @@ const StrViewA QuarkApp::controlDocName("control");
 QuarkApp::QuarkApp():rnd(std::random_device()()) {
 	controlServer.add("stop",this,&QuarkApp::controlStop);
 	controlServer.add("dumpState",this,&QuarkApp::controlDumpState);
+	controlServer.add("dumpBlocked",this,&QuarkApp::controlDumpBlocked);
 	controlServer.add_ping("ping");
 	controlServer.add_listMethods("listMethods");
 
@@ -1288,7 +1289,9 @@ Dispatcher& QuarkApp::getDispatcher() {
 void QuarkApp::controlDumpState(RpcRequest req) {
 	req.setResult(coreState.toJson());
 }
-
+void QuarkApp::controlDumpBlocked(RpcRequest req) {
+	req.setResult(moneyService->toJson());
+}
 
 void QuarkApp::createNextOrder(Value originOrder, Value nextOrder) {
 
