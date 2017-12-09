@@ -59,7 +59,7 @@ void MoneyService::unlockUser(const json::Value user) {
 	} else {
 		auto req = it->second.front();
 		it->second.pop();
-		allocBudgetLk2(req, !it->second.empty());
+		allocBudgetLk2(req);
 	}
 }
 
@@ -76,7 +76,7 @@ bool MoneyService::allocBudgetLk(const PAllocReq &req) {
 	if (client == nullptr) return true;
 
 	auto &qstate = lockedUsers[req->user];
-	return allocBudgetLk2(req, !qstate.empty());
+	return allocBudgetLk2(req);
 
 }
 
@@ -116,7 +116,7 @@ void MoneyService::allocFinishCb(bool async, const PAllocReq &req,
 	};
 }
 
-bool MoneyService::allocBudgetLk2(const PAllocReq &req, bool nosendhint) {
+bool MoneyService::allocBudgetLk2(const PAllocReq &req) {
 
 
 	auto badv = calculateBudgetAdv(req->user,req->order,req->budget);
@@ -128,7 +128,7 @@ bool MoneyService::allocBudgetLk2(const PAllocReq &req, bool nosendhint) {
 		inflight.inc();
 		client->allocBudget(req->user,badv.second,AllocCallback(*this,req,badv.second,true));
 		return false;
-	} else if (badv.second != badv.first && !nosendhint) {
+	} else if (badv.second != badv.first) {
 		//when budget is below previous, we can update budget without waiting
 		inflight.inc();
 		client->allocBudget(req->user, badv.second,AllocCallback(*this,req,badv.second,false));

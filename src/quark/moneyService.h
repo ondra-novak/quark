@@ -112,7 +112,7 @@ protected:
 
 
 	bool allocBudgetLk(const PAllocReq &req);
-	bool allocBudgetLk2(const PAllocReq &req, bool nosendhint);
+	bool allocBudgetLk2(const PAllocReq &req);
 
 
 	struct Key {
