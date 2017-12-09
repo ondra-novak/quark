@@ -49,6 +49,7 @@ protected:
 	void rpcChartGet(RpcRequest rq);
 	void rpcTradesStats(RpcRequest rq);
 	void rpcUserOrders(RpcRequest rq);
+	void rpcUserActiveOrders(RpcRequest rq);
 	void rpcUserTrades(RpcRequest rq);
 	void rpcControlStop(RpcRequest rq);
 	void rpcControlPing(RpcRequest rq);
