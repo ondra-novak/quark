@@ -163,7 +163,7 @@ protected:
 	typedef std::unique_lock<std::recursive_mutex> Sync;
 
 	void allocFinish(const PAllocReq &req, IMoneySrvClient::AllocResult b);
-	void allocFinishCb(bool async, const PAllocReq &req, IMoneySrvClient::AllocResult b);
+	void allocFinishCb(bool async, const PAllocReq &req, const OrderBudget &budget, IMoneySrvClient::AllocResult b);
 	void unlockUser(const json::Value user);
 	class AllocCallback;
 };

@@ -80,39 +80,41 @@ bool MoneyService::allocBudgetLk(const PAllocReq &req) {
 
 }
 
-void MoneyService::allocFinishCb(bool async, const PAllocReq &req, IMoneySrvClient::AllocResult b) {
-	dispatch << [=] {
-		if (b == IMoneySrvClient::allocTryAgain) {
-			Sync _(lock);
-			unlockUser(req->user);
-			allocBudgetLk(req);
-		} else {
-			if (async) allocFinish(req, b);
-			Sync _(lock);
-			unlockUser(req->user);
-		}
-		inflight.dec();
-	};
-}
 
 
 class MoneyService::AllocCallback {
 public:
 
 
-	AllocCallback(MoneyService &owner, const PAllocReq &req, bool async)
-		:owner(owner),req(req), async(async) {}
+	AllocCallback(MoneyService &owner, const PAllocReq &req, const OrderBudget &b, bool async)
+		:owner(owner),req(req), budget(b), async(async) {}
 
 	void operator()(IMoneySrvClient::AllocResult b) {
-		owner.allocFinishCb(async, req, b);
+		owner.allocFinishCb(async, req, budget, b);
 	}
 
 protected:
 	MoneyService &owner;
 	PAllocReq req;
+	OrderBudget budget;
 	bool async;
 };
 
+
+void MoneyService::allocFinishCb(bool async, const PAllocReq &req,
+		const OrderBudget &budget, IMoneySrvClient::AllocResult b) {
+	dispatch << [=] {
+		if (b == IMoneySrvClient::allocTryAgain) {
+			Sync _(lock);
+			client->allocBudget(req->user,budget,AllocCallback(*this, req, budget, async));
+		} else {
+			inflight.dec();
+			if (async) allocFinish(req, b);
+			Sync _(lock);
+			unlockUser(req->user);
+		}
+	};
+}
 
 bool MoneyService::allocBudgetLk2(const PAllocReq &req, bool nosendhint) {
 
@@ -124,17 +126,18 @@ bool MoneyService::allocBudgetLk2(const PAllocReq &req, bool nosendhint) {
 
 	if (badv.second.above(badv.first)) {
 		inflight.inc();
-		client->allocBudget(req->user,badv.second,AllocCallback(*this,req,true));
+		client->allocBudget(req->user,badv.second,AllocCallback(*this,req,badv.second,true));
 		return false;
 	} else if (badv.second != badv.first && !nosendhint) {
 		//when budget is below previous, we can update budget without waiting
 		inflight.inc();
-		client->allocBudget(req->user, badv.second,AllocCallback(*this,req,false));
+		client->allocBudget(req->user, badv.second,AllocCallback(*this,req,badv.second,false));
 		allocFinish(req, IMoneySrvClient::allocOk);
 		return true;
 	} else {
-		allocFinish(req, IMoneySrvClient::allocOk);
-		unlockUser(req->user);
+		//simulate call of the finish callback
+		AllocCallback cb(*this,req,badv.second,true);
+		cb(IMoneySrvClient::allocOk);
 		return true;
 	}
 
