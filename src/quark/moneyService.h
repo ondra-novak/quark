@@ -112,6 +112,7 @@ protected:
 
 
 	bool allocBudgetLk(const PAllocReq &req);
+	bool allocBudgetLk2(const PAllocReq &req);
 
 
 	struct Key {
@@ -143,13 +144,12 @@ protected:
 	};
 
 	typedef std::map<Key, OrderBudget, CmpKey> BudgetUserMap;
-	typedef std::unordered_set<json::Value> LockedUsers;
 	typedef std::queue<PAllocReq> AllocQueue;
+	typedef std::unordered_map<json::Value, AllocQueue> LockedUsers;
 
 
 	BudgetUserMap budgetMap;
 	LockedUsers lockedUsers;
-	AllocQueue allocQueue;
 	MTCounter inflight;
 	mutable std::mutex lock;
 

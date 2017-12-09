@@ -51,29 +51,36 @@ void MoneyService::allocFinish(const PAllocReq &req, IMoneySrvClient::AllocResul
 }
 
 void MoneyService::unlockUser(const json::Value user) {
-	lockedUsers.erase(user);
-	if (!allocQueue.empty()) {
-		auto q = allocQueue.front();
-		allocQueue.pop();
-		allocBudgetLk(q);
-	}
-	if (!allocQueue.empty()) {
-		auto q = allocQueue.front();
-		allocQueue.pop();
-		allocBudgetLk(q);
+	auto it = lockedUsers.find(user);
+	if (it == lockedUsers.end())
+		return;
+	if (it->second.empty()) {
+		lockedUsers.erase(it);
+	} else {
+		auto req = it->second.front();
+		it->second.pop();
+		allocBudgetLk2(req);
 	}
 }
 
 
 bool MoneyService::allocBudgetLk(const PAllocReq &req) {
-	if (lockedUsers.find(req->user) != lockedUsers.end()) {
-		allocQueue.push(req);
+
+
+	auto lk = lockedUsers.find(req->user);
+	if (lk != lockedUsers.end()) {
+		lk->second.push(req);
 		return false;
 	}
 
 	if (client == nullptr) return true;
 
-	lockedUsers.insert(req->user);
+	lockedUsers[req->user];
+	return allocBudgetLk2(req);
+}
+
+bool MoneyService::allocBudgetLk2(const PAllocReq &req) {
+
 
 	auto badv = calculateBudgetAdv(req->user,req->order,req->budget);
 	client->adjustBudget(req->user,badv.first);
@@ -158,7 +165,7 @@ quark::MoneyService::~MoneyService() {
 		{
 		Sync _(lock);
 		client = nullptr;
-		allocQueue = AllocQueue();
+		lockedUsers.clear();
 		}
 	inflight.zeroWait();
 	logDebug("MoneyService destructor");
@@ -171,25 +178,20 @@ Value quark::MoneyService::toJson() const {
 		auto u = bmap.object(x.first.user.toString());
 		u.set(x.first.command.toString(), x.second.toJson());
 	}
-	Array lusrs;
+	Object lusrs;
 	for (auto &&x: lockedUsers) {
-		lusrs.push_back(x);
-	}
-	Array rq;
-	auto q = allocQueue;
-	while (!q.empty()) {
-		auto && z = q.front();
-		rq.push_back(Object
-				("user", z->user)
-				("order", z->order)
-				("budget", z->budget.toJson()));
-		q.pop();
-	}
+		auto rq = lusrs.object(x.first.toString());
 
+		auto q = x.second;
+		while (!q.empty()) {
+			auto && z = q.front();
+			rq.set(z->order.toString(),z->budget.toJson());
+			q.pop();
+		}
+	}
 	return Object ("allocated", bmap)
-			("lockedUsers", lusrs)
-			("queue", rq)
-			("inflight", inflight.getCounter());
+			("waiting", lusrs)
+			("processing", inflight.getCounter());
 }
 
 
