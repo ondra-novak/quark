@@ -529,7 +529,9 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 
 
 				} else {
-					//order is still in progress, nothing needed
+					//update budget
+					OrderBudget b = calculateBudget(d);
+					moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),b,nullptr);
 				}
 
 

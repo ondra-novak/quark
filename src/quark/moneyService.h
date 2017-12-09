@@ -112,7 +112,7 @@ protected:
 
 
 	bool allocBudgetLk(const PAllocReq &req);
-	bool allocBudgetLk2(const PAllocReq &req);
+	bool allocBudgetLk2(const PAllocReq &req, bool nosendhint);
 
 
 	struct Key {
@@ -151,7 +151,7 @@ protected:
 	BudgetUserMap budgetMap;
 	LockedUsers lockedUsers;
 	MTCounter inflight;
-	mutable std::mutex lock;
+	mutable std::recursive_mutex lock;
 
 
 	void updateBudget(json::Value user, json::Value order, const OrderBudget& toBlock);
@@ -160,10 +160,12 @@ protected:
 	OrderBudget calculateBudget(Value user) const;
 	std::pair<OrderBudget,OrderBudget> calculateBudgetAdv(Value user, Value order, const OrderBudget &b) const;
 
-	typedef std::unique_lock<std::mutex> Sync;
+	typedef std::unique_lock<std::recursive_mutex> Sync;
 
 	void allocFinish(const PAllocReq &req, IMoneySrvClient::AllocResult b);
+	void allocFinishCb(bool async, const PAllocReq &req, IMoneySrvClient::AllocResult b);
 	void unlockUser(const json::Value user);
+	class AllocCallback;
 };
 
 
