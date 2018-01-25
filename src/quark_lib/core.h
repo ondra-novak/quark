@@ -85,7 +85,6 @@ public:
 	POrder updateOrder(const OrderId &orderId, const POrder &newOrder);
 	POrder updateOrder(const POrder &newOrder) {return updateOrder(newOrder->getId(), newOrder);}
 
-	std::size_t calcBudgetForMarketOrder(OrderDir::Type direction, std::size_t size) const;
 
 
 

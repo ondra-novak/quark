@@ -75,7 +75,7 @@ bool MoneyService::allocBudgetLk(const PAllocReq &req) {
 
 	if (client == nullptr) return true;
 
-	auto &qstate = lockedUsers[req->user];
+//	auto &qstate = lockedUsers[req->user];
 	return allocBudgetLk2(req);
 
 }

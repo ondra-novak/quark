@@ -17,7 +17,7 @@ using ondra_shared::MsgQueue;
 class MockupMoneyService: public IMoneySrvClient {
 public:
 
-	MockupMoneyService(OrderBudget maxBudget, std::size_t serverLatency):maxBudget(maxBudget),serverLatency(serverLatency) {
+	MockupMoneyService(OrderBudget maxBudget, std::size_t serverLatency):serverLatency(serverLatency),maxBudget(maxBudget) {
 		start();
 	}
 	~MockupMoneyService() {stop();}

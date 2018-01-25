@@ -156,6 +156,7 @@ double getCurrentPrice(String url) {
 		return resp[0].getNumber();
 	} catch (std::exception &e) {
 		logError({"Failed to read price", e.what()});
+		return 0;
 	}
 
 

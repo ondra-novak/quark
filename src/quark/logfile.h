@@ -19,6 +19,7 @@ public:
 
 	virtual void sendLog(LogType type, json::Value message) = 0;
 
+	virtual ~ILogProvider() {}
 	static void globSendLog(LogType type, json::Value message);
 };
 
@@ -28,6 +29,7 @@ class ILogProviderFactory {
 public:
 
 	virtual PLogProvider createLogProvider() = 0;
+	virtual ~ILogProviderFactory() {}
 
 
 };

@@ -74,8 +74,8 @@ bool sortTrailings(const POrder &a, const POrder &b) {
 CurrentState::CurrentState()
 	:orderbook_ask(OrderCompare(&sortLimitPriceUp))
 	,orderbook_bid(OrderCompare(&sortLimitPriceDown))
-	,stop_above(OrderCompare(&sortTrigPriceUp))
 	,stop_below(OrderCompare(&sortTrigPriceDown))
+	,stop_above(OrderCompare(&sortTrigPriceUp))
 	,market(OrderCompare(&sortMarketPriority))
 	,curQueue(OrderCompare([](const POrder &a , const POrder &b) {
 		return sortMarketPriority(b,a);}
@@ -113,7 +113,8 @@ void CurrentState::rebuildQueues() {
 				stop_below.insert(o.second);
 			}
 			break;
-
+		case Order::prepared:
+			break;
 		}
 
 		if (o.second->isTrailing()) {
@@ -174,9 +175,6 @@ POrder CurrentState::updateOrder(const OrderId &orderId, const POrder &newOrder)
 
 }
 
-std::size_t CurrentState::calcBudgetForMarketOrder(OrderDir::Type direction,
-		std::size_t size) const {
-}
 
 
 CurrentState::OrderQueue& CurrentState::selectOpositeOrderbook(OrderDir::Type direction) {
@@ -241,7 +239,7 @@ bool CurrentState::checkMaxSpreadCond() const {
 	std::intptr_t spread = (*ask)->getLimitPrice() - (*bid)->getLimitPrice();
 	std::intptr_t center = ((*ask)->getLimitPrice() + (*bid)->getLimitPrice()) / 2;
 	std::intptr_t spreadpct = (spread*10000)/center;
-	return (spreadpct < maxSpread100Pct);
+	return (spreadpct < (std::intptr_t)maxSpread100Pct);
 
 
 
@@ -513,7 +511,7 @@ bool CurrentState::checkSpread() {
 			centerOfSpread = center;
 
 			//compare with required spread
-			return spreadpct > maxSpread100Pct;
+			return spreadpct > (std::intptr_t)maxSpread100Pct;
 		} else {
 			return false;
 		}
@@ -825,7 +823,7 @@ static json::Value dumpQueue(const CurrentState::OrderQueue &list) {
 
 }
 
-
+/*
 static json::Value dumpQueue(const CurrentState::Queue &list) {
 	json::Array res;
 	res.reserve(list.size());
@@ -836,7 +834,7 @@ static json::Value dumpQueue(const CurrentState::Queue &list) {
 	}
 	return res;
 
-}
+}*/
 
 json::Value quark::CurrentState::toJson() const {
 	json::Object out;

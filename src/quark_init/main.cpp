@@ -171,14 +171,14 @@ static void createDatabase (CouchDB &db) {
 	db.requestPUT(conn,security,nullptr,0);
 
 }
-
+/*
 
 static Value getConfig(CouchDB &db, StrViewA path) {
 	CouchDB::PConnection conn = db.getConnection(configEndpointPrefix);
 	conn->add(path);
 	return db.requestGET(conn,nullptr,0);
 }
-
+*/
 static Value setConfig(CouchDB &db, StrViewA path, StrViewA key, Value data) {
 	CouchDB::PConnection conn = db.getConnection(configEndpointPrefix);
 	conn->add(path);

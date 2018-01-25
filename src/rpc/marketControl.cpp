@@ -42,12 +42,12 @@ static json::Value removeServiceMembers(json::Value doc) {
 			("_rev",undefined);
 }
 
-
+/*
 static void notImpl(RpcRequest req) {
 	req.setError(501,"Not implemented yet!");
 }
 
-
+*/
 bool MarketControl::testDatabase() {
 	CouchDB::PConnection conn = ordersDb.getConnection("");
 	try {
@@ -591,7 +591,7 @@ void MarketControl::FeedControl::start() {
 }
 
 MarketControl::FeedControl::FeedControl(CouchDB& db, Value since, Value filter)
-	:feed(db.createChangesFeed()),  since(since), db(db), stopped(true), filter(filter)
+	:feed(db.createChangesFeed()),  since(since), db(db), filter(filter), stopped(true)
 {
 	feed.setTimeout(-1);
 	feed.includeDocs(true);
@@ -649,11 +649,11 @@ static std::uintptr_t decodeTime(Value tmRec) {
 				+ tmRec[6].getUInt() * 60UL;
 		return x;
 	};
-
+/*
 static double fixFloat(double c) {
     return floor(c * 1000000000+0.5)/ 1000000000;
 }
-
+*/
 struct TimeFrameDef {
 	StrViewA name;
 	unsigned int groupLevel;

@@ -63,25 +63,26 @@ bool QuarkApp::runOrder(Document order, bool update) {
 				QuarkApp *mptr = me;
 
 				//probably exit, do not process the order
-				if (me->moneyService == nullptr)
+				if (me->moneyService == nullptr) {
 					return;
 
-				 	//in positive response
-					switch (response) {
-					case IMoneySrvClient::allocOk:
-						mptr->runOrder2(order, update);
-						break;
-					case IMoneySrvClient::allocReject:
-						mptr->rejectOrderBudget(order, update);
-						break;
-					case IMoneySrvClient::allocError:
-						mptr->rejectOrder(order,OrderErrorException(order.getIDValue(),
-								OrderErrorException::internalError,
-								"Failed to allocate budget (money server error)"),update);
-						break;
-					case IMoneySrvClient::allocTryAgain:
-						return;
-					}
+				}
+				//in positive response
+				switch (response) {
+				case IMoneySrvClient::allocOk:
+					mptr->runOrder2(order, update);
+					break;
+				case IMoneySrvClient::allocReject:
+					mptr->rejectOrderBudget(order, update);
+					break;
+				case IMoneySrvClient::allocError:
+					mptr->rejectOrder(order,OrderErrorException(order.getIDValue(),
+							OrderErrorException::internalError,
+							"Failed to allocate budget (money server error)"),update);
+					break;
+				case IMoneySrvClient::allocTryAgain:
+					return;
+				}
 
 
 
@@ -95,6 +96,7 @@ bool QuarkApp::runOrder(Document order, bool update) {
 		rejectOrder(order,
 				OrderErrorException(order.getIDValue(),OrderErrorException::internalError,
 						e.what()),false);
+		return true;
 	}
 
 }
@@ -933,6 +935,7 @@ bool QuarkApp::initDb(Value cfg, String signature) {
 	positionsDb = std::make_shared<CouchDB>(initCouchDBConfig(cfg,signature, "-positions"));
 	initPositionsDB(*positionsDb);
 
+	return true;
 }
 
 
@@ -949,7 +952,7 @@ public:
 
 	class Provider: public ILogProvider {
 		public:
-			Provider(PCouchDB db, PLogProvider nx):db(db),nx(nx) {}
+			Provider(PCouchDB db, PLogProvider nx):nx(nx),db(db) {}
 			virtual void sendLog(LogType type, json::Value message) {
 				nx->sendLog(type,message);
 				if (type == error || type == warning) {
@@ -1452,7 +1455,7 @@ void QuarkApp::schedulerWorker() {
 		Result res = q.exec();
 		std::size_t delay = 3600;
 		for (Row r: res) {
-			size_t nx = r.key.getUInt();
+			time_t nx = r.key.getInt();
 			if (nx < now) {
 				schedulerCycle(now);
 				delay = 0;
