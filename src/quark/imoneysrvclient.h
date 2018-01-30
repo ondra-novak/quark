@@ -24,6 +24,7 @@ public:
 	struct UserInfo {
 		Value userId;
 		Value context;
+		double fee;
 	};
 
 	struct TradeData {
@@ -55,6 +56,9 @@ public:
 	virtual bool cancelAllOrders(const json::Array &users) = 0;
 	///Receive dispatcher
 	virtual Dispatcher &getDispatcher() = 0;
+
+	virtual void rememberFee(const Value &user, double fee) = 0;
+
 
 };
 

@@ -73,24 +73,10 @@ protected:
 
 	typedef std::unordered_map<Value, Document> OrdersToUpdate;
 	typedef std::unordered_map<Value, Value> UsersToUpdate;
-	typedef std::unordered_map<Value, Value> OrderCache;
+	typedef std::unordered_map<Value, double> FeeMap;
 
 
-	class PendingOrders {
-		typedef std::unordered_map<Value, std::queue<Value> > Map;
 
-		Map orders;
-		std::mutex l;
-	public:
-		void clear();
-		bool lock(Value id, const Value &doc);
-		Value unlock(Value id);
-	};
-
-
-//	void createOrder(Document order);
-	//Document saveOrder(Document order, Object newItems);
-	void matchOrder(Document order);
 	OrderBudget calculateBudget(const Document &order);
 	void runTransaction(const TxItem &txitm);
 
@@ -151,6 +137,8 @@ private:
 	OrdersToUpdate o2u_1, o2u_2, ocache; //prepared maps
 	TradeList tradeList; //buffer for trades
 	Array queryKeysArray;
+	FeeMap feeMap;		//< map which stores data to calculate fees
+	std::mutex feeMapLock; //< lock of the feeMap
 
 
 
@@ -180,6 +168,10 @@ private:
 	virtual void resync(ITradeStream &target, const Value fromTrade, const Value toTrade);
 	virtual bool cancelAllOrders(const json::Array &users);
 	virtual Dispatcher &getDispatcher();
+
+	virtual void rememberFee(const Value &user, double fee) ;
+	double calcFee(const Value &user, double val);
+
 };
 
 typedef RefCntPtr<QuarkApp> PQuarkApp;

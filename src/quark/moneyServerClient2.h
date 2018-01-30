@@ -13,6 +13,8 @@ namespace quark {
 using namespace json;
 
 
+
+
 class MoneyServerClient2: public IMoneySrvClient {
 public:
 

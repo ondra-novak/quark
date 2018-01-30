@@ -60,6 +60,7 @@ void MockupMoneyService::worker() {
 bool MockupMoneyService::allocBudget(json::Value user, const OrderBudget& b) {
 	bool allowed = !(b.above(maxBudget));
 	logInfo({"Moneyserver-AllocBudget", user, b.toJson(), allowed});
+	support.rememberFee(user, 0.001);
 	return allowed;
 }
 

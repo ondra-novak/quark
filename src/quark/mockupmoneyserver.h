@@ -17,7 +17,7 @@ using ondra_shared::MsgQueue;
 class MockupMoneyService: public IMoneySrvClient {
 public:
 
-	MockupMoneyService(OrderBudget maxBudget, std::size_t serverLatency):serverLatency(serverLatency),maxBudget(maxBudget) {
+	MockupMoneyService(OrderBudget maxBudget, IMoneySrvClientSupport &support, std::size_t serverLatency):serverLatency(serverLatency),maxBudget(maxBudget),support(support) {
 		start();
 	}
 	~MockupMoneyService() {stop();}
@@ -36,6 +36,7 @@ protected:
 	std::thread workerThread;
 	std::size_t serverLatency;
 	OrderBudget maxBudget;
+	IMoneySrvClientSupport &support;
 
 	struct QueueItem: public RefCntObj {
 		json::Value user;

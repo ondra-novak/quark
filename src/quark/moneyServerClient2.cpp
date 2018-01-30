@@ -60,6 +60,8 @@ void MoneyServerClient2::adjustBudget(json::Value ,
 bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 		Callback callback) {
 
+	IMoneySrvClientSupport *sp = &support;
+
 	[=] {
 
 		connectIfNeed();
@@ -75,7 +77,7 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 
 
 		(*client)("CurrencyBalance.block_money", params)
-				>> [c,callback](const RpcResult &res) {
+				>> [c,callback,user,sp](const RpcResult &res) {
 
 
 			if (res.isError()) {
@@ -83,7 +85,11 @@ bool MoneyServerClient2::allocBudget(json::Value user, OrderBudget total,
 					handleError(c,"CurrencyBalance.block_money", res);
 				callback(allocTryAgain);
 			} else {
-				if (Value(res)["success"].getBool()) {
+				Value r(res);
+				if (r["success"].getBool()) {
+					Value f = r["fee"];
+					if (f.defined())
+						sp->rememberFee(user, f.getNumber());
 					callback(allocOk);
 				} else {
 					callback(allocReject);

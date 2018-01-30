@@ -34,6 +34,8 @@ public:
 	double maxSlippagePct;
 
 
+
+
 	std::size_t priceToCurrency(double price) const;
 	double currencyToPrice(std::size_t pip) const;
 
@@ -47,6 +49,9 @@ public:
 	double adjustSize(double size)const;
 	double adjustPrice(double price)const;
 	double adjustTotal(double price)const;
+	double adjustSizeUp(double size)const;
+	double adjustPriceUp(double price)const;
+	double adjustTotalUp(double price)const;
 
 
 	json::String currencySign;

@@ -617,16 +617,20 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					}
 					Document trade;
 
+					double buyerFee = marketCfg->adjustSizeUp(calcFee(tbo->getUser(), amount));
+					double sellerFee = marketCfg->adjustTotalUp(calcFee(tbo->getUser(), price));
 
 					auto tradeId = lexID::create(tradeCounter);
 					tradeCounter += uniform_dist(rnd);
 					logInfo({"Trade",dir,price,amount,tradeId});
 
 
+
+
 					trade("_id",tradeId)
 						 ("price",price)
-						 ("buy",{tbo->getId(),tbo->getUser(),tbd[0]})
-						 ("sell",{tso->getId(),tso->getUser(),tsd[0]})
+						 ("buy",{tbo->getId(),tbo->getUser(),tbd[0], buyerFee})
+						 ("sell",{tso->getId(),tso->getUser(),tsd[0], sellerFee})
 						 ("size",amount)
 						 ("dir",dir)
 						 ("time",(std::size_t)now);
@@ -871,7 +875,7 @@ void QuarkApp::initMoneyService() {
 		OrderBudget b(maxBudget["asset"].getNumber(),maxBudget["currency"].getNumber()
 				,maxBudget["marginLong"].getNumber(),maxBudget["marginShort"].getNumber(), 0 ,0);
 		std::size_t latency =jlatency.getUInt();
-		sv = new MockupMoneyService(b,latency);
+		sv = new MockupMoneyService(b,*this,latency);
 	} else if (type == "singleJsonRPCServer" || type == "jsonrpc"){
 		Value addr = cfg["addr"];
 		bool logTrafic = cfg["logTrafic"].getBool();
@@ -1138,40 +1142,6 @@ bool QuarkApp::start(Value cfg, String signature)
 
 	return exitCode;
 }
-
-
-bool QuarkApp::PendingOrders::lock(Value id, const Value& doc) {
-	std::lock_guard<std::mutex> _(l);
-	auto f = orders.find(id);
-	if (f == orders.end()) {
-		orders.operator [](id);
-		return true;
-	} else {
-		orders[id].push(doc);
-		return false;
-	}
-}
-
-Value QuarkApp::PendingOrders::unlock(Value id) {
-	std::lock_guard<std::mutex> _(l);
-	auto f = orders.find(id);
-	if (f == orders.end()) return undefined;
-	if (f->second.empty()) {
-		orders.erase(f);
-		return undefined;
-	}
-	Value out = f->second.front();
-	f->second.pop();
-	return out;
-}
-
-
-
-void QuarkApp::PendingOrders::clear() {
-	std::lock_guard<std::mutex> _(l);
-	orders.clear();
-}
-
 
 
 
@@ -1509,6 +1479,22 @@ void QuarkApp::syncTS(Value cfg, String signature) {
 	}
 }
 
+void QuarkApp::rememberFee(const Value& user, double fee) {
+	std::unique_lock<std::mutex> _(feeMapLock);
+	feeMap[user] = fee;
+}
+
+double QuarkApp::calcFee(const Value &user, double val)  {
+	std::unique_lock<std::mutex> _(feeMapLock);
+	auto f = feeMap.find(user);
+	if (f != feeMap.end()) {
+		return f->second * val; //(add half of fee percent to achieve rounding up)
+	} else {
+		logWarn({"No fee recorded for user", user});
+		return 0;
+	}
+
+}
 
 } /* namespace quark */
 

@@ -305,6 +305,8 @@ static json::Value normTrade(json::Value doc) {
 		 ("sellOrder",doc["sell"][0])
 		 ("buyUser",doc["buy"][1])
 		 ("sellUser",doc["sell"][1])
+		 ("buyFee",doc["buy"][3])
+		 ("sellFee",doc["sell"][3])
 		 ("dir",doc["dir"])
 		 ("price",doc["price"])
 		 ("size",doc["size"])

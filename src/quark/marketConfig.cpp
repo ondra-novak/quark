@@ -145,6 +145,17 @@ double quark::MarketConfig::adjustTotal(double price) const {
 	double comb = currencyStep * assetStep;
 	return floor(price/comb+0.5)*comb;
 }
+double quark::MarketConfig::adjustSizeUp(double size) const {
+	return ceil(size/assetStep)*assetStep;
+}
+
+double quark::MarketConfig::adjustPriceUp(double price) const {
+	return ceil(price/currencyStep)*currencyStep;
+}
+double quark::MarketConfig::adjustTotalUp(double price) const {
+	double comb = currencyStep * assetStep;
+	return ceil(price/comb)*comb;
+}
 
 
 } /* namespace quark */
