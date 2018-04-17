@@ -27,7 +27,7 @@ tmp :
 	echo extern unsigned int designdoc_$(@F:.design.h=)_length\; >> $@
 
 %.design.json: | tmp 
-	FILES=`find $(@:.json=) -name "*.cpp"`; $(COUCHCPP) -p $$FILES -o $(COUCHCPP_BASEDIR) 
+#	FILES=`find $(@:.json=) -name "*.cpp"`; $(COUCHCPP) -p $$FILES -o $(COUCHCPP_BASEDIR) 
 	cd $(@:.json=) && couchapp push --export > ../$(@F)
 	echo $@ : `find  $(@:.json=)/*`  > $(@:.json=.deps)  	
 

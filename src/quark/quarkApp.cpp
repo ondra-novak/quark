@@ -503,6 +503,8 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 
 					//we run out of budget and budget was not defined...
 					if ( !d[OrderFields::finished].getBool()) {
+						//delete order from the budget, we will reacquire it later
+						moneyService->deleteOrder(d[OrderFields::user],d.getIDValue());
 						//this enqueues request to download specified order and
 						//process it like by queue.
 						String orderId (r.key);
