@@ -68,6 +68,13 @@ void resync(couchit::CouchDB& ordersDB, couchit::CouchDB& tradeDB,
 	bool rep;
 	Array orders;
 	do {
+		if (fromTrade != nullptr) {
+			Value x =tradeDB.get(fromTrade.getString(), CouchDB::flgNullIfMissing);
+			if (x == nullptr) {
+				throw std::runtime_error(String({"Transaction module error. Referenced trade doesn't exist: ", fromTrade.getString()}).c_str());
+			}
+
+		}
 		Query q = tradeDB.createQuery(View::includeDocs);
 		if (fromTrade != nullptr) {
 			q.range(fromTrade, "Z");

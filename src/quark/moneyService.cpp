@@ -31,6 +31,11 @@ bool MoneyService::allocBudget(const PAllocReq &req) {
 	return allocBudgetLk(req);
 }
 
+void MoneyService::deleteOrder(json::Value user, json::Value order) {
+	Sync _(lock);
+	budgetMap.erase(Key(user,order));
+
+}
 
 void MoneyService::allocFinish(const PAllocReq &req, IMoneySrvClient::AllocResult b) {
 
@@ -75,7 +80,7 @@ bool MoneyService::allocBudgetLk(const PAllocReq &req) {
 
 	if (client == nullptr) return true;
 
-//	auto &qstate = lockedUsers[req->user];
+    lockedUsers[req->user];
 	return allocBudgetLk2(req);
 
 }
@@ -132,12 +137,17 @@ bool MoneyService::allocBudgetLk2(const PAllocReq &req) {
 		//when budget is below previous, we can update budget without waiting
 		inflight.inc();
 		client->allocBudget(req->user, badv.second,AllocCallback(*this,req,badv.second,false));
-		allocFinish(req, IMoneySrvClient::allocOk);
+		//cannot call allocFinish because it calls callback, but we don't want to call it
+		//just update budget
+		updateBudget(req->user,req->order,req->budget);
+		//however, unlock user must be called from finish
 		return true;
 	} else {
-		//simulate call of the finish callback
-		AllocCallback cb(*this,req,badv.second,true);
-		cb(IMoneySrvClient::allocOk);
+		//nothing async is needed, update budget now
+		updateBudget(req->user,req->order,req->budget);
+		//and unlock user
+		unlockUser(req->user);
+		//its ok
 		return true;
 	}
 
