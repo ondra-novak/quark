@@ -66,8 +66,8 @@ int main(int c, char **args) {
 
 	}
 
-	RpcApp rpcApp(config);
-	rpcApp.run(std::cin, std::cout);
+	RefCntPtr<RpcApp> rpcApp=new RpcApp(config);
+	rpcApp->run(std::cin, std::cout);
 
 }
 
