@@ -92,9 +92,16 @@ public:
 
 	bool allocBudget(const PAllocReq &req);
 
-	//void setMarketConfig(PMarketConfig cfg) {mcfg = cfg;client->setMarketConfig(cfg);}*/
+	///Deletes order from budget
+	/** Function doesn't send update to TM. Use this function only if you plan to reacquire
+	 * the budget by calling allocBudget
+	 *
+	 * @param user user
+	 * @param order order
+	 */
+	void deleteOrder(json::Value user, json::Value order);
 
-//	OrderBudget getOrderBudget(const json::Value &user, const json::Value &order) const;
+
 
 	void setClient(PMoneySrvClient client) {this->client = client;}
 	void setMarketConfig(PMarketConfig cfg) {this->mcfg = mcfg;}
