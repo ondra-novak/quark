@@ -4,6 +4,7 @@
  *  Created on: Jun 11, 2017
  *      Author: ondra
  */
+#include <unistd.h>
 
 #ifdef _WIN32
 #include <io.h>
@@ -16,6 +17,7 @@
 #include <imtjson/utf8.h>
 #include "marketControl.h"
 #include <stdio.h>
+
 
 namespace quark {
 
@@ -64,6 +66,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 
 
 	PRpcApp me(this);
+
 	rpcServer.add_listMethods("methods");
 	rpcServer.add_ping("ping");
 	rpcServer.add_multicall("multicall");
@@ -106,6 +109,9 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 					goInteractiveMode(input);
 					break;
 				}
+				if (c == 'q') {
+					break;
+				}
 				if (c == EOF) break;
 				input.putback(c);
 				 v = Value::fromStream(input);
@@ -128,6 +134,7 @@ void RpcApp::run(std::istream& input, std::ostream& output) {
 		sendResponse(resp,output);
 
 	}
+	rpcServer.removeAll();
 
 }
 
