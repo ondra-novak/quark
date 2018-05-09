@@ -752,11 +752,13 @@ void QuarkApp::syncWithDb() {
 	Value lastTrade = fetchLastTrade(*tradesDb);
 	if (lastTrade != nullptr) {
 		tradeCounter = 0;
-		tradeCounter = lexID::parse(lastTrade["_id"].getString(),tradeCounter)+1;
+		lastTradeId = lastTrade["_id"];
+		tradeCounter = lexID::parse(lastTradeId.getString(),tradeCounter)+1;
 		lastPrice = lastTrade["price"].getNumber();
 	} else {
 		tradeCounter = 1;
 		lastPrice = 1;
+		lastTradeId = nullptr;
 	}
 
 }
