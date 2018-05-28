@@ -68,6 +68,8 @@ STRCONST(expireAction);
 STRCONST(expired);
 STRCONST(fs);
 STRCONST(fp);
+STRCONST(nonce);
+STRCONST(nonce_hash);
 
 }
 

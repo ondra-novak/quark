@@ -8,6 +8,9 @@
 #include "orderControl.h"
 
 #include <couchit/document.h>
+#include <imtjson/fnv.h>
+#include <random>
+#include "fnv128.h"
 #include "../quark_lib/constants.h"
 
 namespace quark {
@@ -148,18 +151,52 @@ json::Value OrderControl::create(json::Value reqOrder) {
 				return validationError(OrderFields::expireTime,"must contain either 'cancel' or 'market'");
 		}
 	}
+	x = reqOrder[OrderFields::nonce];
+	Value nonce_hash;
+	Value vid;
+	if (x.defined()) {
+		StrViewA nonce = x.getString();
+		if (x.type() != json::string || nonce.empty())
+			return validationError(OrderFields::nonce, "must be non-empty string");
+
+		std::uintptr_t nhash;
+		{
+			FNV1a<sizeof(nhash)> h(nhash);
+			for(auto &c: nonce) h(c);
+		}
+		nonce_hash = nhash;
+		Arith128 idhash;
+		FNV128 fnv128(idhash);
+		for (auto c: StrViewA(reqOrder[OrderFields::user].toString())) fnv128(c);
+		for (auto c: nonce) fnv128(c);
+		String sid(30, [&](char *buff) {
+			int pos = 0;
+			buff[pos++] = 'o';
+			buff[pos++] = '.';
+			base64url->encodeBinaryValue(BinaryView(reinterpret_cast<unsigned char *>(&idhash),sizeof(idhash)),[&](StrViewA fraq){
+				for (auto c: fraq) {
+					if (!isalnum(c)) c = 'A'+pos-2;
+					buff[pos++] = c;
+				}
+			});
+			return pos;
+		});
+		if (nonce.substr(0,6) == "!test:" && nonce.length<=10) {
+			std::random_device rnd;
+			nonce_hash = rnd();
+		}
+		vid = sid;
+
+	}
+
+
 
 
 	time_t ct;
 	time(&ct);
 
 	Document doc;
-	Value vid = reqOrder[OrderFields::vendorId];
 	if (vid.defined()) {
-		if (vid.type() != json::string)
-			return validationError(OrderFields::vendorId, "must be string");
-		if (vid.getString().substr(0,2) != "o.")
-			return validationError(OrderFields::vendorId, "must begin with prefix 'o.' ");
 		doc.setID(vid);
 	} else {
 		doc = db.newDocument("o.");
@@ -168,8 +205,9 @@ json::Value OrderControl::create(json::Value reqOrder) {
 	doc.setBaseObject(reqOrder);
 	doc.set( OrderFields::status,Status::str[Status::validating])
 		.set(OrderFields::timeCreated, ct)
-		.set(OrderFields::origSize, reqOrder[OrderFields::size]);
-	doc.unset(OrderFields::vendorId);
+		.set(OrderFields::origSize, reqOrder[OrderFields::size])
+		.set(OrderFields::nonce, json::undefined)
+		.set(OrderFields::nonce_hash, nonce_hash);
 	doc.enableTimestamp();
 
 	try {
@@ -177,7 +215,11 @@ json::Value OrderControl::create(json::Value reqOrder) {
 		return {doc.getIDValue(),doc.getRevValue()};
 	} catch (UpdateException &e) {
 		if (e.getErrors()[0].isConflict()) {
-			throw ConflictError(normFields(db.get(doc.getID())));
+			Value actualDoc = db.get(doc.getID());
+			if (actualDoc[OrderFields::user] == doc[OrderFields::user] && actualDoc[OrderFields::nonce_hash] == doc[OrderFields::nonce_hash])
+				throw ConflictError(normFields(actualDoc));
+			else
+				throw ConflictError(nullptr);
 		}
 		throw;
 	}

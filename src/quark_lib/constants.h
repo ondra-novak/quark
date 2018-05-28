@@ -68,6 +68,8 @@ namespace OrderFields {
 	extern StrViewA prevOrder;
 	extern StrViewA data;
 	extern StrViewA expireTime;
+	extern StrViewA nonce;
+	extern StrViewA nonce_hash;
 	extern StrViewA expireAction;
 	extern StrViewA expired;
 	extern StrViewA fs;

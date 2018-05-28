@@ -45,9 +45,9 @@ protected:
 class ConflictError: public std::exception {
 public:
 
-	ConflictError(const couchit::Document &actualDoc):actualDoc(actualDoc) {}
+	ConflictError(const json::Value &actualDoc):actualDoc(actualDoc) {}
 
-	couchit::Document getActualDoc() const {
+	json::Value getActualDoc() const {
 		return actualDoc;
 	}
 
@@ -55,7 +55,7 @@ public:
 
 
 protected:
-	couchit::Document actualDoc;
+	json::Value actualDoc;
 
 };
 
