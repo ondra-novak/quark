@@ -143,6 +143,9 @@ bool MoneyService::allocBudgetLk2(const PAllocReq &req) {
 		//however, unlock user must be called from finish
 		return true;
 	} else {
+		//update transaction module, but no need to wait for result
+		//and also no need to lock user
+		client->allocBudget(req->user, badv.second,[](IMoneySrvClient::AllocResult){});
 		//nothing async is needed, update budget now
 		updateBudget(req->user,req->order,req->budget);
 		//and unlock user
