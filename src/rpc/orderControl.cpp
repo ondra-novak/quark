@@ -289,7 +289,11 @@ json::Value OrderControl::modify(json::Value orderId, json::Value reqOrder, json
 
 json::Value OrderControl::cancel(json::Value orderId) {
 	Document doc = loadOrder(orderId,Value());
-	doc.set(OrderFields::cancelReq,true);
+	if (doc[OrderFields::cancelReq].getBool() || doc[OrderFields::finished].getBool()) {
+		return doc.getRevValue();
+	} else {
+		doc.set(OrderFields::cancelReq,true);
+	}
 	try {
 		db.put(doc);
 		return doc.getRevValue();
