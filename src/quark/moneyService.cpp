@@ -180,7 +180,7 @@ void MoneyService::updateBudget(json::Value user, json::Value order, const Order
 	if (toBlock == OrderBudget())
 		budgetMap.erase(Key(user,order));
 	else
-		budgetMap.insert(std::make_pair(Key(user,order), toBlock));
+		budgetMap[Key(user,order)] =  toBlock;
 }
 
 bool ErrorMoneyService::allocBudget(json::Value user, OrderBudget total, Callback callback) {
