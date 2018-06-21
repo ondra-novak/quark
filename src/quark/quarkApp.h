@@ -89,7 +89,7 @@ protected:
 	void initMoneyService();
 
 private:
-	POrder docOrder2POrder(const Document& order);
+	POrder docOrder2POrder(const Document& order, double marketBuyBudget);
 
 
 	/// Processes order (stage 2)
@@ -143,7 +143,7 @@ private:
 
 
 	bool runOrder(Document order, bool update);
-	void runOrder2(Document order, bool update);
+	void runOrder2(Document order, bool update, double marketBuyBudget);
 	void freeBudget(const Document& order);
 	bool blockOnError(ChangesFeed &chfeed);
 

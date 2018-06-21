@@ -56,10 +56,13 @@ bool QuarkApp::runOrder(Document order, bool update) {
 		//calculate budget
 		auto b = calculateBudget(order);
 
+		//this value limits budget on order when buying
+		double bl = b.getBudgetOrderLimit();
+
 		LOGDEBUG3("Budget calculated for the order", order.getIDValue(), b.toJson());
 
 		if (!moneyService->allocBudget(order[OrderFields::user], order.getIDValue(), b,
-							[me,order,update,user](IMoneySrvClient::AllocResult response) {
+							[me,order,update,user,bl](IMoneySrvClient::AllocResult response) {
 				QuarkApp *mptr = me;
 
 				//probably exit, do not process the order
@@ -70,7 +73,7 @@ bool QuarkApp::runOrder(Document order, bool update) {
 				//in positive response
 				switch (response) {
 				case IMoneySrvClient::allocOk:
-					mptr->runOrder2(order, update);
+					mptr->runOrder2(order, update,bl);
 					break;
 				case IMoneySrvClient::allocReject:
 					mptr->rejectOrderBudget(order, update);
@@ -89,7 +92,7 @@ bool QuarkApp::runOrder(Document order, bool update) {
 
 		})) return false;
 		else {
-			runOrder2(order,update);
+			runOrder2(order,update,bl);
 			return true;
 		}
 	} catch (std::exception &e) {
@@ -140,7 +143,7 @@ void QuarkApp::rejectOrder(Document order, const OrderErrorException &e, bool up
 	}
 }
 
-void QuarkApp::runOrder2(Document order, bool update) {
+void QuarkApp::runOrder2(Document order, bool update, double marketBuyBudget) {
 
 
 	LOGDEBUG3("Executing order", order.getIDValue(), update?"(update)":"(new order)");
@@ -150,7 +153,7 @@ void QuarkApp::runOrder2(Document order, bool update) {
 		TxItem txi;
 		txi.action = update?actionUpdateOrder:actionAddOrder;
 		txi.orderId = order.getIDValue();
-		txi.order = docOrder2POrder(order);
+		txi.order = docOrder2POrder(order,marketBuyBudget);
 
 
 		if (order[OrderFields::status].getString() != Status::strActive) {
@@ -384,16 +387,23 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 		if (budget.defined()) {
 			reqbudget = budget.getNumber();
 		} else {
-			Value limPrice = order[OrderFields::limitPrice];
-			Value stopPrice = order[OrderFields::stopPrice];
-			if (limPrice.defined()) {
-				reqbudget = size*marketCfg->adjustPrice(limPrice.getNumber());
-			} else if (stopPrice.defined()) {
-				reqbudget = size*marketCfg->adjustPrice(stopPrice.getNumber()*slippage);
-			} else {
+			OrderType::Type otype = OrderType::str[order[OrderFields::type].getString()];
+			switch (otype) {
+			case OrderType::maker:
+			case OrderType::stoplimit:
+			case OrderType::limit:
+			case OrderType::ioc:
+			case OrderType::oco_limitstop:
+			case OrderType::fok:
+				reqbudget = size * order[OrderFields::limitPrice].getNumber();
+				break;
+			case OrderType::stop:
+				reqbudget = size * std::max(order[OrderFields::limitPrice].getNumber(), lastPrice);
+				break;
+			default:
 				reqbudget = lastPrice * size * slippage;
+				break;
 			}
-
 		}
 
 		if (context == OrderContext::margin) {
@@ -500,9 +510,19 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 				//if order is unknown for the core, check what happened
 				if (!coreState.isKnownOrder(r.key)) {
 
+					bool finished = d[OrderFields::finished].getBool();
+					//if order is not market as finished, but it hash defined custom budget
+					if (!finished && d[OrderFields::budget].defined()) {
+						//then we cannot continue in this order, so mark it as finished
+						d.set(OrderFields::finished, true);
+						//mark with status executed
+						d.set(OrderFields::status, Status::executed);
+						//set finished flag
+						finished = true;
+					}
 
-					//we run out of budget and budget was not defined...
-					if ( !d[OrderFields::finished].getBool()) {
+					//we run out of budget and order is not finished yet
+					if (!finished) {
 						//delete order from the budget, we will reacquire it later
 						moneyService->deleteOrder(d[OrderFields::user],d.getIDValue());
 						//this enqueues request to download specified order and
@@ -519,7 +539,7 @@ void QuarkApp::runTransaction(const TxItem& txitm) {
 
 
 					} else {
-						//in case that order is no longe in matching
+						//in case that order is no longer in matching
 						//remove order's budget from the money service
 						//in case that order will be requeued, it will ask for budget again later
 						moneyService->allocBudget(d[OrderFields::user],d.getIDValue(),OrderBudget(),nullptr);
@@ -667,6 +687,13 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					Document &o = o2u[t.getOrder()->getId()];
 					o(OrderFields::status, Status::strDelayed);
 				}break;
+			case quark::trOrderNoBudget: {
+					const quark::TradeResultOrderNoBudget &t = dynamic_cast<const quark::TradeResultOrderNoBudget& >(r);
+					lastPrice = t.getPrice();
+					//just mark the document, this is enough, because it fill be found out of matching and revalidated
+					o2u[t.getOrder()->getId()];
+				}break;
+
 			}
 }
 
@@ -678,13 +705,12 @@ void QuarkApp::rejectOrderBudget(Document order, bool update) {
 
 }
 
-POrder QuarkApp::docOrder2POrder(const Document& order) {
+POrder QuarkApp::docOrder2POrder(const Document& order, double marketBuyBudget) {
 	POrder po;
 	OrderJsonData odata;
 	Value v;
 	double x;
 
-	OrderBudget b = calculateBudget(order);
 
 	odata.id = order["_id"];
 	odata.dir = String(order["dir"]);
@@ -731,8 +757,13 @@ POrder QuarkApp::docOrder2POrder(const Document& order) {
 		odata.stopPrice = 0;
 	}
 
-	double totalBudget = b.marginLong+b.marginShort+b.currency;
-	odata.budget = marketCfg->budgetToFixPt(totalBudget);
+	Value userBudget = order[OrderFields::budget];
+	if (userBudget.defined()) {
+		if (marketBuyBudget == 0) marketBuyBudget = userBudget.getNumber();
+		else marketBuyBudget = std::min(marketBuyBudget, userBudget.getNumber());
+	}
+//	double totalBudget = b.marginLong+b.marginShort+b.currency;
+	odata.budget = marketCfg->budgetToFixPt(marketBuyBudget);
 	odata.trailingDistance = marketCfg->priceToCurrency(
 			order[OrderFields::trailingDistance].getNumber());
 	odata.domPriority = order[OrderFields::domPriority].getInt();

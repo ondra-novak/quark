@@ -51,6 +51,9 @@ public:
 
 	}
 
+	double getBudgetOrderLimit() const {
+		return marginLong+marginShort+currency;
+	}
 
 };
 

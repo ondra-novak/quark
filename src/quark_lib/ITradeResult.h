@@ -10,7 +10,8 @@ enum TradeRestType {
 	trOrderCancel,
 	trOrderTrigger,
 	trOrderOk,
-	trOrderDelayed
+	trOrderDelayed,
+	trOrderNoBudget
 };
 
 class ITradeResult {
@@ -181,6 +182,28 @@ protected:
 	POrder order;
 
 };
+
+class TradeResultOrderNoBudget: public AbstractTradeResult {
+public:
+	TradeResultOrderNoBudget(POrder order, std::size_t price)
+		:AbstractTradeResult(trOrderNoBudget),order(order),price(price) {}
+
+
+	const POrder& getOrder() const {
+		return order;
+	}
+
+	std::size_t getPrice() const {
+		return price;
+	}
+
+protected:
+	POrder order;
+	std::size_t price;
+
+};
+
+
 
 typedef json::RefCntPtr<AbstractTradeResult> PTradeResult;
 

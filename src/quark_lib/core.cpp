@@ -554,10 +554,37 @@ CurrentState::PairResult CurrentState::willOrderPair(OrderQueue& queue, const PO
 template<typename Q>
 void CurrentState::pairOneStep(Q &queue, const POrder &maker, const POrder &taker, std::size_t curPrice, Output out) {
 	//matching size
-	std::size_t commonSize = std::min(maker->getSizeAtPrice(curPrice), taker->getSizeAtPrice(curPrice));
+	std::size_t msz = maker->getSizeAtPrice(curPrice);
+	std::size_t tsz = taker->getSizeAtPrice(curPrice);
+	std::size_t commonSize = std::min(msz, tsz);
+
+	//the common size is zero - sanity check
+	if (commonSize == 0) {
+		// so because commonSize is zero, we need to find, which order generates zero
+
+		//if taker, so probably takers budget is not enough to cover trade
+		if (tsz == 0) {
+			//remove order from the matching
+			updateOrder(taker->getId(), nullptr);
+			//send exception with order itself and current price (this helps to calculate budget more accurate)
+			out(TradeResultOrderNoBudget(taker, curPrice));
+		}
+		//if maker, so probably its budget is not enough to cover the trade
+		else if (msz == 0) {
+			//erase maker from queue
+			queue.erase(maker);
+			//remove order from the matching
+			updateOrder(maker->getId(), nullptr);
+			//send exception with order itself and current price (this helps to calculate budget more accurate)
+			out(TradeResultOrderNoBudget(taker, curPrice));
+			//push taker back to queue to continue matching
+			curQueue.push(taker);
+		}
+
+	}
 
 	//we need pair orders of different users
-	if (maker->getUser() != taker->getUser()) {
+	else if (maker->getUser() != taker->getUser()) {
 
 
 		//update maker command
