@@ -863,7 +863,7 @@ static json::Value dumpQueue(const CurrentState::Queue &list) {
 
 }*/
 
-json::Value quark::CurrentState::toJson() const {
+json::Value quark::CurrentState::toJson() const  {
 	json::Object out;
 	out("orderbook_ask", dumpQueue(orderbook_ask))
 		("orderbook_bid",dumpQueue(orderbook_bid))
@@ -874,6 +874,35 @@ json::Value quark::CurrentState::toJson() const {
 	return out;
 }
 
+class Queue;
+
+template<typename Q>
+std::size_t CurrentState::estimateBudget(const Q &q, std::size_t reqSize)  {
+	auto iter = q.begin();
+	std::size_t lastPrice = 0;
+	std::size_t budget = 0;
+	while (iter != q.end() && reqSize) {
+		const POrder &o = *iter++;
+		std::size_t sz = o->getSize();
+		std::size_t price = o->getLimitPrice();
+		std::size_t commonSz = std::min(reqSize, sz);
+		budget += price*commonSz;
+		lastPrice = price;
+		reqSize-=commonSz;
+	}
+	budget += lastPrice * reqSize;
+	return budget;
+}
+
+
+
+std::size_t CurrentState::estimateBudgetForMarket(OrderDir::Type direction, std::size_t reqSize) const {
+	switch (direction) {
+	case OrderDir::buy: return estimateBudget(orderbook_ask,reqSize);
+	case OrderDir::sell: return estimateBudget(orderbook_bid,reqSize);
+	default: throw std::runtime_error("estimateBudgetForMarket: invalid direction");
+	}
+}
 
 }
 

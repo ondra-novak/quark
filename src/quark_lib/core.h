@@ -166,6 +166,18 @@ public:
 
 	std::size_t centerOfSpread;
 
+	///estimates required budget for given market order
+	/**
+	 * @param direction order direction
+	 * @param reqBudget required size
+	 * @return total budged need for operation
+	 */
+	std::size_t estimateBudgetForMarket(OrderDir::Type direction, std::size_t reqSize) const;
+
+	template<typename Q>
+	static std::size_t estimateBudget(const Q &q, std::size_t reqSize);
+
+
 
 protected:
 	void resetCurrentState();

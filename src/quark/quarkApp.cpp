@@ -383,6 +383,11 @@ bool QuarkApp::updateOrder(Document order) {
 	return runOrder(order, isKnown);
 }
 
+double QuarkApp::estimateMarketBuy(double size) {
+	auto c = coreState.estimateBudgetForMarket(OrderDir::buy, marketCfg->assetToSize(size));
+	if (c == 0) return lastPrice*size;
+	else return marketCfg->budgetFromFixPt(c);
+}
 
 OrderBudget QuarkApp::calculateBudget(const Document &order) {
 
@@ -413,10 +418,11 @@ OrderBudget QuarkApp::calculateBudget(const Document &order) {
 				reqbudget = size * order[OrderFields::limitPrice].getNumber();
 				break;
 			case OrderType::stop:
-				reqbudget = size * std::max(order[OrderFields::limitPrice].getNumber(), lastPrice);
+				//use bigger budget (for market or for stopprice)
+				reqbudget = std::max(estimateMarketBuy(size), order[OrderFields::stopPrice].getNumber() * size) * slippage;
 				break;
 			default:
-				reqbudget = lastPrice * size * slippage;
+				reqbudget = estimateMarketBuy(size) * slippage;
 				break;
 			}
 		}

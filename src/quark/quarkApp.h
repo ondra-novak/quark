@@ -171,7 +171,7 @@ private:
 
 	virtual void rememberFee(const Value &user, double fee) ;
 	double calcFee(const Value &user, double val);
-
+	double estimateMarketBuy(double size);
 };
 
 typedef RefCntPtr<QuarkApp> PQuarkApp;
