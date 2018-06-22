@@ -13,6 +13,7 @@
 #include <couchit/query.h>
 #include <couchit/changeset.h>
 #include <couchit/couchDB.h>
+#include <couchit/query.h>
 #include "../common/config.h"
 #include "../common/runtime_error.h"
 #include "../common/semaphore.h"
@@ -187,10 +188,24 @@ void QuarkApp::runOrder2(Document order, bool update, double marketBuyBudget) {
 			} catch (const UpdateException &e) {
 				//in case of conflict...
 				if (e.getErrors()[0].isConflict()) {
-					logWarn({"Order creation conflict, waiting for fresh data", order.getIDValue()});
+					logWarn({"Order has changed - removing from the queue without matching", order.getIDValue()});
 					return;
 				}
 				throw;
+			}
+		} else {
+			//check for any change happened during waiting to approval
+			//change is detected by comparing revisions
+			//This is achieved by querying _all_docs where key is ID
+			//the revision is returned as value under key "rev"
+			//if the revision is different, the code stops here
+			//... because if the change has been caused by a user, the order will
+			//be processed again (or has been already processed)
+			Result res = ordersDb->createQuery(0).key(order.getIDValue()).exec();
+			Row rw = res[0];
+			if (rw.value["rev"] != order.getRevValue()) {
+				logWarn({"Order has changed - removing from the queue without matching", order.getIDValue()});
+				return;
 			}
 		}
 
