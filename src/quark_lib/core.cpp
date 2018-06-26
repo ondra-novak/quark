@@ -640,7 +640,7 @@ void CurrentState::pairOneStep(Q &queue, const POrder &maker, const POrder &take
 			updateOrder(taker->getId(), nullptr);
 			out(TradeResultOrderCancel(taker, OrderErrorException::orderSelfTradingCanceled));
 		}
-		if (maker->getSize() <= taker->getSize()) {
+		else  {
 			queue.erase(maker);
 			updateOrder(maker->getId(), nullptr);
 			out(TradeResultOrderCancel(maker, OrderErrorException::orderSelfTradingCanceled));
