@@ -661,7 +661,7 @@ void QuarkApp::receiveResults(const ITradeResult& r, OrdersToUpdate &o2u, TradeL
 					Document trade;
 
 					double buyerFee = marketCfg->adjustSizeUp(calcFee(tbo->getUser(), amount));
-					double sellerFee = marketCfg->adjustTotalUp(calcFee(tbo->getUser(), price));
+					double sellerFee = marketCfg->adjustTotalUp(calcFee(tso->getUser(), price));
 
 					auto tradeId = lexID::create(tradeCounter);
 					tradeCounter += uniform_dist(rnd);
